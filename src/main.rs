@@ -120,7 +120,7 @@ fn main() {
     };
 
     let segment_length = 0.1;
-    let system = make_gosper_hexa();
+    let system = make_plant1();
 
     println!("Expanding");
     let instructions = system.instructions();
@@ -491,44 +491,22 @@ fn main() {
 //    }
 //}
 
-//fn make_plant1() -> LSystem {
-//    let mut rules = init_rules();
+fn make_plant1() -> LSystem {
+    let mut system = LSystem::new();
 
-//    rules[Command::A as usize] = vec![
-//        Command::Forward,
-//        Command::Push,
-//        Command::YawRight,
-//        Command::A,
-//        Command::Pop,
-//        Command::Push,
-//        Command::YawLeft,
-//        Command::A,
-//        Command::Pop,
-//        Command::Push,
-//        Command::PitchDown,
-//        Command::A,
-//        Command::Pop,
-//        Command::Push,
-//        Command::PitchUp,
-//        Command::A,
-//        Command::Pop,
-//        Command::Forward,
-//        Command::A,
-//    ];
-//    rules[Command::Forward as usize] = vec![
-//        Command::Forward,
-//        Command::Shrink,
-//        Command::Forward,
-//        Command::Shrink
-//    ];
+    system.command_map['X' as usize] = Command::Noop;
 
-//    LSystem {
-//        axiom: vec![Command::A],
-//        iterations: 6,
-//        angle: 0.4485496,
-//        rules: rules,
-//    }
-//}
+    system.rules['X' as usize] = String::from("F[+X][-X][&X][^X]FX");
+    system.rules['F' as usize] = String::from("F!F!");
+
+    system.axiom = String::from("X");
+    system.iterations = 6;
+    system.angle = 0.4485496;
+    system.width = 0.03;
+    system.shrink_rate = 1.01;
+
+    system
+}
 
 //fn make_plant2() -> LSystem {
 //    let mut rules = init_rules();
