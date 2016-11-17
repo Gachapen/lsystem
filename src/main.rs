@@ -28,15 +28,12 @@ type RuleMap = [String; MAX_ALPHABET_SIZE];
 type CommandMap = [Command; MAX_ALPHABET_SIZE];
 
 fn create_rule_map() -> RuleMap {
-    let mut rules: RuleMap;
+    let mut rules: RuleMap = unsafe { std::mem::uninitialized() };
 
-    unsafe {
-        rules = std::mem::uninitialized();
-        for (i, v) in rules.iter_mut().enumerate() {
-            let mut rule = String::new();
-            rule.push(i as u8 as char);
-            std::ptr::write(v, rule);
-        }
+    for (i, v) in rules.iter_mut().enumerate() {
+        let mut rule = String::with_capacity(1);
+        rule.push(i as u8 as char);
+        unsafe { std::ptr::write(v, rule); }
     }
 
     rules
