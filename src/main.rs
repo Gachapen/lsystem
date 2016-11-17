@@ -45,8 +45,13 @@ fn create_command_map() -> CommandMap {
     lchar_commands['F' as usize] = Command::Forward;
     lchar_commands['+' as usize] = Command::YawLeft;
     lchar_commands['-' as usize] = Command::YawRight;
+    lchar_commands['<' as usize] = Command::RollLeft;
+    lchar_commands['>' as usize] = Command::RollRight;
+    lchar_commands['^' as usize] = Command::PitchUp;
+    lchar_commands['&' as usize] = Command::PitchDown;
     lchar_commands['[' as usize] = Command::Push;
     lchar_commands[']' as usize] = Command::Pop;
+    lchar_commands['!' as usize] = Command::Shrink;
 
     lchar_commands
 }
