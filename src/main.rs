@@ -86,6 +86,7 @@ struct LSystem {
     iterations: u32,
     angle: f32,
     width: f32,
+    shrink_rate: f32,
 }
 
 impl LSystem {
@@ -97,6 +98,7 @@ impl LSystem {
             iterations: 0,
             angle: 0.0,
             width: 1.0,
+            shrink_rate: 1.0,
         }
     }
 
@@ -118,7 +120,6 @@ fn main() {
     };
 
     let segment_length = 0.1;
-    let shrink_rate = 1.0;
     let system = make_gosper_hexa();
 
     println!("Expanding");
@@ -170,10 +171,10 @@ fn main() {
                 rotation = Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * system.angle) * rotation;
             },
             &Command::Shrink => {
-                width = width / shrink_rate;
+                width = width / system.shrink_rate;
             },
             &Command::Grow => {
-                width = width * shrink_rate;
+                width = width * system.shrink_rate;
             },
             &Command::Push => {
                 states.push((position, rotation, width));
