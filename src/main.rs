@@ -249,152 +249,21 @@ fn main() {
 //    }
 //}
 
-//fn make_hilbert() -> LSystem {
-//    let mut rules = init_rules();
+fn make_hilbert() -> LSystem {
+    let mut system = LSystem::new();
 
-//    rules[Command::A as usize] = vec![
-//        Command::B,
-//        Command::YawRight,
-//        Command::Forward,
-//        Command::YawLeft,
-//        Command::C,
-//        Command::Forward,
-//        Command::C,
-//        Command::YawLeft,
-//        Command::Forward,
-//        Command::YawRight,
-//        Command::D,
-//        Command::PitchDown,
-//        Command::Forward,
-//        Command::PitchUp,
-//        Command::D,
-//        Command::YawRight,
-//        Command::Forward,
-//        Command::YawLeft,
-//        Command::PitchDown,
-//        Command::PitchDown,
-//        Command::C,
-//        Command::Forward,
-//        Command::C,
-//        Command::YawLeft,
-//        Command::Forward,
-//        Command::YawLeft,
-//        Command::B,
-//        Command::RollRight,
-//        Command::RollRight,
-//    ];
-//    rules[Command::B as usize] = vec![
-//        Command::A,
-//        Command::PitchDown,
-//        Command::Forward,
-//        Command::PitchUp,
-//        Command::C,
-//        Command::Forward,
-//        Command::B,
-//        Command::PitchUp,
-//        Command::Forward,
-//        Command::PitchUp,
-//        Command::D,
-//        Command::PitchUp,
-//        Command::PitchUp,
-//        Command::YawRight,
-//        Command::Forward,
-//        Command::YawRight,
-//        Command::D,
-//        Command::PitchUp,
-//        Command::YawLeft,
-//        Command::YawLeft,
-//        Command::Forward,
-//        Command::PitchUp,
-//        Command::B,
-//        Command::YawLeft,
-//        Command::YawLeft,
-//        Command::Forward,
-//        Command::C,
-//        Command::PitchUp,
-//        Command::Forward,
-//        Command::PitchUp,
-//        Command::A,
-//        Command::RollRight,
-//        Command::RollRight,
-//    ];
-//    rules[Command::C as usize] = vec![
-//        Command::YawLeft,
-//        Command::YawLeft,
-//        Command::D,
-//        Command::PitchUp,
-//        Command::YawLeft,
-//        Command::YawLeft,
-//        Command::Forward,
-//        Command::PitchUp,
-//        Command::B,
-//        Command::YawRight,
-//        Command::Forward,
-//        Command::YawLeft,
-//        Command::C,
-//        Command::PitchUp,
-//        Command::Forward,
-//        Command::PitchUp,
-//        Command::A,
-//        Command::PitchDown,
-//        Command::PitchDown,
-//        Command::Forward,
-//        Command::A,
-//        Command::PitchDown,
-//        Command::Forward,
-//        Command::PitchUp,
-//        Command::C,
-//        Command::YawLeft,
-//        Command::Forward,
-//        Command::YawLeft,
-//        Command::B,
-//        Command::PitchUp,
-//        Command::Forward,
-//        Command::PitchUp,
-//        Command::D,
-//        Command::RollRight,
-//        Command::RollRight,
-//    ];
-//    rules[Command::D as usize] = vec![
-//        Command::YawLeft,
-//        Command::YawLeft,
-//        Command::C,
-//        Command::Forward,
-//        Command::B,
-//        Command::YawRight,
-//        Command::Forward,
-//        Command::YawLeft,
-//        Command::B,
-//        Command::YawLeft,
-//        Command::YawLeft,
-//        Command::Forward,
-//        Command::A,
-//        Command::PitchDown,
-//        Command::Forward,
-//        Command::PitchUp,
-//        Command::A,
-//        Command::PitchDown,
-//        Command::PitchDown,
-//        Command::Forward,
-//        Command::B,
-//        Command::YawRight,
-//        Command::Forward,
-//        Command::YawLeft,
-//        Command::B,
-//        Command::YawLeft,
-//        Command::YawLeft,
-//        Command::Forward,
-//        Command::C,
-//        Command::RollRight,
-//        Command::RollRight,
-//    ];
-//    LSystem {
-//        axiom: vec![Command::A],
-//        iterations: 3,
-//        angle: f32::frac_pi_2(),
-//        rules: rules,
-//    }
-//}
+    system.rules['A' as usize] = String::from("B-F+CFC+F-D&F^D-F+&&CFC+F+B>>");
+    system.rules['B' as usize] = String::from("A&F^CFB^F^D^^-F-D^++F^B++FC^F^A>>");
+    system.rules['C' as usize] = String::from("++D^++F^-F+C^F^A&&FA&F^C+F+B^F^D>>");
+    system.rules['D' as usize] = String::from("++CFB-F+B++FA&F^A&&FB-F+B++FC>>");
+
+    system.axiom = String::from("A");
+    system.iterations = 2;
+    system.angle = f32::to_radians(90.0);
+    system.width = 0.01;
+
+    system
+}
 
 //fn make_koch1() -> LSystem {
 //    let mut rules = init_rules();
