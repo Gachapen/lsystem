@@ -6,7 +6,7 @@ use kiss3d::window::Window;
 use kiss3d::light::Light;
 use kiss3d::camera::ArcBall;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 enum Command {
     Forward,
     Backward,
@@ -71,10 +71,13 @@ fn expand_lsystem(axiom: &str, rules: &RuleMap, iterations: u32) -> String {
     lword
 }
 
-fn lword_to_commands(lword: &str, lchar_commands: &CommandMap) -> Vec<Command> {
+fn map_lword_to_commands(lword: &str, lchar_commands: &CommandMap) -> Vec<Command> {
     let mut commands = Vec::<Command>::with_capacity(lword.len());
     for lchar in lword.bytes() {
-        commands.push(lchar_commands[lchar as usize]);
+        let command = lchar_commands[lchar as usize];
+        if (command != Command::Noop) {
+            commands.push(command);
+        }
     }
     commands
 }
@@ -104,7 +107,7 @@ impl LSystem {
 
     fn instructions(&self) -> Vec<Command> {
         let lword = expand_lsystem(&self.axiom, &self.rules, self.iterations);
-        lword_to_commands(&lword, &self.command_map)
+        map_lword_to_commands(&lword, &self.command_map)
     }
 }
 
