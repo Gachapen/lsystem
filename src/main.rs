@@ -105,6 +105,10 @@ impl LSystem {
         }
     }
 
+    fn set_rule(&mut self, letter: char, expansion: &str) {
+        self.rules[letter as usize] = String::from(expansion);
+    }
+
     fn instructions(&self) -> Vec<Command> {
         let lword = expand_lsystem(&self.axiom, &self.rules, self.iterations);
         map_lword_to_commands(&lword, &self.command_map)
