@@ -127,7 +127,7 @@ fn main() {
     };
 
     let segment_length = 0.1;
-    let system = make_plant1();
+    let system = make_2012xuequiang();
 
     println!("Expanding");
     let instructions = system.instructions();
@@ -531,6 +531,26 @@ fn make_gosper_hexa() -> LSystem {
     system.axiom = String::from("l");
     system.iterations = 4;
     system.angle = f32::to_radians(60.0);
+    system.width = 0.02;
+
+    system
+}
+
+fn make_2012xuequiang() -> LSystem {
+    let mut system = LSystem::new();
+
+    // 3D
+    //system.set_rule('X', "F&[[^F^Y]&F&Y]^[[&F&Y]^F^Y]-[[+F+Y]-F-Y]+F[+FX+Y]-X");
+    //system.set_rule('Y', "F[&Y]F[^Y]F[+Y]F[-Y]+Y");
+
+    // 2D
+    system.set_rule('X', "F-[[+F+Y]-F-Y]+F[+FX+Y]-X");
+    system.set_rule('Y', "F[+Y]F[-Y]+Y");
+    system.set_rule('F', "FF");
+
+    system.axiom = String::from("X");
+    system.iterations = 5;
+    system.angle = f32::to_radians(23.5);
     system.width = 0.02;
 
     system
