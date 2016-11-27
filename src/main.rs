@@ -8,6 +8,7 @@ use kiss3d::camera::ArcBall;
 
 mod lsys;
 use lsys::ol;
+use lsys::il;
 use lsys::Command;
 
 fn main() {
@@ -21,8 +22,8 @@ fn main() {
         ArcBall::new(eye, at)
     };
 
-    let segment_length = 0.1;
-    let (system, settings) = make_plant1();
+    let segment_length = 0.2;
+    let (system, settings) = make_hogeweg_e();
 
     println!("Expanding");
     let instructions = system.instructions();
@@ -465,4 +466,144 @@ fn make_2012xuequiang() -> (ol::LSystem, lsys::Settings) {
     };
 
     (system, settings)
+}
+
+fn make_hogeweg_b() -> (il::LSystem, lsys::Settings) {
+    let mut sys = il::LSystem::new();
+
+    sys.axiom = "F1F1F1".to_string();
+    sys.ignore_from_context("+-F");
+    sys.productions = vec![
+        il::Production::with_context('0', '0', '0', "1"),
+        il::Production::with_context('0', '0', '1', "1[-F1F1]"),
+        il::Production::with_context('0', '1', '0', "1"),
+        il::Production::with_context('0', '1', '1', "1"),
+        il::Production::with_context('1', '0', '0', "0"),
+        il::Production::with_context('1', '0', '1', "1F1"),
+        il::Production::with_context('1', '1', '0', "1"),
+        il::Production::with_context('1', '1', '1', "0"),
+        il::Production::without_context('+', "-"),
+        il::Production::without_context('-', "+"),
+    ];
+    sys.iterations = 30;
+
+    let settings = lsys::Settings {
+        angle: f32::to_radians(22.5),
+        width: 0.02,
+        ..lsys::Settings::new()
+    };
+
+    (sys, settings)
+}
+
+fn make_hogeweg_a() -> (il::LSystem, lsys::Settings) {
+    let mut sys = il::LSystem::new();
+
+    sys.axiom = "F1F1F1".to_string();
+    sys.ignore_from_context("+-F");
+    sys.productions = vec![
+        il::Production::with_context('0', '0', '0', "0"),
+        il::Production::with_context('0', '0', '1', "1[+F1F1]"),
+        il::Production::with_context('0', '1', '0', "1"),
+        il::Production::with_context('0', '1', '1', "1"),
+        il::Production::with_context('1', '0', '0', "0"),
+        il::Production::with_context('1', '0', '1', "1F1"),
+        il::Production::with_context('1', '1', '0', "0"),
+        il::Production::with_context('1', '1', '1', "0"),
+        il::Production::without_context('+', "-"),
+        il::Production::without_context('-', "+"),
+    ];
+    sys.iterations = 30;
+
+    let settings = lsys::Settings {
+        angle: f32::to_radians(22.5),
+        width: 0.02,
+        ..lsys::Settings::new()
+    };
+
+    (sys, settings)
+}
+
+fn make_hogeweg_c() -> (il::LSystem, lsys::Settings) {
+    let mut sys = il::LSystem::new();
+
+    sys.axiom = "F1F1F1".to_string();
+    sys.ignore_from_context("+-F");
+    sys.productions = vec![
+        il::Production::with_context('0', '0', '0', "0"),
+        il::Production::with_context('0', '0', '1', "1"),
+        il::Production::with_context('0', '1', '0', "0"),
+        il::Production::with_context('0', '1', '1', "1[+F1F1]"),
+        il::Production::with_context('1', '0', '0', "0"),
+        il::Production::with_context('1', '0', '1', "1F1"),
+        il::Production::with_context('1', '1', '0', "0"),
+        il::Production::with_context('1', '1', '1', "0"),
+        il::Production::without_context('+', "-"),
+        il::Production::without_context('-', "+"),
+    ];
+    sys.iterations = 26;
+
+    let settings = lsys::Settings {
+        angle: f32::to_radians(22.75),
+        width: 0.02,
+        ..lsys::Settings::new()
+    };
+
+    (sys, settings)
+}
+
+fn make_hogeweg_d() -> (il::LSystem, lsys::Settings) {
+    let mut sys = il::LSystem::new();
+
+    sys.axiom = "F0F1F1".to_string();
+    sys.ignore_from_context("+-F");
+    sys.productions = vec![
+        il::Production::with_context('0', '0', '0', "1"),
+        il::Production::with_context('0', '0', '1', "0"),
+        il::Production::with_context('0', '1', '0', "0"),
+        il::Production::with_context('0', '1', '1', "1F1"),
+        il::Production::with_context('1', '0', '0', "1"),
+        il::Production::with_context('1', '0', '1', "1[+F1F1]"),
+        il::Production::with_context('1', '1', '0', "1"),
+        il::Production::with_context('1', '1', '1', "0"),
+        il::Production::without_context('+', "-"),
+        il::Production::without_context('-', "+"),
+    ];
+    sys.iterations = 24;
+
+    let settings = lsys::Settings {
+        angle: f32::to_radians(22.75),
+        width: 0.02,
+        ..lsys::Settings::new()
+    };
+
+    (sys, settings)
+}
+
+fn make_hogeweg_e() -> (il::LSystem, lsys::Settings) {
+    let mut sys = il::LSystem::new();
+
+    sys.axiom = "F1F1F1".to_string();
+    sys.ignore_from_context("+-F");
+    sys.productions = vec![
+        il::Production::with_context('0', '0', '0', "0"),
+        il::Production::with_context('0', '0', '1', "1[-F1F1]"),
+        il::Production::with_context('0', '1', '0', "1"),
+        il::Production::with_context('0', '1', '1', "1"),
+        il::Production::with_context('1', '0', '0', "0"),
+        il::Production::with_context('1', '0', '1', "1F1"),
+        il::Production::with_context('1', '1', '0', "1"),
+        il::Production::with_context('1', '1', '1', "0"),
+        il::Production::without_context('+', "-"),
+        il::Production::without_context('-', "+"),
+    ];
+    sys.iterations = 30;
+
+    let settings = lsys::Settings {
+        angle: f32::to_radians(22.5),
+        width: 0.02,
+        ..lsys::Settings::new()
+    };
+
+    (sys, settings)
 }
