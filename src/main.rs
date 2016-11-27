@@ -6,114 +6,9 @@ use kiss3d::window::Window;
 use kiss3d::light::Light;
 use kiss3d::camera::ArcBall;
 
-#[derive(Copy, Clone, PartialEq, Debug)]
-enum Command {
-    Forward,
-    Backward,
-    YawRight,
-    YawLeft,
-    PitchUp,
-    PitchDown,
-    RollRight,
-    RollLeft,
-    Shrink,
-    Grow,
-    Push,
-    Pop,
-    Noop,
-}
-
-const MAX_ALPHABET_SIZE: usize = 128;
-type RuleMap = [String; MAX_ALPHABET_SIZE];
-type CommandMap = [Command; MAX_ALPHABET_SIZE];
-
-fn create_rule_map() -> RuleMap {
-    let mut rules: RuleMap = unsafe { std::mem::uninitialized() };
-
-    for (i, v) in rules.iter_mut().enumerate() {
-        let mut rule = String::with_capacity(1);
-        rule.push(i as u8 as char);
-        unsafe { std::ptr::write(v, rule); }
-    }
-
-    rules
-}
-
-fn create_command_map() -> CommandMap {
-    let mut lchar_commands: CommandMap = [Command::Noop; MAX_ALPHABET_SIZE];
-
-    lchar_commands['F' as usize] = Command::Forward;
-    lchar_commands['+' as usize] = Command::YawLeft;
-    lchar_commands['-' as usize] = Command::YawRight;
-    lchar_commands['<' as usize] = Command::RollLeft;
-    lchar_commands['>' as usize] = Command::RollRight;
-    lchar_commands['^' as usize] = Command::PitchUp;
-    lchar_commands['&' as usize] = Command::PitchDown;
-    lchar_commands['[' as usize] = Command::Push;
-    lchar_commands[']' as usize] = Command::Pop;
-    lchar_commands['!' as usize] = Command::Shrink;
-
-    lchar_commands
-}
-
-fn expand_lsystem(axiom: &str, rules: &RuleMap, iterations: u32) -> String {
-    let mut lword = String::from(axiom);
-
-    for _ in 0..iterations {
-        let mut expanded_lword = String::with_capacity(lword.len());
-        for lchar in lword.bytes() {
-            let expanded_lchar = &rules[lchar as usize];
-            expanded_lword.push_str(&mut expanded_lchar.clone());
-        }
-        lword = expanded_lword;
-    }
-
-    lword
-}
-
-fn map_lword_to_commands(lword: &str, lchar_commands: &CommandMap) -> Vec<Command> {
-    let mut commands = Vec::<Command>::with_capacity(lword.len());
-    for lchar in lword.bytes() {
-        let command = lchar_commands[lchar as usize];
-        if (command != Command::Noop) {
-            commands.push(command);
-        }
-    }
-    commands
-}
-
-struct LSystem {
-    command_map: CommandMap,
-    rules: RuleMap,
-    axiom: String,
-    iterations: u32,
-    angle: f32,
-    width: f32,
-    shrink_rate: f32,
-}
-
-impl LSystem {
-    fn new() -> LSystem {
-        LSystem {
-            command_map: create_command_map(),
-            rules: create_rule_map(),
-            axiom: String::new(),
-            iterations: 0,
-            angle: 0.0,
-            width: 1.0,
-            shrink_rate: 1.0,
-        }
-    }
-
-    fn set_rule(&mut self, letter: char, expansion: &str) {
-        self.rules[letter as usize] = String::from(expansion);
-    }
-
-    fn instructions(&self) -> Vec<Command> {
-        let lword = expand_lsystem(&self.axiom, &self.rules, self.iterations);
-        map_lword_to_commands(&lword, &self.command_map)
-    }
-}
+mod lsys;
+use lsys::ol;
+use lsys::Command;
 
 fn main() {
     let mut window = Window::new("lsystem");
@@ -127,7 +22,7 @@ fn main() {
     };
 
     let segment_length = 0.1;
-    let system = make_2012xuequiang();
+    let (system, settings) = make_plant1();
 
     println!("Expanding");
     let instructions = system.instructions();
@@ -137,7 +32,7 @@ fn main() {
     //tree.append_translation(&Vector3::new(0.0, -10.0, 0.0));
     let mut position = Point3::new(0.0, 0.0, 0.0);
     let mut rotation = Rotation3::new(Vector3::new(0.0, 0.0, 0.0));
-    let mut width = system.width;
+    let mut width = settings.width;
     let mut states = Vec::<(Point3<f32>, Rotation3<f32>, f32)>::new();
 
     println!("Assembling");
@@ -160,28 +55,28 @@ fn main() {
             &Command::Backward => {
             },
             &Command::YawRight => {
-                rotation = Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * -system.angle) * rotation;
+                rotation = Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * -settings.angle) * rotation;
             },
             &Command::YawLeft => {
-                rotation = Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * system.angle) * rotation;
+                rotation = Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * settings.angle) * rotation;
             },
             &Command::PitchUp => {
-                rotation = Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * system.angle) * rotation;
+                rotation = Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * settings.angle) * rotation;
             },
             &Command::PitchDown => {
-                rotation = Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * -system.angle) * rotation;
+                rotation = Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * -settings.angle) * rotation;
             }
             &Command::RollRight => {
-                rotation = Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * -system.angle) * rotation;
+                rotation = Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * -settings.angle) * rotation;
             },
             &Command::RollLeft => {
-                rotation = Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * system.angle) * rotation;
+                rotation = Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * settings.angle) * rotation;
             },
             &Command::Shrink => {
-                width = width / system.shrink_rate;
+                width = width / settings.shrink_rate;
             },
             &Command::Grow => {
-                width = width * system.shrink_rate;
+                width = width * settings.shrink_rate;
             },
             &Command::Push => {
                 states.push((position, rotation, width));
@@ -231,7 +126,7 @@ fn main() {
 //    rules
 //}
 
-//fn make_thing1() -> LSystem {
+//fn make_thing1() -> ol::LSystem {
 //    let mut rules = init_rules();
 
 //    rules[Command::Forward as usize] = vec![
@@ -245,7 +140,7 @@ fn main() {
 //        Command::Forward
 //    ];
 
-//    LSystem {
+//    ol::LSystem {
 //        axiom: vec![Command::Forward],
 //        iterations: 4,
 //        angle: f32::frac_pi_4(),
@@ -253,8 +148,8 @@ fn main() {
 //    }
 //}
 
-fn make_hilbert() -> LSystem {
-    let mut system = LSystem::new();
+fn make_hilbert() -> (ol::LSystem, lsys::Settings) {
+    let mut system = ol::LSystem::new();
 
     system.rules['A' as usize] = String::from("B-F+CFC+F-D&F^D-F+&&CFC+F+B>>");
     system.rules['B' as usize] = String::from("A&F^CFB^F^D^^-F-D^++F^B++FC^F^A>>");
@@ -263,13 +158,17 @@ fn make_hilbert() -> LSystem {
 
     system.axiom = String::from("A");
     system.iterations = 2;
-    system.angle = f32::to_radians(90.0);
-    system.width = 0.01;
 
-    system
+    let settings = lsys::Settings {
+        angle: f32::to_radians(90.0),
+        width: 0.01,
+        ..lsys::Settings::new()
+    };
+
+    (system, settings)
 }
 
-//fn make_koch1() -> LSystem {
+//fn make_koch1() -> ol::LSystem {
 //    let mut rules = init_rules();
 
 //    rules[Command::Forward as usize] = vec![
@@ -289,7 +188,7 @@ fn make_hilbert() -> LSystem {
 //        Command::Forward,
 //    ];
 
-//    LSystem {
+//    ol::LSystem {
 //        axiom: vec![
 //            Command::Forward,
 //            Command::YawLeft,
@@ -305,7 +204,7 @@ fn make_hilbert() -> LSystem {
 //    }
 //}
 
-//fn make_koch2() -> LSystem {
+//fn make_koch2() -> ol::LSystem {
 //    let mut rules = init_rules();
 
 //    rules[Command::Forward as usize] = vec![
@@ -320,7 +219,7 @@ fn make_hilbert() -> LSystem {
 //        Command::Forward,
 //    ];
 
-//    LSystem {
+//    ol::LSystem {
 //        axiom: vec![
 //            Command::Forward,
 //            Command::YawLeft,
@@ -336,7 +235,7 @@ fn make_hilbert() -> LSystem {
 //    }
 //}
 
-//fn make_koch3() -> LSystem {
+//fn make_koch3() -> ol::LSystem {
 //    let mut rules = init_rules();
 
 //    rules[Command::Forward as usize] = vec![
@@ -351,7 +250,7 @@ fn make_hilbert() -> LSystem {
 //        Command::Forward,
 //    ];
 
-//    LSystem {
+//    ol::LSystem {
 //        axiom: vec![
 //            Command::Forward,
 //            Command::YawLeft,
@@ -367,8 +266,8 @@ fn make_hilbert() -> LSystem {
 //    }
 //}
 
-fn make_plant1() -> LSystem {
-    let mut system = LSystem::new();
+fn make_plant1() -> (ol::LSystem, lsys::Settings) {
+    let mut system = ol::LSystem::new();
 
     system.command_map['X' as usize] = Command::Noop;
 
@@ -377,14 +276,18 @@ fn make_plant1() -> LSystem {
 
     system.axiom = String::from("X");
     system.iterations = 6;
-    system.angle = 0.4485496;
-    system.width = 0.03;
-    system.shrink_rate = 1.01;
 
-    system
+    let settings = lsys::Settings {
+        angle: 0.4485496,
+        width: 0.03,
+        shrink_rate: 1.01,
+        ..lsys::Settings::new()
+    };
+
+    (system, settings)
 }
 
-//fn make_plant2() -> LSystem {
+//fn make_plant2() -> ol::LSystem {
 //    let mut rules = init_rules();
 
 //    rules[Command::A as usize] = vec![
@@ -438,7 +341,7 @@ fn make_plant1() -> LSystem {
 //        Command::Forward,
 //    ];
 
-//    LSystem {
+//    ol::LSystem {
 //        axiom: vec![Command::A],
 //        iterations: 5,
 //        angle: 0.3926991,
@@ -446,7 +349,7 @@ fn make_plant1() -> LSystem {
 //    }
 //}
 
-//fn make_wheat() -> LSystem {
+//fn make_wheat() -> ol::LSystem {
 //    let mut rules = init_rules();
 
 //    rules[Command::A as usize] = vec![
@@ -465,7 +368,7 @@ fn make_plant1() -> LSystem {
 //        Command::A,
 //    ];
 
-//    LSystem {
+//    ol::LSystem {
 //        axiom: vec![Command::A],
 //        iterations: 10,
 //        angle: f32::frac_pi_4(),
@@ -473,7 +376,7 @@ fn make_plant1() -> LSystem {
 //    }
 //}
 
-//fn make_plant3() -> LSystem {
+//fn make_plant3() -> ol::LSystem {
 //    let mut rules = init_rules();
 
 //    rules[Command::A as usize] = vec![
@@ -511,7 +414,7 @@ fn make_plant1() -> LSystem {
 //        Command::Forward,
 //    ];
 
-//    LSystem {
+//    ol::LSystem {
 //        axiom: vec![Command::A],
 //        iterations: 6,
 //        angle: f32::frac_pi_4(),
@@ -519,8 +422,8 @@ fn make_plant1() -> LSystem {
 //    }
 //}
 
-fn make_gosper_hexa() -> LSystem {
-    let mut system = LSystem::new();
+fn make_gosper_hexa() -> (ol::LSystem, lsys::Settings) {
+    let mut system = ol::LSystem::new();
 
     system.command_map['l' as usize] = Command::Forward;
     system.command_map['r' as usize] = Command::Forward;
@@ -530,14 +433,18 @@ fn make_gosper_hexa() -> LSystem {
 
     system.axiom = String::from("l");
     system.iterations = 4;
-    system.angle = f32::to_radians(60.0);
-    system.width = 0.02;
 
-    system
+    let settings = lsys::Settings {
+        angle: f32::to_radians(60.0),
+        width: 0.02,
+        ..lsys::Settings::new()
+    };
+
+    (system, settings)
 }
 
-fn make_2012xuequiang() -> LSystem {
-    let mut system = LSystem::new();
+fn make_2012xuequiang() -> (ol::LSystem, lsys::Settings) {
+    let mut system = ol::LSystem::new();
 
     // 3D
     //system.set_rule('X', "F&[[^F^Y]&F&Y]^[[&F&Y]^F^Y]-[[+F+Y]-F-Y]+F[+FX+Y]-X");
@@ -550,8 +457,12 @@ fn make_2012xuequiang() -> LSystem {
 
     system.axiom = String::from("X");
     system.iterations = 5;
-    system.angle = f32::to_radians(23.5);
-    system.width = 0.02;
 
-    system
+    let settings = lsys::Settings {
+        angle: f32::to_radians(23.5),
+        width: 0.02,
+        ..lsys::Settings::new()
+    };
+
+    (system, settings)
 }
