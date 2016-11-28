@@ -63,6 +63,10 @@ impl LSystem {
         }
     }
 
+    pub fn map_command(&mut self, letter: char, command: Command) {
+        self.command_map[letter as u8 as usize] = command;
+    }
+
     pub fn set_rule(&mut self, letter: char, expansion: &str) {
         self.rules[letter as usize] = String::from(expansion);
     }
