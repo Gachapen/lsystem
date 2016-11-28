@@ -1,10 +1,10 @@
 use std::mem;
 use std::ptr;
 
-use lsys::common::Command;
-use lsys::common::CommandMap;
-use lsys::common::create_command_map;
-use lsys::common::MAX_ALPHABET_SIZE;
+use common::Command;
+use common::CommandMap;
+use common::create_command_map;
+use common::MAX_ALPHABET_SIZE;
 
 type RuleMap = [String; MAX_ALPHABET_SIZE];
 

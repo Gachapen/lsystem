@@ -6,3 +6,4 @@ authors = [ "Magnus Bjerke Vik <mbvett@gmail.com>" ]
 [dependencies]
 kiss3d = "0.7.*"
 nalgebra = "0.9.*"
+lsys = { path = "lsys" }

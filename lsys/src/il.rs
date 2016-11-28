@@ -2,9 +2,9 @@ use std::fmt;
 use std::result::Result;
 use std::option::Option;
 
-use lsys::common::Command;
-use lsys::common::CommandMap;
-use lsys::common::create_command_map;
+use common::Command;
+use common::CommandMap;
+use common::create_command_map;
 
 fn matches_left_context(word_left: &str, context: u8, ignores: &Vec<u8>) -> bool {
     let bytes = word_left.as_bytes();
