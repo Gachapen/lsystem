@@ -23,7 +23,7 @@ fn main() {
     };
 
     let segment_length = 0.2;
-    let (system, settings) = make_hogeweg_e();
+    let (system, settings) = make_bush();
 
     println!("Expanding");
     let instructions = system.instructions();
@@ -62,10 +62,10 @@ fn main() {
                 rotation = Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * settings.angle) * rotation;
             },
             &Command::PitchUp => {
-                rotation = Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * settings.angle) * rotation;
+                rotation = rotation * Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * settings.angle)// * rotation;
             },
             &Command::PitchDown => {
-                rotation = Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * -settings.angle) * rotation;
+                rotation = rotation * Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * -settings.angle)// * rotation;
             }
             &Command::RollRight => {
                 rotation = Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * -settings.angle) * rotation;
@@ -598,6 +598,24 @@ fn make_hogeweg_e() -> (il::LSystem, lsys::Settings) {
         il::Production::without_context('-', "+"),
     ];
     sys.iterations = 30;
+
+    let settings = lsys::Settings {
+        angle: f32::to_radians(22.5),
+        width: 0.02,
+        ..lsys::Settings::new()
+    };
+
+    (sys, settings)
+}
+
+fn make_bush() -> (ol::LSystem, lsys::Settings) {
+    let mut sys = ol::LSystem::new();
+
+    sys.axiom = "A".to_string();
+    sys.set_rule('A', "[&FA]>>>>>[&FA]>>>>>>>[&FA]");
+    sys.set_rule('F', "S>>>>>F");
+    sys.set_rule('S', "F");
+    sys.iterations = 7;
 
     let settings = lsys::Settings {
         angle: f32::to_radians(22.5),
