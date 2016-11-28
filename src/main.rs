@@ -56,22 +56,22 @@ fn main() {
             &Command::Backward => {
             },
             &Command::YawRight => {
-                rotation = Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * -settings.angle) * rotation;
+                rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * -settings.angle);
             },
             &Command::YawLeft => {
-                rotation = Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * settings.angle) * rotation;
+                rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * settings.angle);
             },
             &Command::PitchUp => {
-                rotation = rotation * Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * settings.angle)// * rotation;
+                rotation = rotation * Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * settings.angle);
             },
             &Command::PitchDown => {
-                rotation = rotation * Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * -settings.angle)// * rotation;
+                rotation = rotation * Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * -settings.angle);
             }
             &Command::RollRight => {
-                rotation = Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * -settings.angle) * rotation;
+                rotation = rotation * Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * -settings.angle);
             },
             &Command::RollLeft => {
-                rotation = Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * settings.angle) * rotation;
+                rotation = rotation * Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * settings.angle);
             },
             &Command::Shrink => {
                 width = width / settings.shrink_rate;
@@ -612,14 +612,15 @@ fn make_bush() -> (ol::LSystem, lsys::Settings) {
     let mut sys = ol::LSystem::new();
 
     sys.axiom = "A".to_string();
-    sys.set_rule('A', "[&FA]>>>>>[&FA]>>>>>>>[&FA]");
+    sys.set_rule('A', "[&F!A]>>>>>[&F!A]>>>>>>>[&F!A]");
     sys.set_rule('F', "S>>>>>F");
     sys.set_rule('S', "F");
     sys.iterations = 7;
 
     let settings = lsys::Settings {
         angle: f32::to_radians(22.5),
-        width: 0.02,
+        width: 0.1,
+        shrink_rate: 1.5,
         ..lsys::Settings::new()
     };
 
