@@ -26,7 +26,7 @@ fn main() {
     let (system, settings) = make_bush();
 
     println!("Expanding");
-    let instructions = system.instructions();
+    let instructions = system.instructions(settings.iterations);
 
     let mut tree = window.add_group();
     tree.append_rotation(&Vector3::new(f32::frac_pi_2(), 0.0, 0.0));
@@ -158,11 +158,11 @@ fn make_hilbert() -> (ol::LSystem, lsys::Settings) {
     system.rules['D' as usize] = String::from("++CFB-F+B++FA&F^A&&FB-F+B++FC>>");
 
     system.axiom = String::from("A");
-    system.iterations = 2;
 
     let settings = lsys::Settings {
         angle: f32::to_radians(90.0),
         width: 0.01,
+        iterations: 2,
         ..lsys::Settings::new()
     };
 
@@ -276,12 +276,12 @@ fn make_plant1() -> (ol::LSystem, lsys::Settings) {
     system.rules['F' as usize] = String::from("F!F!");
 
     system.axiom = String::from("X");
-    system.iterations = 6;
 
     let settings = lsys::Settings {
         angle: 0.4485496,
         width: 0.03,
         shrink_rate: 1.01,
+        iterations: 6,
         ..lsys::Settings::new()
     };
 
@@ -433,11 +433,11 @@ fn make_gosper_hexa() -> (ol::LSystem, lsys::Settings) {
     system.rules['r' as usize] = String::from("-l+rr++r+l--l-r");
 
     system.axiom = String::from("l");
-    system.iterations = 4;
 
     let settings = lsys::Settings {
         angle: f32::to_radians(60.0),
         width: 0.02,
+        iterations: 4,
         ..lsys::Settings::new()
     };
 
@@ -457,11 +457,11 @@ fn make_2012xuequiang() -> (ol::LSystem, lsys::Settings) {
     system.set_rule('F', "FF");
 
     system.axiom = String::from("X");
-    system.iterations = 5;
 
     let settings = lsys::Settings {
         angle: f32::to_radians(23.5),
         width: 0.02,
+        iterations: 5,
         ..lsys::Settings::new()
     };
 
@@ -485,11 +485,11 @@ fn make_hogeweg_b() -> (il::LSystem, lsys::Settings) {
         il::Production::without_context('+', "-"),
         il::Production::without_context('-', "+"),
     ];
-    sys.iterations = 30;
 
     let settings = lsys::Settings {
         angle: f32::to_radians(22.5),
         width: 0.02,
+        iterations: 30,
         ..lsys::Settings::new()
     };
 
@@ -513,11 +513,11 @@ fn make_hogeweg_a() -> (il::LSystem, lsys::Settings) {
         il::Production::without_context('+', "-"),
         il::Production::without_context('-', "+"),
     ];
-    sys.iterations = 30;
 
     let settings = lsys::Settings {
         angle: f32::to_radians(22.5),
         width: 0.02,
+        iterations: 30,
         ..lsys::Settings::new()
     };
 
@@ -541,11 +541,11 @@ fn make_hogeweg_c() -> (il::LSystem, lsys::Settings) {
         il::Production::without_context('+', "-"),
         il::Production::without_context('-', "+"),
     ];
-    sys.iterations = 26;
 
     let settings = lsys::Settings {
         angle: f32::to_radians(22.75),
         width: 0.02,
+        iterations: 26,
         ..lsys::Settings::new()
     };
 
@@ -569,11 +569,11 @@ fn make_hogeweg_d() -> (il::LSystem, lsys::Settings) {
         il::Production::without_context('+', "-"),
         il::Production::without_context('-', "+"),
     ];
-    sys.iterations = 24;
 
     let settings = lsys::Settings {
         angle: f32::to_radians(22.75),
         width: 0.02,
+        iterations: 24,
         ..lsys::Settings::new()
     };
 
@@ -597,11 +597,11 @@ fn make_hogeweg_e() -> (il::LSystem, lsys::Settings) {
         il::Production::without_context('+', "-"),
         il::Production::without_context('-', "+"),
     ];
-    sys.iterations = 30;
 
     let settings = lsys::Settings {
         angle: f32::to_radians(22.5),
         width: 0.02,
+        iterations: 30,
         ..lsys::Settings::new()
     };
 
@@ -615,12 +615,12 @@ fn make_bush() -> (ol::LSystem, lsys::Settings) {
     sys.set_rule('A', "[&F!A]>>>>>[&F!A]>>>>>>>[&F!A]");
     sys.set_rule('F', "S>>>>>F");
     sys.set_rule('S', "F");
-    sys.iterations = 7;
 
     let settings = lsys::Settings {
         angle: f32::to_radians(22.5),
         width: 0.1,
         shrink_rate: 1.5,
+        iterations: 7,
         ..lsys::Settings::new()
     };
 

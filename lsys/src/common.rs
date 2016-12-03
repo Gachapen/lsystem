@@ -35,7 +35,19 @@ pub fn create_command_map() -> CommandMap {
     lchar_commands
 }
 
+pub fn map_lword_to_commands(lword: &str, lchar_commands: &CommandMap) -> Vec<Command> {
+    let mut commands = Vec::<Command>::with_capacity(lword.len());
+    for lchar in lword.bytes() {
+        let command = lchar_commands[lchar as usize];
+        if command != Command::Noop {
+            commands.push(command);
+        }
+    }
+    commands
+}
+
 pub struct Settings {
+    pub iterations: u32,
     pub angle: f32,
     pub width: f32,
     pub shrink_rate: f32,
@@ -44,6 +56,7 @@ pub struct Settings {
 impl Settings {
     pub fn new() -> Settings {
         Settings {
+            iterations: 0,
             angle: 0.0,
             width: 1.0,
             shrink_rate: 1.0,

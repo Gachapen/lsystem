@@ -4,6 +4,7 @@ use std::ptr;
 use common::Command;
 use common::CommandMap;
 use common::create_command_map;
+use common::map_lword_to_commands;
 use common::MAX_ALPHABET_SIZE;
 
 type RuleMap = [String; MAX_ALPHABET_SIZE];
@@ -30,27 +31,16 @@ fn expand_lsystem(axiom: &str, rules: &RuleMap, iterations: u32) -> String {
             expanded_lword.push_str(&mut expanded_lchar.clone());
         }
         lword = expanded_lword;
+        //println!("{}: {}", i+1, lword);
     }
 
     lword
-}
-
-fn map_lword_to_commands(lword: &str, lchar_commands: &CommandMap) -> Vec<Command> {
-    let mut commands = Vec::<Command>::with_capacity(lword.len());
-    for lchar in lword.bytes() {
-        let command = lchar_commands[lchar as usize];
-        if command != Command::Noop {
-            commands.push(command);
-        }
-    }
-    commands
 }
 
 pub struct LSystem {
     pub command_map: CommandMap,
     pub rules: RuleMap,
     pub axiom: String,
-    pub iterations: u32,
 }
 
 impl LSystem {
@@ -59,7 +49,6 @@ impl LSystem {
             command_map: create_command_map(),
             rules: create_rule_map(),
             axiom: String::new(),
-            iterations: 0,
         }
     }
 
@@ -71,8 +60,8 @@ impl LSystem {
         self.rules[letter as usize] = String::from(expansion);
     }
 
-    pub fn instructions(&self) -> Vec<Command> {
-        let lword = expand_lsystem(&self.axiom, &self.rules, self.iterations);
+    pub fn instructions(&self, iterations: u32) -> Vec<Command> {
+        let lword = expand_lsystem(&self.axiom, &self.rules, iterations);
         map_lword_to_commands(&lword, &self.command_map)
     }
 }

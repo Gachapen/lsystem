@@ -5,6 +5,7 @@ use std::option::Option;
 use common::Command;
 use common::CommandMap;
 use common::create_command_map;
+use common::map_lword_to_commands;
 
 fn matches_left_context(word_left: &str, context: u8, ignores: &Vec<u8>) -> bool {
     let bytes = word_left.as_bytes();
@@ -185,7 +186,7 @@ fn expand_lsystem(axiom: &str, rules: &Vec<Production>, iterations: u32, ignore:
     let mut lword = String::from(axiom);
     //println!("0: {}", lword);
 
-    for i in 0..iterations {
+    for _ in 0..iterations {
         let mut expanded_lword = String::with_capacity(lword.len());
 
         for (i, lchar) in lword.as_bytes().iter().cloned().enumerate() {
@@ -205,17 +206,6 @@ fn expand_lsystem(axiom: &str, rules: &Vec<Production>, iterations: u32, ignore:
     }
 
     lword
-}
-
-fn map_lword_to_commands(lword: &str, lchar_commands: &CommandMap) -> Vec<Command> {
-    let mut commands = Vec::<Command>::with_capacity(lword.len());
-    for lchar in lword.bytes() {
-        let command = lchar_commands[lchar as usize];
-        if command != Command::Noop {
-            commands.push(command);
-        }
-    }
-    commands
 }
 
 pub struct Predecessor {
@@ -313,7 +303,6 @@ pub struct LSystem {
     pub command_map: CommandMap,
     pub productions: Vec<Production>,
     pub axiom: String,
-    pub iterations: u32,
     ignore: Vec<u8>,
 }
 
@@ -323,13 +312,12 @@ impl LSystem {
             command_map: create_command_map(),
             productions: Vec::new(),
             axiom: String::new(),
-            iterations: 0,
             ignore: Vec::new(),
         }
     }
 
-    pub fn instructions(&self) -> Vec<Command> {
-        let lword = expand_lsystem(&self.axiom, &self.productions, self.iterations, &self.ignore);
+    pub fn instructions(&self, iterations: u32) -> Vec<Command> {
+        let lword = expand_lsystem(&self.axiom, &self.productions, iterations, &self.ignore);
         map_lword_to_commands(&lword, &self.command_map)
     }
 
@@ -343,8 +331,6 @@ impl LSystem {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn matches_left_context_test_single() {
         assert!(super::matches_left_context("A", 'A' as u8, &vec![]));
