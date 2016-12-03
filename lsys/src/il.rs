@@ -251,13 +251,22 @@ impl Predecessor {
 impl fmt::Debug for Predecessor {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if let Some(left) = self.left {
-            write!(f, "{} < ", left as char);
+            let result = write!(f, "{} < ", left as char);
+            if result.is_err() {
+                return result;
+            }
         }
 
-        write!(f, "{}", self.strict as char);
+        let result = write!(f, "{}", self.strict as char);
+        if result.is_err() {
+            return result;
+        }
 
         if let Some(right) = self.right {
-            write!(f, " > {}", right as char);
+            let result = write!(f, " > {}", right as char);
+            if result.is_err() {
+                return result;
+            }
         }
 
         Result::Ok::<(), fmt::Error>(())
