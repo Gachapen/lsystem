@@ -28,7 +28,7 @@ fn main() {
     };
 
     let segment_length = 0.2;
-    let (system, settings) = make_antenna();
+    let (system, settings) = make_tree();
 
     println!("Expanding");
     let instructions = system.instructions(settings.iterations);
@@ -146,6 +146,9 @@ fn main() {
                     }
                 };
                 width = width * rate;
+            },
+            Command::Width => {
+                width = instruction.args[0];
             },
             Command::Push => {
                 states.push((position, rotation, width));
@@ -728,6 +731,70 @@ fn make_antenna() -> (param::LSystem, lsys::Settings) {
         angle: f32::to_radians(85.0),
         width: 0.05,
         iterations: 10,
+        ..lsys::Settings::new()
+    };
+
+    (sys, settings)
+}
+
+fn make_tree() -> (param::LSystem, lsys::Settings) {
+    let mut sys = param::LSystem::new();
+
+    sys.axiom = vec![
+        param::Letter::with_params('#', vec![Param::Float(1.0/10.0)]),
+        param::Letter::with_params('F', vec![Param::Float(5.0)]),
+        param::Letter::with_params('>', vec![Param::Float(f32::to_radians(45.0))]),
+        param::Letter::new('A'),
+    ];
+
+    let d1 = f32::to_radians(94.74);
+    let d2 = f32::to_radians(132.63);
+    let a = f32::to_radians(18.95);
+    let lr = 1.309;
+    let vr = 1.732;
+
+    sys.productions = vec![
+        param::Production::new(
+            'A',
+            vec![
+                param::ProductionLetter::with_transform('#', Rc::new(move |_| vec![Param::Float(vr/10.0)])),
+                param::ProductionLetter::with_params('F', vec![Param::Float(2.0)]),
+                param::ProductionLetter::new('['),
+                param::ProductionLetter::with_transform('&', Rc::new(move |_| vec![Param::Float(a)])),
+                param::ProductionLetter::with_params('F', vec![Param::Float(2.0)]),
+                param::ProductionLetter::new('A'),
+                param::ProductionLetter::new(']'),
+                param::ProductionLetter::with_transform('>', Rc::new(move |_| vec![Param::Float(d1)])),
+                param::ProductionLetter::new('['),
+                param::ProductionLetter::with_transform('&', Rc::new(move |_| vec![Param::Float(a)])),
+                param::ProductionLetter::with_params('F', vec![Param::Float(2.0)]),
+                param::ProductionLetter::new('A'),
+                param::ProductionLetter::new(']'),
+                param::ProductionLetter::with_transform('>', Rc::new(move |_| vec![Param::Float(d2)])),
+                param::ProductionLetter::new('['),
+                param::ProductionLetter::with_transform('&', Rc::new(move |_| vec![Param::Float(a)])),
+                param::ProductionLetter::with_params('F', vec![Param::Float(2.0)]),
+                param::ProductionLetter::new('A'),
+                param::ProductionLetter::new(']'),
+            ]
+        ),
+        param::Production::new(
+            'F',
+            vec![
+                param::ProductionLetter::with_transform('F', Rc::new(move |p| vec![Param::Float(p[0].float().unwrap() * lr)])),
+            ]
+        ),
+        param::Production::new(
+            '#',
+            vec![
+                param::ProductionLetter::with_transform('#', Rc::new(move |p| vec![Param::Float(p[0].float().unwrap() * vr)])),
+            ]
+        ),
+    ];
+
+    let settings = lsys::Settings {
+        width: 0.05,
+        iterations: 7,
         ..lsys::Settings::new()
     };
 

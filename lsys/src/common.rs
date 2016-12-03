@@ -9,6 +9,7 @@ pub enum Command {
     RollLeft,
     Shrink,
     Grow,
+    Width,
     Push,
     Pop,
     Noop,
@@ -44,6 +45,7 @@ pub fn create_command_map() -> CommandMap {
     lchar_commands['[' as usize] = Command::Push;
     lchar_commands[']' as usize] = Command::Pop;
     lchar_commands['!' as usize] = Command::Shrink;
+    lchar_commands['#' as usize] = Command::Width;
 
     lchar_commands
 }
