@@ -2,14 +2,19 @@ extern crate kiss3d;
 extern crate nalgebra as na;
 extern crate lsys;
 
+use std::rc::Rc;
+
 use na::{Vector3, Point3, Rotation3, Translate, BaseFloat};
 use kiss3d::window::Window;
 use kiss3d::light::Light;
 use kiss3d::camera::ArcBall;
 
+use lsys::Command;
 use lsys::ol;
 use lsys::il;
-use lsys::Command;
+use lsys::param;
+use lsys::param::Param;
+use lsys::param::WordFromString;
 
 fn main() {
     let mut window = Window::new("lsystem");
@@ -23,7 +28,7 @@ fn main() {
     };
 
     let segment_length = 0.2;
-    let (system, settings) = make_bush();
+    let (system, settings) = make_antenna();
 
     println!("Expanding");
     let instructions = system.instructions(settings.iterations);
@@ -38,9 +43,18 @@ fn main() {
 
     println!("Assembling");
 
-    for command in &instructions {
+    for instruction in &instructions {
+        let command = instruction.command;
         match command {
-            &Command::Forward => {
+            Command::Forward => {
+                let segment_length = {
+                    if !instruction.args.is_empty() {
+                       instruction.args[0]
+                    } else {
+                        segment_length
+                    }
+                };
+
                 let mut segment = tree.add_cube(1.0 * width, 1.0 * width, segment_length);
                 segment.append_translation(&Vector3::new(0.0, 0.0, -segment_length / 2.0));
                 segment.append_transformation(
@@ -53,36 +67,90 @@ fn main() {
                 let direction = na::rotate(&rotation, &Vector3::new(0.0, 0.0, -1.0));
                 position = (direction * segment_length).translate(&position);
             },
-            &Command::Backward => {
+            Command::YawRight => {
+                let angle = {
+                    if !instruction.args.is_empty() {
+                       instruction.args[0]
+                    } else {
+                        settings.angle
+                    }
+                };
+                rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * -angle);
             },
-            &Command::YawRight => {
-                rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * -settings.angle);
+            Command::YawLeft => {
+                let angle = {
+                    if !instruction.args.is_empty() {
+                       instruction.args[0]
+                    } else {
+                        settings.angle
+                    }
+                };
+                rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * angle);
             },
-            &Command::YawLeft => {
-                rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * settings.angle);
+            Command::PitchUp => {
+                let angle = {
+                    if !instruction.args.is_empty() {
+                       instruction.args[0]
+                    } else {
+                        settings.angle
+                    }
+                };
+                rotation = rotation * Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * angle);
             },
-            &Command::PitchUp => {
-                rotation = rotation * Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * settings.angle);
-            },
-            &Command::PitchDown => {
-                rotation = rotation * Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * -settings.angle);
+            Command::PitchDown => {
+                let angle = {
+                    if !instruction.args.is_empty() {
+                       instruction.args[0]
+                    } else {
+                        settings.angle
+                    }
+                };
+                rotation = rotation * Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * -angle);
             }
-            &Command::RollRight => {
-                rotation = rotation * Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * -settings.angle);
+            Command::RollRight => {
+                let angle = {
+                    if !instruction.args.is_empty() {
+                       instruction.args[0]
+                    } else {
+                        settings.angle
+                    }
+                };
+                rotation = rotation * Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * -angle);
             },
-            &Command::RollLeft => {
-                rotation = rotation * Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * settings.angle);
+            Command::RollLeft => {
+                let angle = {
+                    if !instruction.args.is_empty() {
+                       instruction.args[0]
+                    } else {
+                        settings.angle
+                    }
+                };
+                rotation = rotation * Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * angle);
             },
-            &Command::Shrink => {
-                width = width / settings.shrink_rate;
+            Command::Shrink => {
+                let rate = {
+                    if !instruction.args.is_empty() {
+                       instruction.args[0]
+                    } else {
+                        settings.shrink_rate
+                    }
+                };
+                width = width / rate;
             },
-            &Command::Grow => {
-                width = width * settings.shrink_rate;
+            Command::Grow => {
+                let rate = {
+                    if !instruction.args.is_empty() {
+                       instruction.args[0]
+                    } else {
+                        settings.shrink_rate
+                    }
+                };
+                width = width * rate;
             },
-            &Command::Push => {
+            Command::Push => {
                 states.push((position, rotation, width));
             },
-            &Command::Pop => {
+            Command::Pop => {
                 if let Some((stored_position, stored_rotation, stored_width)) = states.pop() {
                     position = stored_position;
                     rotation = stored_rotation;
@@ -91,7 +159,7 @@ fn main() {
                     panic!("Tried to pop empty state stack");
                 }
             },
-            &Command::Noop => {},
+            Command::Noop => {},
         };
     }
 
@@ -621,6 +689,45 @@ fn make_bush() -> (ol::LSystem, lsys::Settings) {
         width: 0.1,
         shrink_rate: 1.5,
         iterations: 7,
+        ..lsys::Settings::new()
+    };
+
+    (sys, settings)
+}
+
+fn make_antenna() -> (param::LSystem, lsys::Settings) {
+    let mut sys = param::LSystem::new();
+
+    sys.axiom = param::Word::from_str("A");
+
+    let r = 1.456;
+    sys.productions = vec![
+        param::Production::new(
+            'A',
+            vec![
+                param::ProductionLetter::with_params('F', vec![Param::Float(1.0)]),
+                param::ProductionLetter::new('['),
+                param::ProductionLetter::new('+'),
+                param::ProductionLetter::new('A'),
+                param::ProductionLetter::new(']'),
+                param::ProductionLetter::new('['),
+                param::ProductionLetter::new('-'),
+                param::ProductionLetter::new('A'),
+                param::ProductionLetter::new(']'),
+            ]
+        ),
+        param::Production::new(
+            'F',
+            vec![
+                param::ProductionLetter::with_transform('F', Rc::new(move |p| vec![Param::Float(p[0].float().unwrap() * r)])),
+            ]
+        ),
+    ];
+
+    let settings = lsys::Settings {
+        angle: f32::to_radians(85.0),
+        width: 0.05,
+        iterations: 10,
         ..lsys::Settings::new()
     };
 

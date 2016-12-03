@@ -1,7 +1,6 @@
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Command {
     Forward,
-    Backward,
     YawRight,
     YawLeft,
     PitchUp,
@@ -13,6 +12,20 @@ pub enum Command {
     Push,
     Pop,
     Noop,
+}
+
+pub struct Instruction {
+    pub command: Command,
+    pub args: Vec<f32>,
+}
+
+impl Instruction {
+    fn new(command: Command) -> Instruction {
+        Instruction {
+            command: command,
+            args: vec![],
+        }
+    }
 }
 
 pub const MAX_ALPHABET_SIZE: usize = 128;
@@ -35,15 +48,15 @@ pub fn create_command_map() -> CommandMap {
     lchar_commands
 }
 
-pub fn map_lword_to_commands(lword: &str, lchar_commands: &CommandMap) -> Vec<Command> {
-    let mut commands = Vec::<Command>::with_capacity(lword.len());
-    for lchar in lword.bytes() {
-        let command = lchar_commands[lchar as usize];
+pub fn map_word_to_instructions(word: &str, command_map: &CommandMap) -> Vec<Instruction> {
+    let mut instructions = Vec::<Instruction>::with_capacity(word.len());
+    for letter in word.bytes() {
+        let command = command_map[letter as usize];
         if command != Command::Noop {
-            commands.push(command);
+            instructions.push(Instruction::new(command));
         }
     }
-    commands
+    instructions
 }
 
 pub struct Settings {

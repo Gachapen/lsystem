@@ -2,9 +2,10 @@ use std::mem;
 use std::ptr;
 
 use common::Command;
+use common::Instruction;
 use common::CommandMap;
 use common::create_command_map;
-use common::map_lword_to_commands;
+use common::map_word_to_instructions;
 use common::MAX_ALPHABET_SIZE;
 
 type RuleMap = [String; MAX_ALPHABET_SIZE];
@@ -60,8 +61,8 @@ impl LSystem {
         self.rules[letter as usize] = String::from(expansion);
     }
 
-    pub fn instructions(&self, iterations: u32) -> Vec<Command> {
+    pub fn instructions(&self, iterations: u32) -> Vec<Instruction> {
         let lword = expand_lsystem(&self.axiom, &self.rules, iterations);
-        map_lword_to_commands(&lword, &self.command_map)
+        map_word_to_instructions(&lword, &self.command_map)
     }
 }
