@@ -1,5 +1,6 @@
 extern crate kiss3d;
 extern crate nalgebra as na;
+extern crate time;
 extern crate lsys;
 
 use std::rc::Rc;
@@ -20,6 +21,7 @@ fn main() {
     let mut window = Window::new("lsystem");
     window.set_light(Light::StickToCamera);
     window.set_background_color(1.0, 1.0, 1.0);
+    window.set_framerate_limit(Some(60));
 
     let mut camera = {
         let eye = Point3::new(0.0, 0.0, 20.0);
@@ -28,150 +30,155 @@ fn main() {
     };
 
     let segment_length = 0.2;
-    let (system, settings) = make_tree();
-
-    println!("Expanding");
-    let instructions = system.instructions(settings.iterations);
+    let (system, settings) = make_anim_tree();
 
     let mut tree = window.add_group();
-    tree.append_rotation(&Vector3::new(f32::frac_pi_2(), 0.0, 0.0));
-    //tree.append_translation(&Vector3::new(0.0, -10.0, 0.0));
-    let mut position = Point3::new(0.0, 0.0, 0.0);
-    let mut rotation = Rotation3::new(Vector3::new(0.0, 0.0, 0.0));
-    let mut width = settings.width;
-    let mut states = Vec::<(Point3<f32>, Rotation3<f32>, f32)>::new();
 
-    println!("Assembling");
-
-    for instruction in &instructions {
-        let command = instruction.command;
-        match command {
-            Command::Forward => {
-                let segment_length = {
-                    if !instruction.args.is_empty() {
-                       instruction.args[0]
-                    } else {
-                        segment_length
-                    }
-                };
-
-                let mut segment = tree.add_cube(1.0 * width, 1.0 * width, segment_length);
-                segment.append_translation(&Vector3::new(0.0, 0.0, -segment_length / 2.0));
-                segment.append_transformation(
-                    &na::Isometry3 {
-                        translation: position.to_vector(),
-                        rotation: rotation,
-                    }
-                );
-
-                let direction = na::rotate(&rotation, &Vector3::new(0.0, 0.0, -1.0));
-                position = (direction * segment_length).translate(&position);
-            },
-            Command::YawRight => {
-                let angle = {
-                    if !instruction.args.is_empty() {
-                       instruction.args[0]
-                    } else {
-                        settings.angle
-                    }
-                };
-                rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * -angle);
-            },
-            Command::YawLeft => {
-                let angle = {
-                    if !instruction.args.is_empty() {
-                       instruction.args[0]
-                    } else {
-                        settings.angle
-                    }
-                };
-                rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * angle);
-            },
-            Command::PitchUp => {
-                let angle = {
-                    if !instruction.args.is_empty() {
-                       instruction.args[0]
-                    } else {
-                        settings.angle
-                    }
-                };
-                rotation = rotation * Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * angle);
-            },
-            Command::PitchDown => {
-                let angle = {
-                    if !instruction.args.is_empty() {
-                       instruction.args[0]
-                    } else {
-                        settings.angle
-                    }
-                };
-                rotation = rotation * Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * -angle);
-            }
-            Command::RollRight => {
-                let angle = {
-                    if !instruction.args.is_empty() {
-                       instruction.args[0]
-                    } else {
-                        settings.angle
-                    }
-                };
-                rotation = rotation * Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * -angle);
-            },
-            Command::RollLeft => {
-                let angle = {
-                    if !instruction.args.is_empty() {
-                       instruction.args[0]
-                    } else {
-                        settings.angle
-                    }
-                };
-                rotation = rotation * Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * angle);
-            },
-            Command::Shrink => {
-                let rate = {
-                    if !instruction.args.is_empty() {
-                       instruction.args[0]
-                    } else {
-                        settings.shrink_rate
-                    }
-                };
-                width = width / rate;
-            },
-            Command::Grow => {
-                let rate = {
-                    if !instruction.args.is_empty() {
-                       instruction.args[0]
-                    } else {
-                        settings.shrink_rate
-                    }
-                };
-                width = width * rate;
-            },
-            Command::Width => {
-                width = instruction.args[0];
-            },
-            Command::Push => {
-                states.push((position, rotation, width));
-            },
-            Command::Pop => {
-                if let Some((stored_position, stored_rotation, stored_width)) = states.pop() {
-                    position = stored_position;
-                    rotation = stored_rotation;
-                    width = stored_width;
-                } else {
-                    panic!("Tried to pop empty state stack");
-                }
-            },
-            Command::Noop => {},
-        };
-    }
-
-    println!("Completed");
-
-    tree.set_color(50.0/255.0, 169.0/255.0, 18.0/255.0);
+    let mut word = system.axiom.clone();
+    let mut time = time::precise_time_s();
 
     while window.render_with_camera(&mut camera) {
+        let prev_time = time;
+        time = time::precise_time_s();
+        let dt = time - prev_time;
+
+        word = param::step(&word, &system.productions, dt as f32 * 1.0);
+        let instructions = param::map_word_to_instructions(&word, &system.command_map);
+
+        tree.unlink();
+        tree = window.add_group();
+        tree.append_rotation(&Vector3::new(f32::frac_pi_2(), 0.0, 0.0));
+
+        let mut position = Point3::new(0.0, 0.0, 0.0);
+        let mut rotation = Rotation3::new(Vector3::new(0.0, 0.0, 0.0));
+        let mut width = settings.width;
+        let mut states = Vec::<(Point3<f32>, Rotation3<f32>, f32)>::new();
+
+        for instruction in &instructions {
+            let command = instruction.command;
+            match command {
+                Command::Forward => {
+                    let segment_length = {
+                        if !instruction.args.is_empty() {
+                           instruction.args[0]
+                        } else {
+                            segment_length
+                        }
+                    };
+
+                    let mut segment = tree.add_cube(1.0 * width, 1.0 * width, segment_length);
+                    segment.append_translation(&Vector3::new(0.0, 0.0, -segment_length / 2.0));
+                    segment.append_transformation(
+                        &na::Isometry3 {
+                            translation: position.to_vector(),
+                            rotation: rotation,
+                        }
+                    );
+
+                    let direction = na::rotate(&rotation, &Vector3::new(0.0, 0.0, -1.0));
+                    position = (direction * segment_length).translate(&position);
+                },
+                Command::YawRight => {
+                    let angle = {
+                        if !instruction.args.is_empty() {
+                           instruction.args[0]
+                        } else {
+                            settings.angle
+                        }
+                    };
+                    rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * -angle);
+                },
+                Command::YawLeft => {
+                    let angle = {
+                        if !instruction.args.is_empty() {
+                           instruction.args[0]
+                        } else {
+                            settings.angle
+                        }
+                    };
+                    rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * angle);
+                },
+                Command::PitchUp => {
+                    let angle = {
+                        if !instruction.args.is_empty() {
+                           instruction.args[0]
+                        } else {
+                            settings.angle
+                        }
+                    };
+                    rotation = rotation * Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * angle);
+                },
+                Command::PitchDown => {
+                    let angle = {
+                        if !instruction.args.is_empty() {
+                           instruction.args[0]
+                        } else {
+                            settings.angle
+                        }
+                    };
+                    rotation = rotation * Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * -angle);
+                }
+                Command::RollRight => {
+                    let angle = {
+                        if !instruction.args.is_empty() {
+                           instruction.args[0]
+                        } else {
+                            settings.angle
+                        }
+                    };
+                    rotation = rotation * Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * -angle);
+                },
+                Command::RollLeft => {
+                    let angle = {
+                        if !instruction.args.is_empty() {
+                           instruction.args[0]
+                        } else {
+                            settings.angle
+                        }
+                    };
+                    rotation = rotation * Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * angle);
+                },
+                Command::Shrink => {
+                    let rate = {
+                        if !instruction.args.is_empty() {
+                           instruction.args[0]
+                        } else {
+                            settings.shrink_rate
+                        }
+                    };
+                    width = width / rate;
+                },
+                Command::Grow => {
+                    let rate = {
+                        if !instruction.args.is_empty() {
+                           instruction.args[0]
+                        } else {
+                            settings.shrink_rate
+                        }
+                    };
+                    width = width * rate;
+                },
+                Command::Width => {
+                    width = instruction.args[0];
+                },
+                Command::Push => {
+                    states.push((position, rotation, width));
+                },
+                Command::Pop => {
+                    if let Some((stored_position, stored_rotation, stored_width)) = states.pop() {
+                        position = stored_position;
+                        rotation = stored_rotation;
+                        width = stored_width;
+                    } else {
+                        panic!("Tried to pop empty state stack");
+                    }
+                },
+                Command::Noop => {},
+            };
+        }
+
         tree.append_rotation(&Vector3::new(0.0f32, 0.004, 0.0));
+        tree.set_color(50.0/255.0, 169.0/255.0, 18.0/255.0);
     }
 }
 
@@ -722,7 +729,7 @@ fn make_antenna() -> (param::LSystem, lsys::Settings) {
         param::Production::new(
             'F',
             vec![
-                param::ProductionLetter::with_transform('F', Rc::new(move |p| vec![Param::Float(p[0].float().unwrap() * r)])),
+                param::ProductionLetter::with_transform('F', Rc::new(move |p,_| vec![Param::Float(p[0].float().unwrap() * r)])),
             ]
         ),
     ];
@@ -737,57 +744,129 @@ fn make_antenna() -> (param::LSystem, lsys::Settings) {
     (sys, settings)
 }
 
-fn make_tree() -> (param::LSystem, lsys::Settings) {
+//fn make_tree() -> (param::LSystem, lsys::Settings) {
+//    let mut sys = param::LSystem::new();
+
+//    sys.axiom = vec![
+//        param::Letter::with_params('#', vec![Param::Float(1.0/10.0)]),
+//        param::Letter::with_params('F', vec![Param::Float(5.0)]),
+//        param::Letter::with_params('>', vec![Param::Float(f32::to_radians(45.0))]),
+//        param::Letter::new('A'),
+//    ];
+
+//    let d1 = f32::to_radians(94.74);
+//    let d2 = f32::to_radians(132.63);
+//    let a = f32::to_radians(18.95);
+//    let lr = 1.309;
+//    let vr = 1.732 / 10.0;
+
+//    sys.productions = vec![
+//        param::Production::new(
+//            'A',
+//            vec![
+//                param::ProductionLetter::with_transform('#', Rc::new(move |_| vec![Param::Float(vr)])),
+//                param::ProductionLetter::with_params('F', vec![Param::Float(2.0)]),
+//                param::ProductionLetter::new('['),
+//                param::ProductionLetter::with_transform('&', Rc::new(move |_| vec![Param::Float(a)])),
+//                param::ProductionLetter::with_params('F', vec![Param::Float(2.0)]),
+//                param::ProductionLetter::new('A'),
+//                param::ProductionLetter::new(']'),
+//                param::ProductionLetter::with_transform('>', Rc::new(move |_| vec![Param::Float(d1)])),
+//                param::ProductionLetter::new('['),
+//                param::ProductionLetter::with_transform('&', Rc::new(move |_| vec![Param::Float(a)])),
+//                param::ProductionLetter::with_params('F', vec![Param::Float(2.0)]),
+//                param::ProductionLetter::new('A'),
+//                param::ProductionLetter::new(']'),
+//                param::ProductionLetter::with_transform('>', Rc::new(move |_| vec![Param::Float(d2)])),
+//                param::ProductionLetter::new('['),
+//                param::ProductionLetter::with_transform('&', Rc::new(move |_| vec![Param::Float(a)])),
+//                param::ProductionLetter::with_params('F', vec![Param::Float(2.0)]),
+//                param::ProductionLetter::new('A'),
+//                param::ProductionLetter::new(']'),
+//            ]
+//        ),
+//        param::Production::new(
+//            'F',
+//            vec![
+//                param::ProductionLetter::with_transform('F', Rc::new(move |p| vec![Param::Float(p[0].float().unwrap() * lr)])),
+//            ]
+//        ),
+//        param::Production::new(
+//            '#',
+//            vec![
+//                param::ProductionLetter::with_transform('#', Rc::new(move |p| vec![Param::Float(p[0].float().unwrap() * vr)])),
+//            ]
+//        ),
+//    ];
+
+//    let settings = lsys::Settings {
+//        width: 0.05,
+//        iterations: 7,
+//        ..lsys::Settings::new()
+//    };
+
+//    (sys, settings)
+//}
+
+fn make_anim_tree() -> (param::LSystem, lsys::Settings) {
     let mut sys = param::LSystem::new();
 
     sys.axiom = vec![
-        param::Letter::with_params('#', vec![Param::Float(1.0/10.0)]),
-        param::Letter::with_params('F', vec![Param::Float(5.0)]),
+        param::Letter::with_params('#', vec![Param::Float(0.01)]),
+        param::Letter::with_params('F', vec![Param::Float(0.0)]),
         param::Letter::with_params('>', vec![Param::Float(f32::to_radians(45.0))]),
-        param::Letter::new('A'),
+        param::Letter::with_params('A', vec![Param::Float(0.0)]),
     ];
 
     let d1 = f32::to_radians(94.74);
     let d2 = f32::to_radians(132.63);
     let a = f32::to_radians(18.95);
     let lr = 1.309;
-    let vr = 1.732;
+    let vr = 1.732 / 10.0;
 
     sys.productions = vec![
-        param::Production::new(
+        param::Production::with_condition(
             'A',
+            Rc::new(|p| p[0].float().unwrap() < 1.0),
             vec![
-                param::ProductionLetter::with_transform('#', Rc::new(move |_| vec![Param::Float(vr/10.0)])),
-                param::ProductionLetter::with_params('F', vec![Param::Float(2.0)]),
+                param::ProductionLetter::with_transform('A', Rc::new(|p,dt| vec![Param::Float(p[0].float().unwrap() + dt)])),
+            ]
+        ),
+        param::Production::with_condition(
+            'A',
+            Rc::new(|p| p[0].float().unwrap() >= 1.0),
+            vec![
+                param::ProductionLetter::with_transform('#', Rc::new(move |_,_| vec![Param::Float(vr)])),
+                param::ProductionLetter::with_params('F', vec![Param::Float(0.0)]),
                 param::ProductionLetter::new('['),
-                param::ProductionLetter::with_transform('&', Rc::new(move |_| vec![Param::Float(a)])),
-                param::ProductionLetter::with_params('F', vec![Param::Float(2.0)]),
-                param::ProductionLetter::new('A'),
+                param::ProductionLetter::with_transform('&', Rc::new(move |_,_| vec![Param::Float(a)])),
+                param::ProductionLetter::with_params('F', vec![Param::Float(0.0)]),
+                param::ProductionLetter::with_params('A', vec![Param::Float(0.0)]),
                 param::ProductionLetter::new(']'),
-                param::ProductionLetter::with_transform('>', Rc::new(move |_| vec![Param::Float(d1)])),
+                param::ProductionLetter::with_transform('>', Rc::new(move |_,_| vec![Param::Float(d1)])),
                 param::ProductionLetter::new('['),
-                param::ProductionLetter::with_transform('&', Rc::new(move |_| vec![Param::Float(a)])),
-                param::ProductionLetter::with_params('F', vec![Param::Float(2.0)]),
-                param::ProductionLetter::new('A'),
+                param::ProductionLetter::with_transform('&', Rc::new(move |_,_| vec![Param::Float(a)])),
+                param::ProductionLetter::with_params('F', vec![Param::Float(0.0)]),
+                param::ProductionLetter::with_params('A', vec![Param::Float(0.0)]),
                 param::ProductionLetter::new(']'),
-                param::ProductionLetter::with_transform('>', Rc::new(move |_| vec![Param::Float(d2)])),
+                param::ProductionLetter::with_transform('>', Rc::new(move |_,_| vec![Param::Float(d2)])),
                 param::ProductionLetter::new('['),
-                param::ProductionLetter::with_transform('&', Rc::new(move |_| vec![Param::Float(a)])),
-                param::ProductionLetter::with_params('F', vec![Param::Float(2.0)]),
-                param::ProductionLetter::new('A'),
+                param::ProductionLetter::with_transform('&', Rc::new(move |_,_| vec![Param::Float(a)])),
+                param::ProductionLetter::with_params('F', vec![Param::Float(0.0)]),
+                param::ProductionLetter::with_params('A', vec![Param::Float(0.0)]),
                 param::ProductionLetter::new(']'),
             ]
         ),
         param::Production::new(
             'F',
             vec![
-                param::ProductionLetter::with_transform('F', Rc::new(move |p| vec![Param::Float(p[0].float().unwrap() * lr)])),
+                param::ProductionLetter::with_transform('F', Rc::new(move |p,dt| vec![Param::Float(p[0].float().unwrap() + dt * lr)])),
             ]
         ),
         param::Production::new(
             '#',
             vec![
-                param::ProductionLetter::with_transform('#', Rc::new(move |p| vec![Param::Float(p[0].float().unwrap() * vr)])),
+                param::ProductionLetter::with_transform('#', Rc::new(move |p,dt| vec![Param::Float(p[0].float().unwrap() + dt * vr)])),
             ]
         ),
     ];

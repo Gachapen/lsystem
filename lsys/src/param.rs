@@ -96,7 +96,7 @@ impl WordFromString for Word {
 
 type Condition = Fn(&Vec<Param>) -> bool;
 
-type ParamTransform = Fn(&Vec<Param>) -> Vec<Param>;
+type ParamTransform = Fn(&Vec<Param>, f32) -> Vec<Param>;
 
 pub struct ProductionLetter {
     character: u8,
@@ -106,11 +106,11 @@ pub struct ProductionLetter {
 pub mod transform {
     use super::Param;
 
-    pub fn identity(params: &Vec<Param>) -> Vec<Param> {
+    pub fn identity(params: &Vec<Param>, _: f32) -> Vec<Param> {
         params.clone()
     }
 
-    pub fn empty(_: &Vec<Param>) -> Vec<Param> {
+    pub fn empty(_: &Vec<Param>, _: f32) -> Vec<Param> {
         vec![]
     }
 }
@@ -133,7 +133,7 @@ impl ProductionLetter {
     pub fn with_params(character: char, params: Vec<Param>) -> ProductionLetter {
         ProductionLetter {
             character: character as u8,
-            transformer: Rc::new(move |_| params.clone()),
+            transformer: Rc::new(move |_,_| params.clone()),
         }
     }
 }
@@ -182,32 +182,7 @@ fn expand_lsystem(axiom: &Word, productions: &Vec<Production>, iterations: u32) 
     let mut word = axiom.clone();
 
     for _ in 0..iterations {
-        let mut expansion = Word::with_capacity(word.len());
-
-        for letter in word {
-            let prod = productions.iter().find(|&prod| {
-                if prod.predecessor != letter.character {
-                    return false;
-                }
-
-                if !(prod.condition)(&letter.params) {
-                    return false;
-                }
-
-                true
-            });
-
-            if let Some(prod) = prod {
-                for prod_letter in &prod.successor {
-                    let params = (prod_letter.transformer)(&letter.params);
-                    expansion.push(Letter::with_params(prod_letter.character as char, params));
-                }
-            } else {
-                expansion.push(letter);
-            }
-        }
-
-        word = expansion;
+        word = step(&word, &productions, 1.0);
     }
 
     word
@@ -231,6 +206,35 @@ pub fn map_word_to_instructions(word: &Word, command_map: &CommandMap) -> Vec<In
         }
     }
     instructions
+}
+
+pub fn step(prev: &Word, productions: &Vec<Production>, dt: f32) -> Word {
+    let mut expansion = Word::with_capacity(prev.len());
+
+    for letter in prev {
+        let prod = productions.iter().find(|&prod| {
+            if prod.predecessor != letter.character {
+                return false;
+            }
+
+            if !(prod.condition)(&letter.params) {
+                return false;
+            }
+
+            true
+        });
+
+        if let Some(prod) = prod {
+            for prod_letter in &prod.successor {
+                let params = (prod_letter.transformer)(&letter.params, dt);
+                expansion.push(Letter::with_params(prod_letter.character as char, params));
+            }
+        } else {
+            expansion.push(letter.clone());
+        }
+    }
+
+    expansion
 }
 
 pub struct LSystem {
@@ -385,7 +389,7 @@ mod tests {
             Production::new(
                 'A',
                 vec![
-                    ProductionLetter::with_transform('A', Rc::new(|p| vec![Param::Int(p[0].int().unwrap() + 1)])),
+                    ProductionLetter::with_transform('A', Rc::new(|p,_| vec![Param::Int(p[0].int().unwrap() + 1)])),
                 ]
             ),
         ];
