@@ -7,36 +7,22 @@ use common::create_command_map;
 
 #[derive(Copy, Clone, Debug)]
 pub enum Param {
-    Float(f32),
-    Int(i32),
+    F(f32),
+    I(i32),
 }
 
 impl Param {
-    pub fn is_float(self) -> bool {
+    pub fn f(self) -> f32 {
         match self {
-            Param::Float(_) => true,
-            Param::Int(_) => false,
+            Param::F(x) => x,
+            Param::I(_) => panic!("Tried converting Param with int into float"),
         }
     }
 
-    pub fn is_int(self) -> bool {
+    pub fn i(self) -> i32 {
         match self {
-            Param::Float(_) => false,
-            Param::Int(_) => true,
-        }
-    }
-
-    pub fn float(self) -> Option<f32> {
-        match self {
-            Param::Float(x) => Some(x),
-            Param::Int(_) => None,
-        }
-    }
-
-    pub fn int(self) -> Option<i32> {
-        match self {
-            Param::Float(_) => None,
-            Param::Int(x) => Some(x),
+            Param::F(_) => panic!("Tried converting Param with float into int"),
+            Param::I(x) => x,
         }
     }
 }
@@ -129,7 +115,7 @@ impl ProductionLetter {
     }
 
     pub fn with_params(character: char, params: Vec<Param>) -> ProductionLetter {
-        ProductionLetter::with_transform(character, move |_,_| params)
+        ProductionLetter::with_transform(character, move |_,_| params.clone())
     }
 }
 
@@ -185,8 +171,8 @@ fn expand_lsystem(axiom: &Word, productions: &Vec<Production>, iterations: u32) 
 fn params_to_args(params: &Vec<Param>) -> Vec<f32> {
     params.iter().map(|p| {
         match *p {
-            Param::Int(x) => x as f32,
-            Param::Float(x) => x,
+            Param::I(x) => x as f32,
+            Param::F(x) => x,
         }
     }).collect()
 }
@@ -252,6 +238,24 @@ impl LSystem {
     }
 }
 
+#[macro_export]
+macro_rules! params_f {
+    ( $( $x:expr ),* ) => {
+        {
+            vec![$(F($x)),*]
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! params_i {
+    ( $( $x:expr ),* ) => {
+        {
+            vec![$(I($x)),*]
+        }
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -278,20 +282,20 @@ mod tests {
                 let bp = bl.params[j];
 
                 match ap {
-                    Param::Int(x) => {
+                    Param::I(x) => {
                         match bp {
-                            Param::Float(y) => return false,
-                            Param::Int(y) => {
+                            Param::F(y) => return false,
+                            Param::I(y) => {
                                 if x != y {
                                     return false
                                 }
                             },
                         }
                     },
-                    Param::Float(x) => {
+                    Param::F(x) => {
                         match bp {
-                            Param::Int(y) => return false,
-                            Param::Float(y) => {
+                            Param::I(y) => return false,
+                            Param::F(y) => {
                                 if x != y {
                                     return false
                                 }
@@ -320,20 +324,20 @@ mod tests {
     #[test]
     fn expand_lsystem_param_test() {
         let axiom = vec![
-            Letter::with_params('A', vec![Param::Int(0), Param::Float(1.0)]),
+            Letter::with_params('A', vec![Param::I(0), Param::F(1.0)]),
         ];
         let productions = vec![
             Production::new(
                 'A',
                 vec![
-                    ProductionLetter::with_params('A', vec![Param::Int(1), Param::Float(0.0)]),
+                    ProductionLetter::with_params('A', vec![Param::I(1), Param::F(0.0)]),
                     ProductionLetter::new('B'),
                 ]
             ),
         ];
 
         let expected = vec![
-            Letter::with_params('A', vec![Param::Int(1), Param::Float(0.0)]),
+            Letter::with_params('A', vec![Param::I(1), Param::F(0.0)]),
             Letter::new('B'),
         ];
 
@@ -344,20 +348,20 @@ mod tests {
     #[test]
     fn expand_lsystem_condition_test() {
         let axiom = vec![
-            Letter::with_params('A', vec![Param::Int(0)]),
+            Letter::with_params('A', vec![Param::I(0)]),
         ];
         let productions = vec![
             Production::with_condition(
                 'A',
-                |params| params[0].int().unwrap() == 0,
+                |params| params[0].i() == 0,
                 vec![
-                    ProductionLetter::with_params('A', vec![Param::Int(0)]),
-                    ProductionLetter::with_params('B', vec![Param::Int(0)]),
+                    ProductionLetter::with_params('A', vec![Param::I(0)]),
+                    ProductionLetter::with_params('B', vec![Param::I(0)]),
                 ]
             ),
             Production::with_condition(
                 'B',
-                |params| params[0].int().unwrap() == 1,
+                |params| params[0].i() == 1,
                 vec![
                     ProductionLetter::new('C'),
                 ]
@@ -365,9 +369,9 @@ mod tests {
         ];
 
         let expected = vec![
-            Letter::with_params('A', vec![Param::Int(0)]),
-            Letter::with_params('B', vec![Param::Int(0)]),
-            Letter::with_params('B', vec![Param::Int(0)]),
+            Letter::with_params('A', vec![Param::I(0)]),
+            Letter::with_params('B', vec![Param::I(0)]),
+            Letter::with_params('B', vec![Param::I(0)]),
         ];
 
         assert!(words_eq(&expected, &super::expand_lsystem(&axiom, &productions, 2)));
@@ -376,19 +380,19 @@ mod tests {
     #[test]
     fn expand_lsystem_transform_test() {
         let axiom = vec![
-            Letter::with_params('A', vec![Param::Int(0)]),
+            Letter::with_params('A', vec![Param::I(0)]),
         ];
         let productions = vec![
             Production::new(
                 'A',
                 vec![
-                    ProductionLetter::with_transform('A', |p,_| vec![Param::Int(p[0].int().unwrap() + 1)]),
+                    ProductionLetter::with_transform('A', |p,_| vec![Param::I(p[0].i() + 1)]),
                 ]
             ),
         ];
 
         let expected = vec![
-            Letter::with_params('A', vec![Param::Int(4)]),
+            Letter::with_params('A', vec![Param::I(4)]),
         ];
 
         assert!(words_eq(&expected, &super::expand_lsystem(&axiom, &productions, 4)));
