@@ -1,4 +1,3 @@
-use std::rc::Rc;
 use std::fmt;
 
 use common::Command;
@@ -100,7 +99,7 @@ type ParamTransform = Fn(&Vec<Param>, f32) -> Vec<Param>;
 
 pub struct ProductionLetter {
     character: u8,
-    transformer: Rc<ParamTransform>,
+    transformer: Box<ParamTransform>,
 }
 
 pub mod transform {
@@ -117,24 +116,20 @@ pub mod transform {
 
 impl ProductionLetter {
     pub fn new(character: char) -> ProductionLetter {
-        ProductionLetter {
-            character: character as u8,
-            transformer: Rc::new(transform::empty),
-        }
+        ProductionLetter::with_transform(character, transform::empty)
     }
 
-    pub fn with_transform(character: char, transformer: Rc<ParamTransform>) -> ProductionLetter {
+    pub fn with_transform<F>(character: char, transformer: F) -> ProductionLetter
+        where F: Fn(&Vec<Param>, f32) -> Vec<Param> + 'static {
+
         ProductionLetter {
             character: character as u8,
-            transformer: transformer,
+            transformer: Box::new(transformer),
         }
     }
 
     pub fn with_params(character: char, params: Vec<Param>) -> ProductionLetter {
-        ProductionLetter {
-            character: character as u8,
-            transformer: Rc::new(move |_,_| params.clone()),
-        }
+        ProductionLetter::with_transform(character, move |_,_| params)
     }
 }
 
@@ -156,25 +151,24 @@ impl ProductionWordFromString for ProductionWord {
 
 pub struct Production {
     predecessor: u8,
-    condition: Rc<Condition>,
+    condition: Box<Condition>,
     successor: ProductionWord,
 }
 
+
 impl Production {
-    pub fn with_condition(predecessor: char, condition: Rc<Condition>, successor: ProductionWord) -> Production {
+    pub fn with_condition<F>(predecessor: char, condition: F, successor: ProductionWord) -> Production
+        where F: Fn(&Vec<Param>) -> bool + 'static {
+
         Production {
             predecessor: predecessor as u8,
-            condition: condition,
+            condition: Box::new(condition),
             successor: successor,
         }
     }
 
     pub fn new(predecessor: char, successor: ProductionWord) -> Production {
-        Production {
-            predecessor: predecessor as u8,
-            condition: Rc::new(|_| true),
-            successor: successor,
-        }
+        Production::with_condition(predecessor, |_| true, successor)
     }
 }
 
@@ -260,7 +254,6 @@ impl LSystem {
 
 #[cfg(test)]
 mod tests {
-    use std::rc::Rc;
     use super::*;
 
     fn words_eq(a: &Word, b: &Word) -> bool {
@@ -356,7 +349,7 @@ mod tests {
         let productions = vec![
             Production::with_condition(
                 'A',
-                Rc::new(|params| params[0].int().unwrap() == 0),
+                |params| params[0].int().unwrap() == 0,
                 vec![
                     ProductionLetter::with_params('A', vec![Param::Int(0)]),
                     ProductionLetter::with_params('B', vec![Param::Int(0)]),
@@ -364,7 +357,7 @@ mod tests {
             ),
             Production::with_condition(
                 'B',
-                Rc::new(|params| params[0].int().unwrap() == 1),
+                |params| params[0].int().unwrap() == 1,
                 vec![
                     ProductionLetter::new('C'),
                 ]
@@ -389,7 +382,7 @@ mod tests {
             Production::new(
                 'A',
                 vec![
-                    ProductionLetter::with_transform('A', Rc::new(|p,_| vec![Param::Int(p[0].int().unwrap() + 1)])),
+                    ProductionLetter::with_transform('A', |p,_| vec![Param::Int(p[0].int().unwrap() + 1)]),
                 ]
             ),
         ];

@@ -729,7 +729,7 @@ fn make_antenna() -> (param::LSystem, lsys::Settings) {
         param::Production::new(
             'F',
             vec![
-                param::ProductionLetter::with_transform('F', Rc::new(move |p,_| vec![Param::Float(p[0].float().unwrap() * r)])),
+                param::ProductionLetter::with_transform('F', move |p,_| vec![Param::Float(p[0].float().unwrap() * r)]),
             ]
         ),
     ];
@@ -764,22 +764,22 @@ fn make_antenna() -> (param::LSystem, lsys::Settings) {
 //        param::Production::new(
 //            'A',
 //            vec![
-//                param::ProductionLetter::with_transform('#', Rc::new(move |_| vec![Param::Float(vr)])),
+//                param::ProductionLetter::with_transform('#', move |_| vec![Param::Float(vr)]),
 //                param::ProductionLetter::with_params('F', vec![Param::Float(2.0)]),
 //                param::ProductionLetter::new('['),
-//                param::ProductionLetter::with_transform('&', Rc::new(move |_| vec![Param::Float(a)])),
-//                param::ProductionLetter::with_params('F', vec![Param::Float(2.0)]),
-//                param::ProductionLetter::new('A'),
-//                param::ProductionLetter::new(']'),
-//                param::ProductionLetter::with_transform('>', Rc::new(move |_| vec![Param::Float(d1)])),
-//                param::ProductionLetter::new('['),
-//                param::ProductionLetter::with_transform('&', Rc::new(move |_| vec![Param::Float(a)])),
+//                param::ProductionLetter::with_transform('&', move |_| vec![Param::Float(a)]),
 //                param::ProductionLetter::with_params('F', vec![Param::Float(2.0)]),
 //                param::ProductionLetter::new('A'),
 //                param::ProductionLetter::new(']'),
-//                param::ProductionLetter::with_transform('>', Rc::new(move |_| vec![Param::Float(d2)])),
+//                param::ProductionLetter::with_transform('>', move |_| vec![Param::Float(d1)]),
 //                param::ProductionLetter::new('['),
-//                param::ProductionLetter::with_transform('&', Rc::new(move |_| vec![Param::Float(a)])),
+//                param::ProductionLetter::with_transform('&', move |_| vec![Param::Float(a)]),
+//                param::ProductionLetter::with_params('F', vec![Param::Float(2.0)]),
+//                param::ProductionLetter::new('A'),
+//                param::ProductionLetter::new(']'),
+//                param::ProductionLetter::with_transform('>', move |_| vec![Param::Float(d2)]),
+//                param::ProductionLetter::new('['),
+//                param::ProductionLetter::with_transform('&', move |_| vec![Param::Float(a)]),
 //                param::ProductionLetter::with_params('F', vec![Param::Float(2.0)]),
 //                param::ProductionLetter::new('A'),
 //                param::ProductionLetter::new(']'),
@@ -788,13 +788,13 @@ fn make_antenna() -> (param::LSystem, lsys::Settings) {
 //        param::Production::new(
 //            'F',
 //            vec![
-//                param::ProductionLetter::with_transform('F', Rc::new(move |p| vec![Param::Float(p[0].float().unwrap() * lr)])),
+//                param::ProductionLetter::with_transform('F', move |p| vec![Param::Float(p[0].float().unwrap() * lr)]),
 //            ]
 //        ),
 //        param::Production::new(
 //            '#',
 //            vec![
-//                param::ProductionLetter::with_transform('#', Rc::new(move |p| vec![Param::Float(p[0].float().unwrap() * vr)])),
+//                param::ProductionLetter::with_transform('#', move |p| vec![Param::Float(p[0].float().unwrap() * vr)]),
 //            ]
 //        ),
 //    ];
@@ -827,31 +827,31 @@ fn make_anim_tree() -> (param::LSystem, lsys::Settings) {
     sys.productions = vec![
         param::Production::with_condition(
             'A',
-            Rc::new(|p| p[0].float().unwrap() < 1.0),
+            |p| p[0].float().unwrap() < 1.0,
             vec![
-                param::ProductionLetter::with_transform('A', Rc::new(|p,dt| vec![Param::Float(p[0].float().unwrap() + dt)])),
+                param::ProductionLetter::with_transform('A', |p,dt| vec![Param::Float(p[0].float().unwrap() + dt)]),
             ]
         ),
         param::Production::with_condition(
             'A',
-            Rc::new(|p| p[0].float().unwrap() >= 1.0),
+            |p| p[0].float().unwrap() >= 1.0,
             vec![
-                param::ProductionLetter::with_transform('#', Rc::new(move |_,_| vec![Param::Float(vr)])),
+                param::ProductionLetter::with_transform('#', move |_,_| vec![Param::Float(vr)]),
                 param::ProductionLetter::with_params('F', vec![Param::Float(0.0)]),
                 param::ProductionLetter::new('['),
-                param::ProductionLetter::with_transform('&', Rc::new(move |_,_| vec![Param::Float(a)])),
-                param::ProductionLetter::with_params('F', vec![Param::Float(0.0)]),
-                param::ProductionLetter::with_params('A', vec![Param::Float(0.0)]),
-                param::ProductionLetter::new(']'),
-                param::ProductionLetter::with_transform('>', Rc::new(move |_,_| vec![Param::Float(d1)])),
-                param::ProductionLetter::new('['),
-                param::ProductionLetter::with_transform('&', Rc::new(move |_,_| vec![Param::Float(a)])),
+                param::ProductionLetter::with_transform('&', move |_,_| vec![Param::Float(a)]),
                 param::ProductionLetter::with_params('F', vec![Param::Float(0.0)]),
                 param::ProductionLetter::with_params('A', vec![Param::Float(0.0)]),
                 param::ProductionLetter::new(']'),
-                param::ProductionLetter::with_transform('>', Rc::new(move |_,_| vec![Param::Float(d2)])),
+                param::ProductionLetter::with_transform('>', move |_,_| vec![Param::Float(d1)]),
                 param::ProductionLetter::new('['),
-                param::ProductionLetter::with_transform('&', Rc::new(move |_,_| vec![Param::Float(a)])),
+                param::ProductionLetter::with_transform('&', move |_,_| vec![Param::Float(a)]),
+                param::ProductionLetter::with_params('F', vec![Param::Float(0.0)]),
+                param::ProductionLetter::with_params('A', vec![Param::Float(0.0)]),
+                param::ProductionLetter::new(']'),
+                param::ProductionLetter::with_transform('>', move |_,_| vec![Param::Float(d2)]),
+                param::ProductionLetter::new('['),
+                param::ProductionLetter::with_transform('&', move |_,_| vec![Param::Float(a)]),
                 param::ProductionLetter::with_params('F', vec![Param::Float(0.0)]),
                 param::ProductionLetter::with_params('A', vec![Param::Float(0.0)]),
                 param::ProductionLetter::new(']'),
@@ -860,13 +860,13 @@ fn make_anim_tree() -> (param::LSystem, lsys::Settings) {
         param::Production::new(
             'F',
             vec![
-                param::ProductionLetter::with_transform('F', Rc::new(move |p,dt| vec![Param::Float(p[0].float().unwrap() + dt * lr)])),
+                param::ProductionLetter::with_transform('F', move |p,dt| vec![Param::Float(p[0].float().unwrap() + dt * lr)]),
             ]
         ),
         param::Production::new(
             '#',
             vec![
-                param::ProductionLetter::with_transform('#', Rc::new(move |p,dt| vec![Param::Float(p[0].float().unwrap() + dt * vr)])),
+                param::ProductionLetter::with_transform('#', move |p,dt| vec![Param::Float(p[0].float().unwrap() + dt * vr)]),
             ]
         ),
     ];
