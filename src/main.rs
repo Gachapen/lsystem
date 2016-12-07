@@ -43,7 +43,7 @@ fn main() {
 
 fn run_static(window: &mut Window, camera: &mut Camera) {
     let segment_length = 0.2;
-    let (system, settings) = make_flower();
+    let (system, settings) = make_bush();
 
     let instructions = system.instructions(settings.iterations);
 
@@ -787,15 +787,21 @@ fn make_bush() -> (ol::LSystem, lsys::Settings) {
     let mut sys = ol::LSystem::new();
 
     sys.axiom = "A".to_string();
-    sys.set_rule('A', "[&F!A]>>>>>[&F!A]>>>>>>>[&F!A]");
+    sys.set_rule('A', "[&FL!A]>>>>>[&FL!A]>>>>>>>[&FL!A]");
     sys.set_rule('F', "S>>>>>F");
-    sys.set_rule('S', "F");
+    sys.set_rule('S', "FL");
+    sys.set_rule('L', "['^^{-f+f+f-|-f+f+f}]");
+    sys.map_command('f', Command::Forward);
 
     let settings = lsys::Settings {
         angle: f32::to_radians(22.5),
         width: 0.1,
         shrink_rate: 1.5,
         iterations: 7,
+        colors: vec![
+            (193.0/255.0, 154.0/255.0, 107.0/255.0),
+            (0.3, 1.0, 0.2),
+        ],
         ..lsys::Settings::new()
     };
 
