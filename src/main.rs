@@ -27,7 +27,7 @@ use lsys::param::Param::{I,F};
 
 fn main() {
     let mut window = Window::new("lsystem");
-    window.set_light(Light::StickToCamera);
+    window.set_light(Light::Absolute(Point3::new(15.0, 40.0, 15.0)));
     window.set_background_color(135.0/255.0, 206.0/255.0, 250.0/255.0);
     window.set_framerate_limit(Some(60));
 
