@@ -7,11 +7,15 @@ pub enum Command {
     PitchDown,
     RollRight,
     RollLeft,
+    UTurn,
     Shrink,
     Grow,
     Width,
     Push,
     Pop,
+    BeginSurface,
+    EndSurface,
+    NextColor,
     Noop,
 }
 
@@ -46,6 +50,10 @@ pub fn create_command_map() -> CommandMap {
     lchar_commands[']' as usize] = Command::Pop;
     lchar_commands['!' as usize] = Command::Shrink;
     lchar_commands['#' as usize] = Command::Width;
+    lchar_commands['|' as usize] = Command::UTurn;
+    lchar_commands['{' as usize] = Command::BeginSurface;
+    lchar_commands['}' as usize] = Command::EndSurface;
+    lchar_commands['\'' as usize] = Command::NextColor;
 
     lchar_commands
 }
@@ -66,6 +74,7 @@ pub struct Settings {
     pub angle: f32,
     pub width: f32,
     pub shrink_rate: f32,
+    pub colors: Vec<(f32, f32, f32)>,
 }
 
 impl Settings {
@@ -75,6 +84,7 @@ impl Settings {
             angle: 0.0,
             width: 1.0,
             shrink_rate: 1.0,
+            colors: vec![],
         }
     }
 }
