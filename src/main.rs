@@ -42,7 +42,6 @@ fn main() {
 }
 
 fn run_static(window: &mut Window, camera: &mut Camera) {
-    let segment_length = 0.2;
     let (system, settings) = make_bush();
 
     let instructions = system.instructions(settings.iterations);
@@ -68,7 +67,7 @@ fn run_animated(window: &mut Window, camera: &mut Camera) {
         time = time::precise_time_s();
         let dt = time - prev_time;
 
-        word = param::step(&word, &system.productions, dt as f32 * 1.0);
+        word = param::step(&word, &system.productions, dt as f32 * 0.3);
         let instructions = param::map_word_to_instructions(&word, &system.command_map);
 
         model.unlink();
@@ -79,7 +78,6 @@ fn run_animated(window: &mut Window, camera: &mut Camera) {
 
 fn build_model(instructions: &Vec<lsys::Instruction>, settings: &lsys::Settings) -> SceneNode {
     let mut model = SceneNode::new_empty();
-    //model.append_rotation(&Vector3::new(f32::frac_pi_2(), 0.0, 0.0));
 
     let segment_length = 0.2;
 
@@ -943,12 +941,14 @@ fn make_anim_tree() -> (param::LSystem, lsys::Settings) {
     let mut sys = param::LSystem::new();
 
     sys.axiom = param::Word::from_str("#(0.01)F(0.0)>(0.593412)A(0.0)");
+    sys.command_map['f' as usize] = Command::Forward;
 
     let d1 = f32::to_radians(94.74);
     let d2 = f32::to_radians(132.63);
     let a = f32::to_radians(18.95);
     let lr = 1.309;
     let vr = 1.732 / 10.0;
+    let ls = 0.1;
 
     sys.productions = vec![
         param::Production::with_condition(
@@ -962,6 +962,15 @@ fn make_anim_tree() -> (param::LSystem, lsys::Settings) {
             'A',
             |p| p[0].f() >= 1.0,
             vec![
+                param::ProductionLetter::new('['),
+                param::ProductionLetter::new('L'),
+                param::ProductionLetter::with_params('>', params_f![f32::to_radians(90.0)]),
+                param::ProductionLetter::new('L'),
+                param::ProductionLetter::with_params('>', params_f![f32::to_radians(90.0)]),
+                param::ProductionLetter::new('L'),
+                param::ProductionLetter::with_params('>', params_f![f32::to_radians(90.0)]),
+                param::ProductionLetter::new('L'),
+                param::ProductionLetter::new(']'),
                 param::ProductionLetter::with_transform('#', move |_,_| params_f![vr]),
                 param::ProductionLetter::with_params('F', params_f![0.0]),
                 param::ProductionLetter::new('['),
@@ -984,6 +993,37 @@ fn make_anim_tree() -> (param::LSystem, lsys::Settings) {
             ]
         ),
         param::Production::new(
+            'L',
+            vec![
+                param::ProductionLetter::new('['),
+                param::ProductionLetter::with_params('&', params_f![f32::to_radians(45.0)]),
+                param::ProductionLetter::new('\''),
+                param::ProductionLetter::new('{'),
+                param::ProductionLetter::with_params('+', params_f![f32::to_radians(60.0)]),
+                param::ProductionLetter::with_params('f', params_f![0.01]),
+                param::ProductionLetter::with_params('-', params_f![f32::to_radians(60.0)]),
+                param::ProductionLetter::with_params('f', params_f![0.05]),
+                param::ProductionLetter::with_params('-', params_f![f32::to_radians(60.0)]),
+                param::ProductionLetter::with_params('f', params_f![0.01]),
+                param::ProductionLetter::with_params('+', params_f![f32::to_radians(60.0)]),
+                param::ProductionLetter::new('|'),
+                param::ProductionLetter::with_params('+', params_f![f32::to_radians(60.0)]),
+                param::ProductionLetter::with_params('f', params_f![0.01]),
+                param::ProductionLetter::with_params('-', params_f![f32::to_radians(60.0)]),
+                param::ProductionLetter::with_params('f', params_f![0.05]),
+                param::ProductionLetter::with_params('-', params_f![f32::to_radians(60.0)]),
+                param::ProductionLetter::with_params('f', params_f![0.01]),
+                param::ProductionLetter::new('}'),
+                param::ProductionLetter::new(']'),
+            ]
+        ),
+        param::Production::new(
+            'f',
+            vec![
+                param::ProductionLetter::with_transform('f', move |p,dt| params_f![p[0].f() + (dt * ls) / p[0].f()]),
+            ]
+        ),
+        param::Production::new(
             'F',
             vec![
                 param::ProductionLetter::with_transform('F', move |p,dt| params_f![p[0].f() + dt * lr]),
@@ -1000,6 +1040,10 @@ fn make_anim_tree() -> (param::LSystem, lsys::Settings) {
     let settings = lsys::Settings {
         width: 0.05,
         iterations: 7,
+        colors: vec![
+            (193.0/255.0, 154.0/255.0, 107.0/255.0),
+            (0.3, 1.0, 0.2),
+        ],
         ..lsys::Settings::new()
     };
 
