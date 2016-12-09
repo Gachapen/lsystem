@@ -942,12 +942,7 @@ fn make_antenna() -> (param::LSystem, lsys::Settings) {
 fn make_anim_tree() -> (param::LSystem, lsys::Settings) {
     let mut sys = param::LSystem::new();
 
-    sys.axiom = vec![
-        param::Letter::with_params('#', params_f![0.01]),
-        param::Letter::with_params('F', params_f![0.0]),
-        param::Letter::with_params('>', params_f![f32::to_radians(45.0)]),
-        param::Letter::with_params('A', params_f![0.0]),
-    ];
+    sys.axiom = param::Word::from_str("#(0.01)F(0.0)>(0.593412)A(0.0)");
 
     let d1 = f32::to_radians(94.74);
     let d2 = f32::to_radians(132.63);

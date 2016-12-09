@@ -11,6 +11,24 @@ pub enum Param {
     I(i32),
 }
 
+#[macro_export]
+macro_rules! params_f {
+    ( $( $x:expr ),* ) => {
+        {
+            vec![$(Param::F($x)),*]
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! params_i {
+    ( $( $x:expr ),* ) => {
+        {
+            vec![$(Param::I($x)),*]
+        }
+    };
+}
+
 impl Param {
     pub fn f(self) -> f32 {
         match self {
@@ -63,18 +81,60 @@ impl fmt::Debug for Letter {
     }
 }
 
+pub type Word = Vec<Letter>;
+
 pub trait WordFromString {
     fn from_str(string: &str) -> Word;
 }
 
-pub type Word = Vec<Letter>;
-
 impl WordFromString for Word {
     fn from_str(string: &str) -> Word {
         let mut word = Word::with_capacity(string.len());
-        for character in string.as_bytes() {
-            word.push(Letter::new(*character as char));
+        let bytes = string.as_bytes();
+
+        let mut iter = bytes.iter().cloned().peekable();
+        while let Some(byte) = iter.next() {
+            let mut params = vec![];
+
+            if let Some(next) = iter.clone().peek() {
+                if *next == '(' as u8 {
+                    iter.next();
+
+                    let param_list_end = iter.clone().position(|b| b == ')' as u8).expect("Syntax error: Parameter has no end paranthesis ')'");
+                    // Iterator for parameter, including ending ')', e.g. "A(50,3)" => "50,3)"
+                    let mut param_list_iter = iter.clone().take(param_list_end + 1);
+
+                    while let Some(param_end) = param_list_iter.clone().position(|b| b == ',' as u8 || b == ')' as u8) {
+                        let param_iter = param_list_iter.clone().take(param_end);
+
+                        let mut param_str = String::new();
+                        for param_byte in param_iter {
+                            param_str.push(param_byte as char);
+                        }
+
+                        if let Ok(param) = param_str.parse::<i32>() {
+                            params.push(Param::I(param));
+                        } else if let Ok(param) = param_str.parse::<f32>() {
+                            params.push(Param::F(param));
+                        } else {
+                            panic!("Failed parsing parameter '{}' as int or float", param_str);
+                        }
+
+                        param_list_iter.nth(param_end);
+                    }
+
+                    iter.nth(param_list_end);
+                }
+            }
+
+            let letter = byte as char;
+            if !params.is_empty() {
+                word.push(Letter::with_params(letter, params));
+            } else {
+                word.push(Letter::new(letter));
+            }
         }
+
         word
     }
 }
@@ -238,24 +298,6 @@ impl LSystem {
     }
 }
 
-#[macro_export]
-macro_rules! params_f {
-    ( $( $x:expr ),* ) => {
-        {
-            vec![$(F($x)),*]
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! params_i {
-    ( $( $x:expr ),* ) => {
-        {
-            vec![$(I($x)),*]
-        }
-    };
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -396,5 +438,45 @@ mod tests {
         ];
 
         assert!(words_eq(&expected, &super::expand_lsystem(&axiom, &productions, 4)));
+    }
+
+    #[test]
+    fn word_from_str_test_no_param() {
+        let expected = vec![
+            Letter::new('A'),
+            Letter::new('B'),
+            Letter::new('C'),
+        ];
+        assert!(words_eq(&expected, &Word::from_str("ABC")));
+    }
+
+    #[test]
+    fn word_from_str_test_single_param() {
+        let expected = vec![
+            Letter::with_params('A', params_i![1]),
+            Letter::new('B'),
+            Letter::with_params('C', params_f![2.0]),
+        ];
+        let actual = Word::from_str("A(1)BC(2.0)");
+
+        println!("Expected: {:?}", expected);
+        println!("Actual: {:?}", actual);
+
+        assert!(words_eq(&expected, &actual));
+    }
+
+    #[test]
+    fn word_from_str_test_multi_param() {
+        let expected = vec![
+            Letter::with_params('A', params_i![1, 2]),
+            Letter::new('B'),
+            Letter::with_params('C', vec![Param::F(3.0), Param::I(4), Param::I(5)]),
+        ];
+        let actual = Word::from_str("A(1,2)BC(3.0,4,5)");
+
+        println!("Expected: {:?}", expected);
+        println!("Actual: {:?}", actual);
+
+        assert!(words_eq(&expected, &actual));
     }
 }
