@@ -326,7 +326,7 @@ mod tests {
                 match ap {
                     Param::I(x) => {
                         match bp {
-                            Param::F(y) => return false,
+                            Param::F(_) => return false,
                             Param::I(y) => {
                                 if x != y {
                                     return false
@@ -336,7 +336,7 @@ mod tests {
                     },
                     Param::F(x) => {
                         match bp {
-                            Param::I(y) => return false,
+                            Param::I(_) => return false,
                             Param::F(y) => {
                                 if x != y {
                                     return false
