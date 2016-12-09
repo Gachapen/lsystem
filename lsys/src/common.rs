@@ -84,7 +84,7 @@ impl Settings {
             angle: 0.0,
             width: 1.0,
             shrink_rate: 1.0,
-            colors: vec![],
+            colors: vec![(50.0/255.0, 169.0/255.0, 18.0/255.0)],
         }
     }
 }
