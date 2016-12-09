@@ -3,11 +3,15 @@ extern crate nalgebra as na;
 extern crate ncollide_transformation as nct;
 extern crate time;
 extern crate num_traits;
+extern crate rand;
+extern crate strsim;
+extern crate glfw;
 
 #[macro_use]
 extern crate lsys;
 
 use std::rc::Rc;
+use std::{f32, u32, cmp, mem};
 
 use na::{Vector3, Point3, Rotation3, Translate, BaseFloat, Origin};
 use num_traits::identities::{One};
@@ -16,6 +20,9 @@ use kiss3d::light::Light;
 use kiss3d::camera::Camera;
 use kiss3d::camera::ArcBall;
 use kiss3d::scene::SceneNode;
+use glfw::WindowEvent;
+use glfw::Key;
+use glfw::Action;
 
 use lsys::Command;
 use lsys::ol;
@@ -37,8 +44,9 @@ fn main() {
         ArcBall::new(eye, at)
     };
 
-    run_static(&mut window, &mut camera);
+    //run_static(&mut window, &mut camera);
     //run_animated(&mut window, &mut camera);
+    run_experiment(&mut window, &mut camera);
 }
 
 fn run_static(window: &mut Window, camera: &mut Camera) {
@@ -73,6 +81,291 @@ fn run_animated(window: &mut Window, camera: &mut Camera) {
         model.unlink();
         model = build_model(&instructions, &settings);
         window.scene_mut().add_child(model.clone());
+    }
+}
+
+fn run_experiment(window: &mut Window, camera: &mut Camera) {
+    #[derive(Copy, Clone, Debug)]
+    struct Point {
+        medoid: usize,
+        index: usize,
+    };
+
+    #[derive(Copy, Clone, Debug)]
+    struct Medoid {
+        index: usize,
+    };
+
+    struct Cluster {
+        medoid: String,
+        members: Vec<String>,
+    };
+
+    fn calculate_cost(costs: &Vec<Vec<f32>>, medoids: &Vec<Medoid>, points: &Vec<Point>) -> f32 {
+        let mut sum = 0.0;
+        for point in points {
+            sum += costs[medoids[point.medoid].index][point.index];
+        }
+        sum
+    }
+
+    fn organize_clusters(rewrites: &Vec<String>, medoids: &Vec<Medoid>, points: &Vec<Point>) -> Vec<Cluster> {
+        let mut clusters = vec![];
+
+        for medoid in medoids {
+            clusters.push(Cluster {
+                medoid: rewrites[medoid.index].clone(),
+                members: vec![],
+            });
+        }
+
+        for point in points {
+            clusters[point.medoid].members.push(rewrites[point.index].clone());
+        }
+
+        clusters
+    }
+
+    fn print_clusters(rewrites: &Vec<String>, medoids: &Vec<Medoid>, points: &Vec<Point>) {
+        let clusters = organize_clusters(&rewrites, &medoids, &points);
+
+        println!("Created {} clusters.", medoids.len());
+        for (i, cluster) in clusters.iter().enumerate() {
+            println!("Cluster {}: {}", i, cluster.medoid);
+            for member in &cluster.members {
+                println!("\t{}", member);
+            }
+        }
+    }
+
+    fn generate_rewrite() -> String {
+        let mut rng = rand::thread_rng();
+        let alphabet = vec!['F', '[', ']', '+', '-'];
+
+        let mut generated = vec![];
+        for _ in 0..20 {
+            let letter = rand::sample(&mut rng, alphabet.iter(), 1);
+            generated.push(*letter[0]);
+        }
+
+        let mut fixed = vec![];
+        let mut depth = 0;
+        for letter in generated {
+            if letter == '[' {
+                depth += 1;
+                fixed.push(letter);
+            } else if letter == ']' {
+                if depth > 0 {
+                    depth -= 1;
+                    fixed.push(letter);
+                }
+            } else {
+                fixed.push(letter);
+            }
+        }
+
+        while depth > 0 {
+            fixed.push(']');
+            depth -= 1;
+        }
+
+        let mut rewrite = String::new();
+        for letter in fixed {
+            rewrite.push(letter);
+        }
+
+        rewrite
+    }
+
+    let num_rewrites = 100;
+    let num_clusters = 20;
+    let mut rng = rand::thread_rng();
+
+    println!("Generating rewrites");
+
+    let mut rewrites = vec![];
+    for _ in 0..num_rewrites {
+        let rewrite = generate_rewrite();
+        rewrites.push(rewrite);
+    }
+    let rewrites = rewrites;
+
+    println!("Calculating costs");
+    let mut costs = vec![vec![0.0f32; num_rewrites]; num_rewrites];
+    for i in 0..rewrites.len() {
+        for j in i+1..rewrites.len() {
+            println!("Checking {} <-> {}", &rewrites[i], &rewrites[j]);
+            let cost = strsim::damerau_levenshtein(&rewrites[i], &rewrites[j]) as f32;
+            println!("Cost: {}", cost);
+            costs[i][j] = cost;
+            costs[j][i] = cost;
+        }
+    }
+
+    println!("Assigning medoids");
+
+    // Assign medoids.
+    let mut medoids = vec![];
+    let indices = rand::sample(&mut rng, 0..rewrites.len(), num_clusters);
+    for i in indices {
+        medoids.push(Medoid{ index: i });
+    }
+
+    println!("Assigning points");
+
+    // Assign points.
+    let mut points = vec![];
+    for i in 0..rewrites.len() {
+        if let None = medoids.iter().find(|m| m.index == i) {
+            points.push(Point{ medoid: 0, index: i });
+        }
+    }
+
+    println!("Rewrites: {:?}", rewrites);
+    println!("Points: {:?}", points);
+    println!("Medoids: {:?}", medoids);
+
+    println!("Optimizing");
+
+    let mut total_cost = f32::MAX;
+    let mut optimize = true;
+    while optimize {
+        println!("Clustering points");
+
+        // Place points into medoids.
+        for point in &mut points {
+            let mut best_cost = f32::MAX;
+            let mut best_medoid = 0;
+            for m in 0..medoids.len() {
+                let ref medoid = medoids[m];
+                let cost = costs[point.index][medoid.index];
+                if cost < best_cost {
+                    best_cost = cost;
+                    best_medoid = m;
+                }
+            }
+            point.medoid = best_medoid;
+        }
+
+        print_clusters(&rewrites, &medoids, &points);
+
+        println!("Optimizing medoids");
+        let prev_cost = total_cost;
+
+        // Optimize medoids.
+        for m in 0..medoids.len() {
+            for p in 0..points.len() {
+                mem::swap(&mut medoids[m].index, &mut points[p].index);
+                let cost = calculate_cost(&costs, &medoids, &points);
+                if cost >= total_cost {
+                    mem::swap(&mut medoids[m].index, &mut points[p].index);
+                } else {
+                    total_cost = cost;
+                    println!("Cost improved to {}", cost);
+                }
+            }
+        }
+
+        // Can't improve more.
+        if total_cost == 0.0 || total_cost == prev_cost {
+            optimize = false;
+        }
+    }
+
+    println!("Done");
+
+    print_clusters(&rewrites, &medoids, &points);
+
+    let clusters = organize_clusters(&rewrites, &medoids, &points);
+    let mut cluster_index = 0;
+    let mut member_index = 0;
+
+    let mut sys = ol::LSystem::new();
+
+    sys.axiom = "F".to_string();
+
+    let settings = lsys::Settings {
+        angle: f32::to_radians(25.7),
+        width: 0.03,
+        iterations: 5,
+        ..lsys::Settings::new()
+    };
+
+    let mut medoid_model = SceneNode::new_empty();
+    let mut member_model = SceneNode::new_empty();
+    let mut medoid_changed = true;
+    let mut member_changed = true;
+
+    while window.render_with_camera(camera) {
+        for mut event in window.events().iter() {
+            match event.value {
+                WindowEvent::Key(Key::Right, _, Action::Release, _) => {
+                    member_index = (member_index + 1) % clusters[cluster_index].members.len();
+                    event.inhibited = true;
+                    member_changed = true;
+                },
+                WindowEvent::Key(Key::Left, _, Action::Release, _) => {
+                    if member_index > 0 {
+                        member_index -= 1;
+                    } else if clusters[cluster_index].members.len() > 0 {
+                        member_index = clusters[cluster_index].members.len() - 1;
+                    }
+                    event.inhibited = true;
+                    member_changed = true;
+                },
+                WindowEvent::Key(Key::Up, _, Action::Release, _) => {
+                    cluster_index = (cluster_index + 1) % clusters.len();
+                    member_index = 0;
+                    event.inhibited = true;
+                    medoid_changed = true;
+                    member_changed = true;
+                },
+                WindowEvent::Key(Key::Down, _, Action::Release, _) => {
+                    if cluster_index > 0 {
+                        cluster_index -= 1;
+                    } else {
+                        cluster_index = clusters.len() - 1;
+                    }
+                    member_index = 0;
+                    event.inhibited = true;
+                    medoid_changed = true;
+                    member_changed = true;
+                },
+                _ => {}
+            }
+        }
+
+        if medoid_changed {
+            medoid_model.unlink();
+
+            println!("Showing cluster {} medoid: {}", cluster_index, clusters[cluster_index].medoid);
+            sys.set_rule('F', &clusters[cluster_index].medoid);
+
+            let instructions = sys.instructions(settings.iterations);
+
+            medoid_model = build_model(&instructions, &settings);
+            medoid_model.prepend_to_local_translation(&Vector3::new(0.0, 5.0, 0.0));
+            window.scene_mut().add_child(medoid_model.clone());
+
+            medoid_changed = false;
+        }
+
+        if member_changed {
+            member_model.unlink();
+
+            if clusters[cluster_index].members.len() > 0 {
+                println!("Showing member {}: {}", member_index, clusters[cluster_index].members[member_index]);
+                sys.set_rule('F', &clusters[cluster_index].members[member_index]);
+
+                let instructions = sys.instructions(settings.iterations);
+
+                member_model = build_model(&instructions, &settings);
+                member_model.prepend_to_local_translation(&Vector3::new(0.0, -5.0, 0.0));
+                window.scene_mut().add_child(member_model.clone());
+            }
+
+            member_changed = false;
+        }
     }
 }
 
