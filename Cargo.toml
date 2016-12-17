@@ -7,6 +7,7 @@ authors = [ "Magnus Bjerke Vik <mbvett@gmail.com>" ]
 kiss3d = "0.7.*"
 glfw = "0.8.*"
 nalgebra = "0.9.*"
+image = "0.6.*"
 ncollide_transformation = "0.5.*"
 time = "0.1.*"
 num-traits = "0.1.*"
