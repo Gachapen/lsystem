@@ -11,6 +11,7 @@ extern crate glfw;
 extern crate lsys;
 
 use std::rc::Rc;
+use std::cmp::Ordering::Equal;
 use std::{f32, u32, cmp, mem, fs};
 
 use na::{Vector3, Point3, Rotation3, Translate, BaseFloat, Origin};
@@ -92,9 +93,10 @@ fn run_experiment(window: &mut Window, camera: &mut Camera) {
         index: usize,
     };
 
-    #[derive(Copy, Clone, Debug)]
+    #[derive(Clone, Debug)]
     struct Medoid {
         index: usize,
+        members: Vec<usize>,
     };
 
     struct Cluster {
@@ -114,14 +116,15 @@ fn run_experiment(window: &mut Window, camera: &mut Camera) {
         let mut clusters = vec![];
 
         for medoid in medoids {
+            let mut members = vec![];
+            for member in &medoid.members {
+                members.push(rewrites[*member].clone());
+            }
+
             clusters.push(Cluster {
                 medoid: rewrites[medoid.index].clone(),
-                members: vec![],
+                members: members,
             });
-        }
-
-        for point in points {
-            clusters[point.medoid].members.push(rewrites[point.index].clone());
         }
 
         clusters
@@ -340,12 +343,21 @@ fn run_experiment(window: &mut Window, camera: &mut Camera) {
     }
 
     fn cluster(rewrites: &Vec<String>) -> Vec<Cluster> {
+        let mut rng = rand::thread_rng();
+        let mut distance_func = |a: &str, b: &str| -> f32 {
+            //Range::new(0.0, 1.0).ind_sample(&mut rng)
+            strsim::damerau_levenshtein(a, b) as f32
+            //strsim::levenshtein(a, b) as f32
+            //1.0 - strsim::jaro(a, b) as f32
+            //f32::abs(a.len() as f32 - b.len() as f32)
+        };
+
         println!("Calculating costs");
         let mut costs = vec![vec![0.0f32; rewrites.len()]; rewrites.len()];
         for i in 0..rewrites.len() {
             for j in i+1..rewrites.len() {
                 println!("Checking {} <-> {}", &rewrites[i], &rewrites[j]);
-                let cost = strsim::damerau_levenshtein(&rewrites[i], &rewrites[j]) as f32;
+                let cost = distance_func(&rewrites[i], &rewrites[j]);
                 println!("Cost: {}", cost);
                 costs[i][j] = cost;
                 costs[j][i] = cost;
@@ -354,14 +366,26 @@ fn run_experiment(window: &mut Window, camera: &mut Camera) {
 
         println!("Assigning medoids");
 
-        let mut rng = rand::thread_rng();
         let num_clusters = 4;
+
+        let mut v = vec![];
+        for j in 0..rewrites.len() {
+            let mut sum = 0.0;
+            for i in 0..rewrites.len() {
+                let mut sum_dist = 0.0;
+                for l in 0..rewrites.len() {
+                    sum_dist += costs[i][l];
+                }
+                sum += costs[i][j] / sum_dist;
+            }
+            v.push((j, sum));
+        }
+        v.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(Equal));
 
         // Assign medoids.
         let mut medoids = vec![];
-        let indices = rand::sample(&mut rng, 0..rewrites.len(), num_clusters);
-        for i in indices {
-            medoids.push(Medoid{ index: i });
+        for i in 0..num_clusters {
+            medoids.push(Medoid{ index: v[i].0, members: vec![] });
         }
 
         println!("Assigning points");
@@ -369,9 +393,7 @@ fn run_experiment(window: &mut Window, camera: &mut Camera) {
         // Assign points.
         let mut points = vec![];
         for i in 0..rewrites.len() {
-            if let None = medoids.iter().find(|m| m.index == i) {
-                points.push(Point{ medoid: 0, index: i });
-            }
+            points.push(Point{ medoid: 0, index: i });
         }
 
         println!("Rewrites: {:?}", rewrites);
@@ -385,19 +407,26 @@ fn run_experiment(window: &mut Window, camera: &mut Camera) {
         while optimize {
             println!("Clustering points");
 
+            for m in &mut medoids {
+                m.members.clear();
+            }
+
             // Place points into medoids.
             for point in &mut points {
-                let mut best_cost = f32::MAX;
-                let mut best_medoid = 0;
-                for m in 0..medoids.len() {
-                    let ref medoid = medoids[m];
-                    let cost = costs[point.index][medoid.index];
-                    if cost < best_cost {
-                        best_cost = cost;
-                        best_medoid = m;
+                if let None = medoids.iter().find(|m| m.index == point.index) {
+                    let mut best_cost = f32::MAX;
+                    let mut best_medoid = 0;
+                    for m in 0..medoids.len() {
+                        let ref medoid = medoids[m];
+                        let cost = costs[point.index][medoid.index];
+                        if cost < best_cost {
+                            best_cost = cost;
+                            best_medoid = m;
+                        }
                     }
+                    point.medoid = best_medoid;
+                    medoids[point.medoid].members.push(point.index);
                 }
-                point.medoid = best_medoid;
             }
 
             print_clusters(&rewrites, &medoids, &points);
@@ -407,17 +436,45 @@ fn run_experiment(window: &mut Window, camera: &mut Camera) {
 
             // Optimize medoids.
             for m in 0..medoids.len() {
-                for p in 0..points.len() {
-                    mem::swap(&mut medoids[m].index, &mut points[p].index);
-                    let cost = calculate_cost(&costs, &medoids, &points);
-                    if cost >= total_cost {
-                        mem::swap(&mut medoids[m].index, &mut points[p].index);
-                    } else {
-                        total_cost = cost;
-                        println!("Cost improved to {}", cost);
+                let locals = {
+                    let mut tmp = medoids[m].members.clone();
+                    tmp.push(medoids[m].index);
+                    tmp
+                };
+                let old_medoid = medoids[m].index;
+
+                let mut best_cost = f32::MAX;
+                let mut best_medoid = old_medoid;
+                for l in &locals {
+                    let cost = {
+                        let mut acc = 0.0;
+                        for l2 in &locals {
+                            if l2 != l {
+                                acc += costs[*l][*l2];
+                            }
+                        }
+                        acc
+                    };
+
+                    if cost < best_cost {
+                        best_cost = cost;
+                        best_medoid = *l;
                     }
                 }
+
+                println!("Old medoid: {}", old_medoid);
+                println!("Old members: {:?}", medoids[m].members);
+                if best_medoid != old_medoid {
+                    let member_pos = medoids[m].members.iter().position(|x| *x == best_medoid).unwrap();
+                    medoids[m].members.swap_remove(member_pos);
+                    medoids[m].members.push(old_medoid);
+                    medoids[m].index = best_medoid;
+                }
+                println!("New medoid: {}", best_medoid);
+                println!("New members: {:?}", medoids[m].members);
             }
+
+            total_cost = calculate_cost(&costs, &medoids, &points);
 
             // Can't improve more.
             if total_cost == 0.0 || total_cost == prev_cost {
@@ -435,15 +492,49 @@ fn run_experiment(window: &mut Window, camera: &mut Camera) {
 
     println!("Generating rewrites");
 
-    let mut rewrites = vec![];
-    for _ in 0..num_rewrites {
-        let rewrite = generate_rewrite();
-        rewrites.push(rewrite);
-    }
-    let rewrites = rewrites;
+    //let mut rewrites = vec![];
+    //for _ in 0..num_rewrites {
+    //    let rewrite = generate_rewrite();
+    //    rewrites.push(rewrite);
+    //}
+    //let rewrites = rewrites;
+    let rewrites = vec![
+        "FFFF+F[F]XFX-",
+        "FF-F+F[FF]X[-XF]F-+",
+        "FFF+X[F+[FF]]--+XF",
+        "F-FF-XF+-[--]+",
+        "F-FF+-[X]+F+-",
+        "F[F]+FXXF+--F",
+        "F[++]+-FFX+X[FFX]+X",
+        "F-F[XFX]+FF-+[X]FF",
+        "FFXX++FFF[FF]F",
+        "F[-F]+X-XX+FF-",
+        "FX-F[F]FFF-F-",
+        "FX+F-F-[-X]XF-",
+        "F-XFX-X[-X][FX]XFF",
+        "FX+[X][X]F--XXF+",
+        "FXX+X--+[-+][X+F]--",
+        "[+XX][XX]FFFX+FF--+",
+    ].iter().map(|s| s.to_string()).collect();
 
+    // Print clusters in a spreadsheet-friendly format.
     //let clusters = cluster(&rewrites);
-    //render_clusters(&clusters, window, camera);
+    //for cluster in clusters {
+    //    let mut items = cluster.members;
+    //    items.push(cluster.medoid);
+    //    for (i, item) in items.iter().enumerate() {
+    //        let pos = rewrites.iter().position(|x| *x == *item).unwrap();
+    //        let id = pos + 1;
+    //        print!("{}", id);
+    //        if i < items.len() - 1 {
+    //            print!(",");
+    //        }
+    //    }
+    //    print!(";");
+    //}
+    //println!("");
+
+    //render_clusters(&cluster(&rewrites), window, camera);
     save_as_images(&rewrites);
 }
 
