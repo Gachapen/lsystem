@@ -3,8 +3,6 @@ extern crate nalgebra as na;
 extern crate ncollide_transformation as nct;
 extern crate time;
 extern crate num_traits;
-extern crate rand;
-extern crate strsim;
 extern crate glfw;
 
 #[macro_use]
@@ -24,7 +22,6 @@ use kiss3d::scene::SceneNode;
 use glfw::WindowEvent;
 use glfw::Key;
 use glfw::Action;
-use rand::distributions::{IndependentSample, Range};
 
 use lsys::Command;
 use lsys::ol;
