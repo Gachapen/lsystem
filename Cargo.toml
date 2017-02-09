@@ -8,14 +8,11 @@ kiss3d = "0.7.*"
 
 # Dependencies of kiss3d also used by the project.
 # Dependencies must match the same versions kiss3d uses.
-glfw = "0.8.*"
 nalgebra = "0.9.*"
-image = "0.6.*"
-ncollide_transformation = "0.5.*"
 
 # Project dependencies
 time = "0.1.*"
-num-traits = "0.1.*"
 
 # Local dependencies.
 lsys = { path = "lsys" }
+lsys_kiss3d = { path = "lsys_kiss3d" }

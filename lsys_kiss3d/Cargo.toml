@@ -1,0 +1,15 @@
+[package]
+name = "lsys_kiss3d"
+version = "0.1.0"
+authors = ["Magnus Bjerke Vik <mbvett@gmail.com>"]
+
+[dependencies]
+kiss3d = "0.7.*"
+num-traits = "0.1.*"
+
+# Dependencies of kiss3d also used by the project.
+# Dependencies must match the same versions kiss3d uses.
+nalgebra = "0.9.*"
+ncollide_transformation = "0.5.*"
+
+lsys = { path = "../lsys" }

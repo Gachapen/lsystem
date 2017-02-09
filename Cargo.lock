@@ -2,13 +2,10 @@
 name = "lsystem"
 version = "0.0.1"
 dependencies = [
- "glfw 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "image 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "kiss3d 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "lsys 0.1.0",
+ "lsys_kiss3d 0.1.0",
  "nalgebra 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "ncollide_transformation 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "num-traits 0.1.36 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.36 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -211,6 +208,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "lsys"
 version = "0.1.0"
+
+[[package]]
+name = "lsys_kiss3d"
+version = "0.1.0"
+dependencies = [
+ "kiss3d 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lsys 0.1.0",
+ "nalgebra 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ncollide_transformation 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-traits 0.1.36 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "lzw"
