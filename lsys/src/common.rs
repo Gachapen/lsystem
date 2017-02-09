@@ -88,3 +88,7 @@ impl Settings {
         }
     }
 }
+
+pub trait Rewriter {
+    fn instructions(&self, iterations: u32) -> Vec<Instruction>;
+}

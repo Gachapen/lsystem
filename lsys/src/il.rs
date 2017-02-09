@@ -6,6 +6,7 @@ use common::Instruction;
 use common::CommandMap;
 use common::create_command_map;
 use common::map_word_to_instructions;
+use common::Rewriter;
 
 fn matches_left_context(word_left: &str, context: u8, ignores: &Vec<u8>) -> bool {
     let bytes = word_left.as_bytes();
@@ -325,16 +326,18 @@ impl LSystem {
         }
     }
 
-    pub fn instructions(&self, iterations: u32) -> Vec<Instruction> {
-        let lword = expand_lsystem(&self.axiom, &self.productions, iterations, &self.ignore);
-        map_word_to_instructions(&lword, &self.command_map)
-    }
-
     pub fn ignore_from_context(&mut self, ignore: &str) {
         self.ignore.reserve(ignore.as_bytes().len());
         for c in ignore.bytes() {
             self.ignore.push(c as u8);
         }
+    }
+}
+
+impl Rewriter for LSystem {
+    fn instructions(&self, iterations: u32) -> Vec<Instruction> {
+        let lword = expand_lsystem(&self.axiom, &self.productions, iterations, &self.ignore);
+        map_word_to_instructions(&lword, &self.command_map)
     }
 }
 

@@ -6,3 +6,4 @@ pub mod param;
 pub use self::common::Settings;
 pub use self::common::Command;
 pub use self::common::Instruction;
+pub use self::common::Rewriter;

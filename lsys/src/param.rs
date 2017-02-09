@@ -4,6 +4,7 @@ use common::Command;
 use common::CommandMap;
 use common::Instruction;
 use common::create_command_map;
+use common::Rewriter;
 
 #[derive(Copy, Clone, Debug)]
 pub enum Param {
@@ -291,8 +292,10 @@ impl LSystem {
             axiom: Word::new(),
         }
     }
+}
 
-    pub fn instructions(&self, iterations: u32) -> Vec<Instruction> {
+impl Rewriter for LSystem {
+    fn instructions(&self, iterations: u32) -> Vec<Instruction> {
         let word = expand_lsystem(&self.axiom, &self.productions, iterations);
         map_word_to_instructions(&word, &self.command_map)
     }

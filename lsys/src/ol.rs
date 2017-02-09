@@ -7,6 +7,7 @@ use common::CommandMap;
 use common::create_command_map;
 use common::map_word_to_instructions;
 use common::MAX_ALPHABET_SIZE;
+use common::Rewriter;
 
 type RuleMap = [String; MAX_ALPHABET_SIZE];
 
@@ -60,8 +61,10 @@ impl LSystem {
     pub fn set_rule(&mut self, letter: char, expansion: &str) {
         self.rules[letter as usize] = String::from(expansion);
     }
+}
 
-    pub fn instructions(&self, iterations: u32) -> Vec<Instruction> {
+impl Rewriter for LSystem {
+    fn instructions(&self, iterations: u32) -> Vec<Instruction> {
         let lword = expand_lsystem(&self.axiom, &self.rules, iterations);
         map_word_to_instructions(&lword, &self.command_map)
     }

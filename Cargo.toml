@@ -10,9 +10,6 @@ kiss3d = "0.7.*"
 # Dependencies must match the same versions kiss3d uses.
 nalgebra = "0.9.*"
 
-# Project dependencies
-time = "0.1.*"
-
 # Local dependencies.
 lsys = { path = "lsys" }
 lsys_kiss3d = { path = "lsys_kiss3d" }

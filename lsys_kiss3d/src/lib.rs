@@ -2,6 +2,7 @@ extern crate kiss3d;
 extern crate nalgebra as na;
 extern crate ncollide_transformation as nct;
 extern crate num_traits;
+extern crate time;
 
 extern crate lsys;
 
@@ -9,9 +10,12 @@ use std::{f32};
 
 use na::{Vector3, Point3, Rotation3, Translate, BaseFloat, Origin};
 use kiss3d::scene::SceneNode;
+use kiss3d::window::Window;
+use kiss3d::camera::Camera;
 use num_traits::identities::One;
 
 use lsys::Command;
+use lsys::param;
 
 pub fn build_model(instructions: &Vec<lsys::Instruction>, settings: &lsys::Settings) -> SceneNode {
     let mut model = SceneNode::new_empty();
@@ -214,3 +218,38 @@ pub fn build_model(instructions: &Vec<lsys::Instruction>, settings: &lsys::Setti
     model
 }
 
+#[allow(dead_code)]
+pub fn run_static<T>(window: &mut Window, camera: &mut Camera, (system, settings): (T, lsys::Settings))
+    where T: lsys::Rewriter
+{
+    let instructions = system.instructions(settings.iterations);
+
+    let mut model = build_model(&instructions, &settings);
+    window.scene_mut().add_child(model.clone());
+
+    while window.render_with_camera(camera) {
+        model.append_rotation(&Vector3::new(0.0f32, 0.004, 0.0));
+    }
+}
+
+#[allow(dead_code)]
+pub fn run_animated(window: &mut Window, camera: &mut Camera, (system, settings): (param::LSystem, lsys::Settings))
+{
+    let mut model = SceneNode::new_empty();
+
+    let mut word = system.axiom.clone();
+    let mut time = time::precise_time_s();
+
+    while window.render_with_camera(camera) {
+        let prev_time = time;
+        time = time::precise_time_s();
+        let dt = time - prev_time;
+
+        word = param::step(&word, &system.productions, dt as f32 * 0.3);
+        let instructions = param::map_word_to_instructions(&word, &system.command_map);
+
+        model.unlink();
+        model = build_model(&instructions, &settings);
+        window.scene_mut().add_child(model.clone());
+    }
+}
