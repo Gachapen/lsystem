@@ -1,5 +1,6 @@
 extern crate kiss3d;
 extern crate nalgebra as na;
+extern crate rand;
 
 #[macro_use]
 extern crate lsys;
@@ -11,6 +12,7 @@ use kiss3d::light::Light;
 use kiss3d::camera::ArcBall;
 
 mod lsystems;
+mod gen;
 
 fn main() {
     let mut window = Window::new("lsystem");
@@ -25,5 +27,6 @@ fn main() {
     };
 
     //lsys3d::run_static(&mut window, &mut camera, lsystems::make_bush());
-    lsys3d::run_animated(&mut window, &mut camera, lsystems::make_anim_tree());
+    //lsys3d::run_animated(&mut window, &mut camera, lsystems::make_anim_tree());
+    gen::run_generated(&mut window, &mut camera);
 }
