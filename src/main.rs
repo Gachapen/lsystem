@@ -3,7 +3,7 @@ extern crate nalgebra as na;
 
 #[macro_use]
 extern crate lsys;
-extern crate lsys_kiss3d as l3d;
+extern crate lsys_kiss3d as lsys3d;
 
 use na::{Point3};
 use kiss3d::window::Window;
@@ -24,6 +24,6 @@ fn main() {
         ArcBall::new(eye, at)
     };
 
-    //l3d::run_static(&mut window, &mut camera, lsystems::make_bush());
-    l3d::run_animated(&mut window, &mut camera, lsystems::make_anim_tree());
+    //lsys3d::run_static(&mut window, &mut camera, lsystems::make_bush());
+    lsys3d::run_animated(&mut window, &mut camera, lsystems::make_anim_tree());
 }
