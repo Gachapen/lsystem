@@ -57,8 +57,8 @@ impl fmt::Display for Param {
 
 #[derive(Debug)]
 pub struct Letter {
-    character: u8,
-    params: Vec<Param>,
+    pub character: u8,
+    pub params: Vec<Param>,
 }
 
 impl Letter {
