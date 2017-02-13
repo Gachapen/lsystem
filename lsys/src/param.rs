@@ -194,6 +194,22 @@ impl ProductionLetter {
     }
 }
 
+/// Convert from Letter to ProductionLetter, changing params to transforms that
+/// return the params.
+impl From<Letter> for ProductionLetter {
+    fn from(letter: Letter) -> ProductionLetter {
+        ProductionLetter::with_params(letter.character as char, letter.params.clone())
+    }
+}
+
+/// Convert from &Letter to ProductionLetter, changing params to transforms that
+/// return the params.
+impl<'a> From<&'a Letter> for ProductionLetter {
+    fn from(letter: &Letter) -> ProductionLetter {
+        ProductionLetter::with_params(letter.character as char, letter.params.clone())
+    }
+}
+
 impl fmt::Display for ProductionLetter {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.character as char)?;
