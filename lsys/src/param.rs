@@ -46,6 +46,16 @@ impl Param {
     }
 }
 
+impl fmt::Display for Param {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Param::F(v) => write!(f, "{}", v),
+            Param::I(v) => write!(f, "{}", v),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Letter {
     character: u8,
     params: Vec<Param>,
@@ -76,9 +86,13 @@ impl Clone for Letter {
     }
 }
 
-impl fmt::Debug for Letter {
+impl fmt::Display for Letter {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Letter {{ character: {}, params: {:?} }}", self.character as char, self.params)
+        write!(f, "{}(", self.character as char)?;
+        for param in &self.params {
+            write!(f, "{}", param)?;
+        }
+        write!(f, ")")
     }
 }
 
@@ -180,6 +194,17 @@ impl ProductionLetter {
     }
 }
 
+impl fmt::Display for ProductionLetter {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.character as char)?;
+        if !(self.character == '[' as u8 || self.character == ']' as u8) {
+            write!(f, "(.)")
+        } else {
+            Ok(())
+        }
+    }
+}
+
 pub type ProductionWord = Vec<ProductionLetter>;
 
 pub trait ProductionWordFromString {
@@ -202,7 +227,6 @@ pub struct Production {
     successor: ProductionWord,
 }
 
-
 impl Production {
     pub fn with_condition<F>(predecessor: char, condition: F, successor: ProductionWord) -> Production
         where F: Fn(&Vec<Param>) -> bool + 'static {
@@ -216,6 +240,19 @@ impl Production {
 
     pub fn new(predecessor: char, successor: ProductionWord) -> Production {
         Production::with_condition(predecessor, |_| true, successor)
+    }
+}
+
+impl fmt::Display for Production {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let prod_str = self.successor.iter().fold(
+            String::new(),
+            |mut word, l|  {
+                word.push_str(&format!("{}", l));
+                word
+            }
+        );
+        write!(f, "{} -> {}", self.predecessor as char, prod_str)
     }
 }
 
@@ -298,6 +335,21 @@ impl Rewriter for LSystem {
     fn instructions(&self, iterations: u32) -> Vec<Instruction> {
         let word = expand_lsystem(&self.axiom, &self.productions, iterations);
         map_word_to_instructions(&word, &self.command_map)
+    }
+}
+
+impl fmt::Display for LSystem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "w: ")?;
+        for letter in &self.axiom {
+            write!(f, "{}", letter)?;
+        }
+
+        for prod in &self.productions {
+            write!(f, "\n{}", prod)?;
+        }
+
+        Ok(())
     }
 }
 
