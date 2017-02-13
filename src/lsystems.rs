@@ -260,8 +260,7 @@ pub fn make_bush() -> (ol::LSystem, lsys::Settings) {
         colors: vec![
             (193.0/255.0, 154.0/255.0, 107.0/255.0),
             (0.3, 1.0, 0.2),
-        ],
-        ..lsys::Settings::new()
+        ]
     };
 
     (sys, settings)
