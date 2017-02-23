@@ -14,3 +14,4 @@ nalgebra = "0.9.*"
 # Local dependencies.
 lsys = { path = "lsys" }
 lsys_kiss3d = { path = "lsys_kiss3d" }
+abnf = { path = "abnf" }
