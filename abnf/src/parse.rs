@@ -1,4 +1,4 @@
-use nom::{alphanumeric, digit};
+use nom::{alphanumeric, digit, eol};
 use std::str;
 
 use syntax::{Repeat, CoreRule, Item, Content, Rule};
@@ -159,9 +159,16 @@ named!(pub rule<Rule>,
     )
 );
 
+named!(pub abnf<Vec<Rule>>,
+    separated_nonempty_list!(
+        call!(eol),
+        call!(rule)
+    )
+);
+
 #[cfg(test)]
 mod tests {
-    use nom::IResult::{Done, Incomplete, Error};
+    use nom::IResult::Done;
 
     use parse;
     use super::*;
@@ -321,6 +328,35 @@ mod tests {
         assert_eq!(
             parse::rule(&b"rule = def"[..]),
             Done(&b""[..], (result))
+        );
+    }
+
+    #[test]
+    fn test_abnf_parser() {
+        let make_result = || {
+            vec![
+                Rule {
+                    name: "def".to_string(),
+                    definition: Item::new(Content::Value("value".to_string())),
+                },
+                Rule {
+                    name: "rule".to_string(),
+                    definition: Item::new(Content::Symbol("def".to_string())),
+                },
+                Rule {
+                    name: "rule2".to_string(),
+                    definition: Item::new(Content::Symbol("def".to_string())),
+                }
+            ]
+        };
+
+        assert_eq!(
+            parse::abnf(&b"def = \"value\"\nrule = def\nrule2 = def"[..]),
+            Done(&b""[..], (make_result()))
+        );
+        assert_eq!(
+            parse::abnf(&b"def = \"value\"\r\nrule = def\r\nrule2 = def"[..]),
+            Done(&b""[..], (make_result()))
         );
     }
 }
