@@ -1,7 +1,8 @@
 use nom::{alphanumeric, digit, eol};
 use std::str;
+use std::collections::HashMap;
 
-use syntax::{Repeat, CoreRule, Item, Content, Rule};
+use syntax::{Repeat, CoreRule, Item, Content};
 
 named!(pub string_literal<String>,
     delimited!(
@@ -142,27 +143,24 @@ named!(pub alternatives<Vec<Item>>,
     )
 );
 
-named!(pub rule<Rule>,
-    map!(
-        do_parse!(
-            s: call!(symbol) >>
-            ws!(char!('=')) >>
-            d: call!(item) >>
-            (s, d)
-        ),
-        |(name, def)| {
-            Rule {
-                name: name,
-                definition: def,
-            }
-        }
+named!(pub rule<(String, Item)>,
+    do_parse!(
+        s: call!(symbol) >>
+        ws!(char!('=')) >>
+        d: call!(item) >>
+        (s, d)
     )
 );
 
-named!(pub abnf<Vec<Rule>>,
-    separated_nonempty_list!(
-        call!(eol),
-        call!(rule)
+named!(pub abnf<HashMap<String, Item>>,
+    map!(
+        separated_nonempty_list!(
+            call!(eol),
+            call!(rule)
+        ),
+        |rules: Vec<_>| {
+            rules.into_iter().collect()
+        }
     )
 );
 
@@ -321,10 +319,10 @@ mod tests {
 
     #[test]
     fn test_rule_parser() {
-        let result = Rule {
-            name: "rule".to_string(),
-            definition: Item::new(Content::Symbol("def".to_string())),
-        };
+        let result = (
+            "rule".to_string(),
+            Item::new(Content::Symbol("def".to_string())),
+        );
         assert_eq!(
             parse::rule(&b"rule = def"[..]),
             Done(&b""[..], (result))
@@ -335,19 +333,19 @@ mod tests {
     fn test_abnf_parser() {
         let make_result = || {
             vec![
-                Rule {
-                    name: "def".to_string(),
-                    definition: Item::new(Content::Value("value".to_string())),
-                },
-                Rule {
-                    name: "rule".to_string(),
-                    definition: Item::new(Content::Symbol("def".to_string())),
-                },
-                Rule {
-                    name: "rule2".to_string(),
-                    definition: Item::new(Content::Symbol("def".to_string())),
-                }
-            ]
+                (
+                    "def".to_string(),
+                    Item::new(Content::Value("value".to_string())),
+                ),
+                (
+                    "rule".to_string(),
+                    Item::new(Content::Symbol("def".to_string())),
+                ),
+                (
+                    "rule2".to_string(),
+                    Item::new(Content::Symbol("def".to_string())),
+                )
+            ].into_iter().collect::<HashMap<_, _>>()
         };
 
         assert_eq!(

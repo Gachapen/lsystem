@@ -70,9 +70,3 @@ impl Item {
         }
     }
 }
-
-#[derive(Debug, PartialEq)]
-pub struct Rule {
-    pub name: String,
-    pub definition: Item,
-}
