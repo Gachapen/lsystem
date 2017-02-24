@@ -1,8 +1,7 @@
 use nom::{alphanumeric, digit, eol};
 use std::str;
-use std::collections::HashMap;
 
-use syntax::{Repeat, CoreRule, Item, Content};
+use syntax::{Repeat, CoreRule, Item, Content, Sequence, Ruleset};
 
 named!(pub string_literal<String>,
     delimited!(
@@ -117,18 +116,16 @@ named!(pub alternatives_item<Item>,
     )
 );
 
-named!(pub sequence<Vec<Item>>,
-    fold_many0!(
-        ws!(item),
-        Vec::new(),
-        |mut acc: Vec<_>, item| {
-            acc.push(item);
-            acc
-        }
+named!(pub space, eat_separator!(&b" \t"[..]));
+
+named!(pub sequence<Sequence>,
+    separated_nonempty_list!(
+        call!(space),
+        call!(item)
     )
 );
 
-named!(pub group<Vec<Item>>,
+named!(pub group<Sequence>,
     delimited!(
         char!('('),
         call!(sequence),
@@ -136,23 +133,23 @@ named!(pub group<Vec<Item>>,
     )
 );
 
-named!(pub alternatives<Vec<Item>>,
+named!(pub alternatives<Sequence>,
     separated_nonempty_list!(
         ws!(char!('/')),
         call!(alternatives_item)
     )
 );
 
-named!(pub rule<(String, Item)>,
+named!(pub rule<(String, Sequence)>,
     do_parse!(
-        s: call!(symbol) >>
+        name: call!(symbol) >>
         ws!(char!('=')) >>
-        d: call!(item) >>
-        (s, d)
+        definition: call!(sequence) >>
+        (name, definition)
     )
 );
 
-named!(pub abnf<HashMap<String, Item>>,
+named!(pub abnf<Ruleset>,
     map!(
         separated_nonempty_list!(
             call!(eol),
@@ -321,7 +318,9 @@ mod tests {
     fn test_rule_parser() {
         let result = (
             "rule".to_string(),
-            Item::new(Content::Symbol("def".to_string())),
+            vec![
+                Item::new(Content::Symbol("def".to_string())),
+            ],
         );
         assert_eq!(
             parse::rule(&b"rule = def"[..]),
@@ -335,25 +334,32 @@ mod tests {
             vec![
                 (
                     "def".to_string(),
-                    Item::new(Content::Value("value".to_string())),
+                    vec![
+                        Item::new(Content::Value("value".to_string())),
+                    ],
                 ),
                 (
                     "rule".to_string(),
-                    Item::new(Content::Symbol("def".to_string())),
+                    vec![
+                        Item::new(Content::Symbol("def".to_string())),
+                    ],
                 ),
                 (
                     "rule2".to_string(),
-                    Item::new(Content::Symbol("def".to_string())),
-                )
-            ].into_iter().collect::<HashMap<_, _>>()
+                    vec![
+                        Item::new(Content::Symbol("def".to_string())),
+                        Item::new(Content::Symbol("def".to_string())),
+                    ],
+                ),
+            ].into_iter().collect::<Ruleset>()
         };
 
         assert_eq!(
-            parse::abnf(&b"def = \"value\"\nrule = def\nrule2 = def"[..]),
+            parse::abnf(&b"def = \"value\"\nrule = def\nrule2 = def def"[..]),
             Done(&b""[..], (make_result()))
         );
         assert_eq!(
-            parse::abnf(&b"def = \"value\"\r\nrule = def\r\nrule2 = def"[..]),
+            parse::abnf(&b"def = \"value\"\r\nrule = def\r\nrule2 = def def"[..]),
             Done(&b""[..], (make_result()))
         );
     }

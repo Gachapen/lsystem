@@ -4,7 +4,6 @@ extern crate nom;
 use std::{error, fmt, io};
 use std::io::prelude::*;
 use std::fs::File;
-use std::collections::HashMap;
 
 mod syntax;
 pub mod parse;
@@ -17,7 +16,7 @@ pub enum Error {
     Io(io::Error),
 }
 
-pub fn parse_file(filename: &str) -> Result<HashMap<String, Item>, Error> {
+pub fn parse_file(filename: &str) -> Result<Ruleset, Error> {
     let mut f = match File::open(filename) {
         Ok(file) => file,
         Err(err) => return Err(Error::Io(err)),
@@ -31,11 +30,11 @@ pub fn parse_file(filename: &str) -> Result<HashMap<String, Item>, Error> {
     }
 }
 
-pub fn parse_string(content: &str) -> Result<HashMap<String, Item>, Error> {
+pub fn parse_string(content: &str) -> Result<Ruleset, Error> {
     parse_bytes(content.as_bytes())
 }
 
-pub fn parse_bytes(content: &[u8]) -> Result<HashMap<String, Item>, Error>  {
+pub fn parse_bytes(content: &[u8]) -> Result<Ruleset, Error>  {
     match parse::abnf(content) {
         nom::IResult::Done(_, item) => Ok(item),
         nom::IResult::Error(_) => Err(Error::Parse("Internal parse module failed".to_string())),

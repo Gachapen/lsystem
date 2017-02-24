@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 #[derive(Debug, PartialEq)]
 pub struct Repeat {
     pub min: Option<u32>,
@@ -70,3 +72,6 @@ impl Item {
         }
     }
 }
+
+pub type Sequence = Vec<Item>;
+pub type Ruleset = HashMap<String, Sequence>;
