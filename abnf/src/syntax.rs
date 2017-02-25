@@ -41,14 +41,18 @@ pub enum CoreRule {
     Alpha,
 }
 
-// string (string string) ALPHA (string / string)
 #[derive(Debug, PartialEq)]
 pub enum Content {
-    Group(Vec<Item>),
-    Alternatives(Vec<Item>),
     Core(CoreRule),
-    Symbol(String),
     Value(String),
+    Symbol(String),
+    Group(List),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum List {
+    Sequence(Vec<Item>),
+    Alternatives(Vec<Item>),
 }
 
 #[derive(Debug, PartialEq)]
@@ -74,4 +78,4 @@ impl Item {
 }
 
 pub type Sequence = Vec<Item>;
-pub type Ruleset = HashMap<String, Sequence>;
+pub type Ruleset = HashMap<String, List>;

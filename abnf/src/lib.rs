@@ -35,7 +35,7 @@ pub fn parse_string(content: &str) -> Result<Ruleset, Error> {
 }
 
 pub fn parse_bytes(content: &[u8]) -> Result<Ruleset, Error>  {
-    match parse::abnf(content) {
+    match parse::ruleset(content) {
         nom::IResult::Done(_, item) => Ok(item),
         nom::IResult::Error(_) => Err(Error::Parse("Internal parse module failed".to_string())),
         nom::IResult::Incomplete(_) => Err(Error::Parse("Internal parse module failed".to_string())),
