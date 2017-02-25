@@ -1,0 +1,7 @@
+lsystem = axiom productions
+axiom = string
+productions = 1*(predicate string)
+predicate = 1*symbol
+stack = "[" 1*string "]"
+symbol = ALPHA / operation
+operation = "+" / "-" / "^" / "&" / ">" / "<"
