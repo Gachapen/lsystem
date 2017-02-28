@@ -1,4 +1,4 @@
-use nom::{alphanumeric, digit, eol, space};
+use nom::{alphanumeric, digit, eol, space, hex_u32};
 use std::str;
 
 use syntax::{Repeat, CoreRule, Item, Content, Sequence, Ruleset, List};
@@ -18,6 +18,21 @@ named!(pub string_literal<String>,
             String::from_utf8
         ),
         char!('"')
+    )
+);
+
+named!(pub hex_values<String>,
+    map!(
+        do_parse!(
+            tag!(&b"%x"[..]) >>
+            value: call!(hex_u32) >>
+            (value)
+        ),
+        |v| {
+            let mut string = String::new();
+            string.push(v as u8 as char);
+            string
+        }
     )
 );
 
@@ -68,6 +83,7 @@ named!(pub symbol<String>,
 named!(pub content<Content>,
     alt!(
         map!(call!(core), |c| Content::Core(c)) |
+        map!(call!(hex_values), |s| Content::Value(s)) |
         map!(call!(string_literal), |s| Content::Value(s)) |
         map!(call!(symbol), |s| Content::Symbol(s)) |
         map!(call!(group), |g| Content::Group(g))
@@ -469,6 +485,26 @@ mod tests {
         assert_eq!(
             parse::ruleset(&input[..]),
             Done(&b""[..], (result))
+        );
+    }
+
+    #[test]
+    fn test_hex_value_parser() {
+        assert_eq!(
+            parse::hex_values(&b"%x41"[..]),
+            Done(&b""[..], ("A".to_string()))
+        );
+        assert_eq!(
+            parse::hex_values(&b"%x2A"[..]),
+            Done(&b""[..], ("*".to_string()))
+        );
+        assert_eq!(
+            parse::hex_values(&b"%x2a"[..]),
+            Done(&b""[..], ("*".to_string()))
+        );
+        assert_eq!(
+            parse::hex_values(&b"%x0A"[..]),
+            Done(&b""[..], ("\n".to_string()))
         );
     }
 }
