@@ -9,9 +9,9 @@ use common::map_word_to_instructions;
 use common::MAX_ALPHABET_SIZE;
 use common::Rewriter;
 
-type RuleMap = [String; MAX_ALPHABET_SIZE];
+pub type RuleMap = [String; MAX_ALPHABET_SIZE];
 
-fn create_rule_map() -> RuleMap {
+pub fn create_rule_map() -> RuleMap {
     let mut rules: RuleMap = unsafe { mem::uninitialized() };
 
     for (i, v) in rules.iter_mut().enumerate() {
@@ -33,7 +33,6 @@ fn expand_lsystem(axiom: &str, rules: &RuleMap, iterations: u32) -> String {
             expanded_lword.push_str(&mut expanded_lchar.clone());
         }
         lword = expanded_lword;
-        //println!("{}: {}", i+1, lword);
     }
 
     lword
