@@ -42,6 +42,23 @@ pub fn parse_bytes(content: &[u8]) -> Result<Ruleset, Error>  {
     }
 }
 
+pub fn expand_core_rule(rule: CoreRule) -> Content {
+    use CoreRule::*;
+    use Content::*;
+    use List::*;
+
+    match rule {
+        Alpha => {
+            Group(
+                Alternatives(vec![
+                    Item::new(Range('A', 'Z')),
+                    Item::new(Range('a', 'z')),
+                ])
+            )
+        },
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
