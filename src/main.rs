@@ -31,5 +31,5 @@ fn main() {
     //lsys3d::run_static(&mut window, &mut camera, lsystems::make_bush());
     //lsys3d::run_animated(&mut window, &mut camera, lsystems::make_anim_tree());
     //gen::run_generated(&mut window, &mut camera);
-    ge::run_ge();
+    ge::run_ge(&mut window, &mut camera);
 }

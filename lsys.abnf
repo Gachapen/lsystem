@@ -1,7 +1,11 @@
 lsystem = axiom productions
 axiom = string
-productions = 1*(predicate string)
-predicate = 1*symbol
-stack = "[" 1*string "]"
-symbol = ALPHA / operation
+productions = 1*3production
+production = predicate successor
+predicate = variable
+successor = string
+string = 1*3(symbol / stack)
+stack = "[" string "]"
+symbol = variable / operation
+variable = "F" / "X"
 operation = "+" / "-" / "^" / "&" / ">" / "<"
