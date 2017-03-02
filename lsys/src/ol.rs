@@ -81,6 +81,10 @@ impl LSystem {
             *successor = remove_redundancy(&successor);
         }
     }
+
+    pub fn rewrite(&self, iterations: u32) -> String {
+        expand_lsystem(&self.axiom, &self.rules, iterations)
+    }
 }
 
 impl Rewriter for LSystem {
