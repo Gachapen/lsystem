@@ -1,0 +1,8 @@
+break rust_panic
+set pagination off
+
+set $_exitcode = -999
+run
+if $_exitcode != -999
+  quit
+end
