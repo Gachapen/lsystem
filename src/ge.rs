@@ -172,3 +172,121 @@ fn expand_successor<T>(list: &abnf::List, depth: u32, grammar: &abnf::Ruleset, s
 {
     expand_list(list, depth, grammar, strategy)
 }
+
+fn infer_selections(expanded: &str, grammar: &abnf::Ruleset, root: &str) -> Result<Vec<usize>, String> {
+    let selection = infer_list_selections(&grammar[root], 0, expanded, grammar);
+
+    match selection {
+        Ok((list, index)) => {
+            if index == 0 {
+                Ok(list)
+            } else {
+                Err(format!("Expanded string does not fully match grammar. The first {} characters matched", index))
+            }
+        },
+        Err(_) => {
+            Err("Expanded string does not match grammar".to_string())
+        },
+    }
+}
+
+// TODO: Need to be able to try new non-tested alternatives/repetitions if a previously matched
+// alternative/repetition results in a mismatch later.
+fn infer_list_selections(list: &abnf::List, mut index: usize, expanded: &str, grammar: &abnf::Ruleset) -> Result<(Vec<usize>, usize), ()> {
+    use abnf::List;
+
+    match *list {
+        List::Sequence(ref sequence) => {
+            let mut selections = vec![];
+
+            for item in sequence {
+                let (item_selections, updated_index) = infer_item_selections(item, index, expanded, grammar)?;
+                index = updated_index;
+                selections.extend(item_selections);
+            }
+
+            Ok((selections, index))
+        },
+        List::Alternatives(ref alternatives) => {
+            let mut selections = Vec::with_capacity(1);
+
+            for (alternative, item) in alternatives.iter().enumerate() {
+                if let Ok((item_selections, updated_index)) = infer_item_selections(item, index, expanded, grammar) {
+                    selections.push(alternative);
+                    selections.extend(item_selections);
+                    index = updated_index;
+
+                    break;
+                }
+            }
+
+            if selections.is_empty() {
+                Err(())
+            } else {
+                Ok((selections, index))
+            }
+        },
+    }
+}
+
+// TODO: Need to be able to try new non-tested alternatives/repetitions if a previously matched
+// alternative/repetition results in a mismatch later.
+fn infer_item_selections(item: &abnf::Item, mut index: usize, expanded: &str, grammar: &abnf::Ruleset) -> Result<(Vec<usize>, usize), ()> {
+    use abnf::Content;
+    use abnf::Item;
+
+    let repeat = match item.repeat {
+        Some(ref repeat) => {
+            let min = repeat.min.unwrap_or(0);
+            let max = repeat.max.unwrap_or(u32::max_value());
+
+            Some((min, max))
+        },
+        None => None,
+    };
+
+    let times = match repeat {
+        Some((min, max)) => max - min + 1,
+        None => 1,
+    };
+
+    let mut result = Err(());
+
+    for i in 0..times {
+        match item.content {
+            Content::Value(ref value) => {
+                let index_end = index + value.len();
+                if *value.as_str() == expanded[index..index_end] {
+                    index += value.len();
+                    let mut selections = Vec::with_capacity(1);
+
+                    if let Some((min, _)) = repeat {
+                        selections.push((min + i) as usize);
+                    }
+
+                    result = Ok((selections, index));
+                }
+            },
+            Content::Symbol(ref symbol) => {
+                result = infer_list_selections(&grammar[symbol], index, expanded, grammar);
+            },
+            Content::Group(ref group) => {
+                result = infer_list_selections(group, index, expanded, grammar);
+            },
+            Content::Core(rule) => {
+                let content = abnf::expand::expand_core_rule(rule);
+                result = infer_item_selections(&Item::new(content), index, expanded, grammar);
+            },
+            Content::Range(min, max) => {
+                //let index = strategy.select_alternative(max as usize - min as usize);
+                //let character = (index + min as usize) as u8 as char;
+            }
+        };
+
+        if result.is_err() {
+            break;
+        }
+    };
+
+    result
+}
