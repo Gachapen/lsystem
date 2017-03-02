@@ -39,6 +39,18 @@ fn expand_lsystem(axiom: &str, rules: &RuleMap, iterations: u32) -> String {
     lword
 }
 
+fn remove_redundancy(from: &str) -> String {
+    let mut trimmed = from.to_string();
+    let mut prev_len = 0;
+
+    while trimmed.len() != prev_len {
+        prev_len = trimmed.len();
+        trimmed = trimmed.replace("[]", "");
+    }
+
+    trimmed
+}
+
 pub struct LSystem {
     pub command_map: CommandMap,
     pub rules: RuleMap,
@@ -60,6 +72,14 @@ impl LSystem {
 
     pub fn set_rule(&mut self, letter: char, expansion: &str) {
         self.rules[letter as usize] = String::from(expansion);
+    }
+
+    pub fn remove_redundancy(&mut self) {
+        self.axiom = remove_redundancy(&self.axiom);
+
+        for successor in self.rules.iter_mut() {
+            *successor = remove_redundancy(&successor);
+        }
     }
 }
 
