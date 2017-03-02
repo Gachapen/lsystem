@@ -46,6 +46,7 @@ pub enum Content {
     Core(CoreRule),
     Value(String),
     Symbol(String),
+    Range(char, char),
     Group(List),
 }
 
