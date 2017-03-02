@@ -20,8 +20,7 @@ pub fn run_ge(window: &mut Window, camera: &mut Camera) {
     let gene_range = Range::new(u8::min_value(), u8::max_value());
     let gene_length = 100;
 
-    let mut genes = vec![];
-    genes.reserve(gene_length);
+    let mut genes = Vec::with_capacity(gene_length);
     for _ in 0..gene_length {
         genes.push(gene_range.ind_sample(&mut rng));
     }
