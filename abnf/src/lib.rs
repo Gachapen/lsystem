@@ -6,8 +6,9 @@ use std::io::prelude::*;
 use std::fs::File;
 
 mod syntax;
-pub mod parse;
+mod parse;
 
+pub mod expand;
 pub use self::syntax::*;
 
 #[derive(Debug)]
@@ -39,23 +40,6 @@ pub fn parse_bytes(content: &[u8]) -> Result<Ruleset, Error>  {
         nom::IResult::Done(_, item) => Ok(item),
         nom::IResult::Error(_) => Err(Error::Parse("Internal parse module failed".to_string())),
         nom::IResult::Incomplete(_) => Err(Error::Parse("Internal parse module failed".to_string())),
-    }
-}
-
-pub fn expand_core_rule(rule: CoreRule) -> Content {
-    use CoreRule::*;
-    use Content::*;
-    use List::*;
-
-    match rule {
-        Alpha => {
-            Group(
-                Alternatives(vec![
-                    Item::new(Range('A', 'Z')),
-                    Item::new(Range('a', 'z')),
-                ])
-            )
-        },
     }
 }
 

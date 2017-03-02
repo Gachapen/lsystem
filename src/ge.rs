@@ -6,6 +6,7 @@ use kiss3d::camera::Camera;
 use na::UnitQuaternion;
 
 use abnf;
+use abnf::expand::{SelectionStrategy, expand_list};
 use lsys;
 use lsys::ol;
 use lsys::Rewriter;
@@ -66,17 +67,10 @@ pub fn run_ge(window: &mut Window, camera: &mut Camera) {
     }
 }
 
-trait AbnfSelectionStrategy {
-    fn select_alternative(&mut self, num: usize) -> usize;
-    fn select_repetition(&mut self, min: u32, max: u32) -> u32;
-}
-
 struct Genotype {
     genes: Vec<u8>,
     index: usize,
 }
-
-const MAX_DEPTH: u32 = 20;
 
 impl Genotype {
     fn new(genes: Vec<u8>) -> Genotype {
@@ -96,7 +90,7 @@ impl Genotype {
     }
 }
 
-impl AbnfSelectionStrategy for Genotype {
+impl SelectionStrategy for Genotype {
     fn select_alternative(&mut self, num: usize) -> usize {
         let max_value = u8::max_value() as usize;
         let num = num % max_value;
@@ -112,79 +106,10 @@ impl AbnfSelectionStrategy for Genotype {
     }
 }
 
-fn expand_list<T>(list: &abnf::List, depth: u32, grammar: &abnf::Ruleset, strategy: &mut T) -> String
-    where T: AbnfSelectionStrategy
-{
-    match *list {
-        abnf::List::Sequence(ref sequence) => {
-            let mut string = String::new();
-
-            for item in sequence {
-                string.push_str(&expand_item(item, depth + 1, grammar, strategy));
-            }
-
-            string
-        },
-        abnf::List::Alternatives(ref alternatives) => {
-            let index = strategy.select_alternative(alternatives.len());
-            expand_item(&alternatives[index], depth + 1, grammar, strategy)
-        },
-    }
-}
-
-fn expand_item<T>(item: &abnf::Item, depth: u32, grammar: &abnf::Ruleset, strategy: &mut T) -> String
-    where T: AbnfSelectionStrategy
-{
-    if depth > MAX_DEPTH {
-        return String::new();
-    }
-
-    let times = match item.repeat {
-        Some(ref repeat) => {
-            let min = repeat.min.unwrap_or(0);
-            let max = repeat.max.unwrap_or(u32::max_value());
-
-            strategy.select_repetition(min, max)
-        },
-        None => 1,
-    };
-
-    let mut string = String::new();
-
-    for _ in 0..times {
-        let expanded = match item.content {
-            abnf::Content::Value(ref value) => {
-                value.clone()
-            },
-            abnf::Content::Symbol(ref symbol) => {
-                expand_list(&grammar[symbol], depth, grammar, strategy)
-            },
-            abnf::Content::Group(ref group) => {
-                expand_list(group, depth, grammar, strategy)
-            },
-            abnf::Content::Core(rule) => {
-                let content = abnf::expand_core_rule(rule);
-                expand_item(&abnf::Item::new(content), depth + 1, grammar, strategy)
-            },
-            abnf::Content::Range(min, max) => {
-                let index = strategy.select_alternative(max as usize - min as usize);
-                let character = (index + min as usize) as u8 as char;
-
-                // Probably not the most efficient...
-                let mut string = String::new();
-                string.push(character);
-                string
-            }
-        };
-
-        string.push_str(&expanded);
-    };
-
-    string
-}
+// Somehow make the below expansion functions a genetic part of abnf::expand?
 
 fn expand_productions<T>(list: &abnf::List, depth: u32, grammar: &abnf::Ruleset, strategy: &mut T) -> ol::RuleMap
-    where T: AbnfSelectionStrategy
+    where T: SelectionStrategy
 {
     let mut rules = ol::create_rule_map();
 
@@ -209,7 +134,7 @@ fn expand_productions<T>(list: &abnf::List, depth: u32, grammar: &abnf::Ruleset,
 }
 
 fn expand_production<T>(list: &abnf::List, depth: u32, grammar: &abnf::Ruleset, strategy: &mut T) -> (char, String)
-    where T: AbnfSelectionStrategy
+    where T: SelectionStrategy
 {
     if let abnf::List::Sequence(ref seq) = *list {
         assert!(seq.len() == 2);
@@ -235,7 +160,7 @@ fn expand_production<T>(list: &abnf::List, depth: u32, grammar: &abnf::Ruleset, 
 }
 
 fn expand_predicate<T>(list: &abnf::List, depth: u32, grammar: &abnf::Ruleset, strategy: &mut T) -> char
-    where T: AbnfSelectionStrategy
+    where T: SelectionStrategy
 {
     let value = expand_list(list, depth, grammar, strategy);
     assert!(value.len() == 1);
@@ -243,107 +168,7 @@ fn expand_predicate<T>(list: &abnf::List, depth: u32, grammar: &abnf::Ruleset, s
 }
 
 fn expand_successor<T>(list: &abnf::List, depth: u32, grammar: &abnf::Ruleset, strategy: &mut T) -> String
-    where T: AbnfSelectionStrategy
+    where T: SelectionStrategy
 {
     expand_list(list, depth, grammar, strategy)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    struct DummyStrategy {}
-
-    impl AbnfSelectionStrategy for DummyStrategy {
-        #[allow(unused_variables)]
-        fn select_alternative(&mut self, num: usize) -> usize {
-            0
-        }
-
-        #[allow(unused_variables)]
-        fn select_repetition(&mut self, min: u32, max: u32) -> u32 {
-            1
-        }
-    }
-
-    #[test]
-    fn test_expand_value() {
-        let rules = abnf::Ruleset::new();
-        let mut strategy = DummyStrategy {};
-        let item = abnf::Item::new(abnf::Content::Value("value".to_string()));
-
-        assert_eq!(expand_item(&item, 0, &rules, &mut strategy), "value".to_string());
-    }
-
-    #[test]
-    fn test_expand_symbol() {
-        let mut rules = abnf::Ruleset::new();
-        rules.insert(
-            "symbol".to_string(),
-            abnf::List::Sequence(vec![
-                abnf::Item::new(abnf::Content::Value("value".to_string())),
-            ])
-        );
-
-        let mut strategy = DummyStrategy {};
-        let item = abnf::Item::new(abnf::Content::Symbol("symbol".to_string()));
-
-        assert_eq!(expand_item(&item, 0, &rules, &mut strategy), "value".to_string());
-    }
-
-    #[test]
-    fn test_expand_core() {
-        let rules = abnf::Ruleset::new();
-        let mut strategy = DummyStrategy {};
-        let item = abnf::Item::new(abnf::Content::Core(abnf::CoreRule::Alpha));
-
-        assert_eq!(expand_item(&item, 0, &rules, &mut strategy), "A".to_string());
-    }
-
-    #[test]
-    fn test_expand_range() {
-        let rules = abnf::Ruleset::new();
-        let mut strategy = DummyStrategy {};
-        let item = abnf::Item::new(abnf::Content::Range('X', 'Z'));
-
-        assert_eq!(expand_item(&item, 0, &rules, &mut strategy), "X".to_string());
-    }
-
-    #[test]
-    fn test_expand_sequence() {
-        let rules = abnf::Ruleset::new();
-        let mut strategy = DummyStrategy {};
-        let list = abnf::List::Sequence(vec![
-            abnf::Item::new(abnf::Content::Value("value".to_string())),
-            abnf::Item::new(abnf::Content::Value("value".to_string())),
-        ]);
-
-        assert_eq!(expand_list(&list, 0, &rules, &mut strategy), "valuevalue".to_string());
-    }
-
-    #[test]
-    fn test_expand_alternatives() {
-        let rules = abnf::Ruleset::new();
-        let mut strategy = DummyStrategy {};
-        let list = abnf::List::Alternatives(vec![
-            abnf::Item::new(abnf::Content::Value("one".to_string())),
-            abnf::Item::new(abnf::Content::Value("two".to_string())),
-        ]);
-
-        assert_eq!(expand_list(&list, 0, &rules, &mut strategy), "one".to_string());
-    }
-
-    #[test]
-    fn test_expand_group() {
-        let rules = abnf::Ruleset::new();
-        let mut strategy = DummyStrategy {};
-        let item = abnf::Item::new(abnf::Content::Group(
-            abnf::List::Sequence(vec![
-                abnf::Item::new(abnf::Content::Value("value".to_string())),
-                abnf::Item::new(abnf::Content::Value("value".to_string())),
-            ])
-        ));
-
-        assert_eq!(expand_item(&item, 0, &rules, &mut strategy), "valuevalue".to_string());
-    }
 }
