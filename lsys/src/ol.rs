@@ -1,5 +1,6 @@
 use std::mem;
 use std::ptr;
+use std::fmt;
 
 use common::Command;
 use common::Instruction;
@@ -66,5 +67,22 @@ impl Rewriter for LSystem {
     fn instructions(&self, iterations: u32) -> Vec<Instruction> {
         let lword = expand_lsystem(&self.axiom, &self.rules, iterations);
         map_word_to_instructions(&lword, &self.command_map)
+    }
+}
+
+impl fmt::Display for LSystem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "w: ")?;
+        for letter in self.axiom.as_bytes() {
+            write!(f, "{}", *letter as char)?;
+        }
+
+        for (pred, succ) in self.rules.iter().enumerate() {
+            if !(succ.len() == 1 && succ.as_bytes()[0] == pred as u8) {
+                write!(f, "\n{} -> {}", pred as u8 as char, succ)?;
+            }
+        }
+
+        Ok(())
     }
 }
