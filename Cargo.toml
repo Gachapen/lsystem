@@ -4,12 +4,12 @@ version = "0.0.1"
 authors = [ "Magnus Bjerke Vik <mbvett@gmail.com>" ]
 
 [dependencies]
-kiss3d = "0.7.*"
+kiss3d = "0.8"
 rand = "0.3"
 
 # Dependencies of kiss3d also used by the project.
 # Dependencies must match the same versions kiss3d uses.
-nalgebra = "0.9.*"
+nalgebra = "0.11"
 
 # Local dependencies.
 lsys = { path = "lsys" }

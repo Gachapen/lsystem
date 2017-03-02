@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt;
 
-use na::Vector3;
+use na::UnitQuaternion;
 use kiss3d::window::Window;
 use kiss3d::camera::Camera;
 use rand;
@@ -276,6 +276,6 @@ pub fn run_generated(window: &mut Window, camera: &mut Camera)
     window.scene_mut().add_child(model.clone());
 
     while window.render_with_camera(camera) {
-        model.append_rotation(&Vector3::new(0.0f32, 0.004, 0.0));
+        model.append_rotation(&UnitQuaternion::from_euler_angles(0.0f32, 0.004, 0.0));
     }
 }

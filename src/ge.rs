@@ -3,7 +3,7 @@ use rand;
 use rand::distributions::{IndependentSample, Range};
 use kiss3d::window::Window;
 use kiss3d::camera::Camera;
-use na::Vector3;
+use na::UnitQuaternion;
 
 use abnf;
 use lsys;
@@ -62,7 +62,7 @@ pub fn run_ge(window: &mut Window, camera: &mut Camera) {
     window.scene_mut().add_child(model.clone());
 
     while window.render_with_camera(camera) {
-        model.append_rotation(&Vector3::new(0.0f32, 0.004, 0.0));
+        model.append_rotation(&UnitQuaternion::from_euler_angles(0.0f32, 0.004, 0.0));
     }
 }
 
