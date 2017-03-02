@@ -8,6 +8,12 @@ pub trait SelectionStrategy {
     fn select_repetition(&mut self, min: u32, max: u32) -> u32;
 }
 
+pub fn expand_grammar<T>(grammar: &Ruleset, root: &str, strategy: &mut T) -> String
+    where T: SelectionStrategy
+{
+    expand_list(&grammar[root], 0, grammar, strategy)
+}
+
 pub fn expand_list<T>(list: &List, depth: u32, grammar: &Ruleset, strategy: &mut T) -> String
     where T: SelectionStrategy
 {

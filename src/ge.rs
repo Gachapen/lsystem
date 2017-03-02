@@ -6,7 +6,7 @@ use kiss3d::camera::Camera;
 use na::UnitQuaternion;
 
 use abnf;
-use abnf::expand::{SelectionStrategy, expand_list};
+use abnf::expand::{SelectionStrategy, expand_grammar, expand_list};
 use lsys;
 use lsys::ol;
 use lsys::Rewriter;
@@ -41,8 +41,8 @@ pub fn run_ge(window: &mut Window, camera: &mut Camera) {
     };
 
     let mut system = ol::LSystem {
-        axiom: expand_list(&lsys_abnf["axiom"], 0, &lsys_abnf, &mut genotype),
-        rules: expand_productions(&lsys_abnf["productions"], 0, &lsys_abnf, &mut genotype),
+        axiom: expand_grammar(&lsys_abnf, "axiom", &mut genotype),
+        rules: expand_productions(&lsys_abnf, "productions", &mut genotype),
         ..ol::LSystem::new()
     };
 
@@ -107,10 +107,11 @@ impl SelectionStrategy for Genotype {
 
 // Somehow make the below expansion functions a genetic part of abnf::expand?
 
-fn expand_productions<T>(list: &abnf::List, depth: u32, grammar: &abnf::Ruleset, strategy: &mut T) -> ol::RuleMap
+fn expand_productions<T>(grammar: &abnf::Ruleset, root: &str, strategy: &mut T) -> ol::RuleMap
     where T: SelectionStrategy
 {
     let mut rules = ol::create_rule_map();
+    let list = &grammar[root];
 
     if let abnf::List::Sequence(ref seq) = *list {
         assert!(seq.len() == 1);
@@ -123,7 +124,7 @@ fn expand_productions<T>(list: &abnf::List, depth: u32, grammar: &abnf::Ruleset,
             let num = strategy.select_repetition(min, max);
 
             for _ in 0..num {
-                let (pred, succ) = expand_production(&grammar[prod_sym], depth + 1, grammar, strategy);
+                let (pred, succ) = expand_production(&grammar[prod_sym], 1, grammar, strategy);
                 rules[pred as usize] = succ;
             }
         }
