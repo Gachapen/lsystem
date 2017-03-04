@@ -178,7 +178,7 @@ fn infer_selections(expanded: &str, grammar: &abnf::Ruleset, root: &str) -> Resu
 
     match selection {
         Ok((list, index)) => {
-            if index == 0 {
+            if index == expanded.len() {
                 Ok(list)
             } else {
                 Err(format!("Expanded string does not fully match grammar. The first {} characters matched", index))
