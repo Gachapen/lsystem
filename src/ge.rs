@@ -317,5 +317,141 @@ fn infer_item_selections(item: &abnf::Item, mut index: usize, expanded: &str, gr
     }
 }
 
-    result
+#[cfg(test)]
+mod test {
+    use super::*;
+    use abnf::{Item, Content, Ruleset, List, Repeat};
+
+    #[test]
+    fn test_infer_selections_value() {
+        let item = Item::new(Content::Value("value".to_string()));
+
+        let mut grammar = Ruleset::new();
+        grammar.insert(
+            "symbol".to_string(),
+            List::Sequence(vec![
+                item.clone(),
+            ])
+        );
+
+        assert_eq!(
+            infer_item_selections(&item, 0, "value", &grammar),
+            Ok((vec![], 5))
+        );
+    }
+
+    #[test]
+    fn test_infer_selections_repeat_limits() {
+        let item = Item::repeated(
+            Content::Value("value".to_string()),
+            Repeat::with_limits(2, 4)
+        );
+
+        let mut grammar = Ruleset::new();
+        grammar.insert(
+            "symbol".to_string(),
+            List::Sequence(vec![
+                item.clone(),
+            ])
+        );
+
+        assert_eq!(
+            infer_item_selections(&item, 0, "valuevaluevalue", &grammar),
+            Ok((vec![2], 10))
+        );
+    }
+
+    #[test]
+    fn test_infer_selections_alternatives() {
+        let list = List::Alternatives(vec![
+            Item::new(Content::Value("1".to_string())),
+            Item::new(Content::Value("2".to_string())),
+            Item::new(Content::Value("3".to_string())),
+        ]);
+
+        let mut grammar = Ruleset::new();
+        grammar.insert(
+            "symbol".to_string(),
+            list.clone()
+        );
+
+        assert_eq!(
+            infer_list_selections(&list, 0, "2", &grammar),
+            Ok((vec![1], 1))
+        );
+    }
+
+    #[test]
+    fn test_infer_selections_match() {
+        let item = Item::new(Content::Value("value".to_string()));
+
+        let mut grammar = Ruleset::new();
+        grammar.insert(
+            "symbol".to_string(),
+            List::Sequence(vec![
+                item.clone(),
+            ])
+        );
+
+        assert_eq!(
+            infer_selections("value", &grammar, "symbol"),
+            Ok(vec![])
+        );
+    }
+
+    #[test]
+    fn test_infer_selections_match_alternatives() {
+        let list = List::Alternatives(vec![
+            Item::new(Content::Value("1".to_string())),
+            Item::new(Content::Value("2".to_string())),
+            Item::new(Content::Value("3".to_string())),
+        ]);
+
+        let mut grammar = Ruleset::new();
+        grammar.insert(
+            "symbol".to_string(),
+            list.clone()
+        );
+
+        assert_eq!(
+            infer_selections("2", &grammar, "symbol"),
+            Ok(vec![1])
+        );
+    }
+
+    #[test]
+    fn test_infer_selections_mismatch() {
+        let item = Item::new(Content::Value("value".to_string()));
+
+        let mut grammar = Ruleset::new();
+        grammar.insert(
+            "symbol".to_string(),
+            List::Sequence(vec![
+                item.clone(),
+            ])
+        );
+
+        assert_eq!(
+            infer_selections("notvalue", &grammar, "symbol"),
+            Err("Expanded string does not match grammar".to_string())
+        );
+    }
+
+    #[test]
+    fn test_infer_selections_missing() {
+        let item = Item::new(Content::Value("value".to_string()));
+
+        let mut grammar = Ruleset::new();
+        grammar.insert(
+            "symbol".to_string(),
+            List::Sequence(vec![
+                item.clone(),
+            ])
+        );
+
+        assert_eq!(
+            infer_selections("valueextra", &grammar, "symbol"),
+            Err("Expanded string does not fully match grammar. The first 5 characters matched".to_string())
+        );
+    }
 }
