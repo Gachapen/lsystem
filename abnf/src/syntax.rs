@@ -41,7 +41,7 @@ pub enum CoreRule {
     Alpha,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Content {
     Core(CoreRule),
     Value(String),
@@ -50,13 +50,13 @@ pub enum Content {
     Group(List),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum List {
     Sequence(Vec<Item>),
     Alternatives(Vec<Item>),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Item {
     pub repeat: Option<Repeat>,
     pub content: Content,
