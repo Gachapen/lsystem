@@ -245,48 +245,77 @@ fn infer_item_selections(item: &abnf::Item, mut index: usize, expanded: &str, gr
         None => None,
     };
 
-    let times = match repeat {
-        Some((min, max)) => max - min + 1,
-        None => 1,
+    let (min_repeat, max_repeat) = match repeat {
+        Some((min, max)) => (min, max),
+        None => (1, 1),
     };
 
-    let mut result = Err(());
+    let mut selections = vec![];
+    let mut matched = false;
+    let mut times_repeated = 0;
 
-    for i in 0..times {
+    for _ in 0..max_repeat {
         match item.content {
             Content::Value(ref value) => {
                 let index_end = index + value.len();
                 if *value.as_str() == expanded[index..index_end] {
                     index += value.len();
-                    let mut selections = Vec::with_capacity(1);
-
-                    if let Some((min, _)) = repeat {
-                        selections.push((min + i) as usize);
-                    }
-
-                    result = Ok((selections, index));
+                    matched = true;
                 }
             },
             Content::Symbol(ref symbol) => {
-                result = infer_list_selections(&grammar[symbol], index, expanded, grammar);
+                let child_result = infer_list_selections(&grammar[symbol], index, expanded, grammar);
+                if let Ok((child_selections, child_index)) = child_result {
+                    selections.extend(child_selections);
+                    index = child_index;
+                    matched = true;
+                }
             },
             Content::Group(ref group) => {
-                result = infer_list_selections(group, index, expanded, grammar);
+                let child_result = infer_list_selections(group, index, expanded, grammar);
+                if let Ok((child_selections, child_index)) = child_result {
+                    selections.extend(child_selections);
+                    index = child_index;
+                    matched = true;
+                }
             },
             Content::Core(rule) => {
                 let content = abnf::expand::expand_core_rule(rule);
-                result = infer_item_selections(&Item::new(content), index, expanded, grammar);
+                let child_result = infer_item_selections(&Item::new(content), index, expanded, grammar);
+                if let Ok((child_selections, child_index)) = child_result {
+                    selections.extend(child_selections);
+                    index = child_index;
+                    matched = true;
+                }
             },
-            Content::Range(min, max) => {
+            Content::Range(_, _) => {
+                panic!("Content::Range not implemented for infer_item_selections");
                 //let index = strategy.select_alternative(max as usize - min as usize);
                 //let character = (index + min as usize) as u8 as char;
             }
         };
 
-        if result.is_err() {
+        if !matched {
             break;
+        } else {
+            times_repeated += 1;
+
+            if times_repeated >= min_repeat {
+                break;
+            }
         }
-    };
+    }
+
+    if matched || times_repeated >= min_repeat {
+        if repeat.is_some() {
+            selections.insert(0, times_repeated as usize);
+        }
+
+        Ok((selections, index))
+    } else {
+        Err(())
+    }
+}
 
     result
 }
