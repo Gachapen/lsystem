@@ -449,4 +449,59 @@ mod test {
             Err("Expanded string does not fully match grammar. The first 5 characters matched".to_string())
         );
     }
+
+    #[test]
+    fn test_lsystem_ge_expansion() {
+        let grammar = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
+        let genes = vec![
+           2, // repeat - "F[FX]X"
+           0, // symbol - "F"
+           0, // variable - "F"
+           0, // "F"
+           1, // stack - "[FX]"
+           1, // repeat - "FX"
+           0, // symbol - "F"
+           0, // variable - "F"
+           0, // "F"
+           0, // symbol - "X"
+           0, // variable - "X"
+           1, // "X"
+           0, // symbol - "X"
+           0, // variable - "X"
+           1, // "X"
+        ];
+        let mut genotype = Genotype::new(genes);
+
+        assert_eq!(
+            expand_grammar(&grammar, "axiom", &mut genotype),
+            "F[FX]X"
+        );
+    }
+
+    #[test]
+    fn test_lsystem_ge_inference() {
+        let grammar = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
+        let genes = vec![
+           2, // repeat - "F[FX]X"
+           0, // symbol - "F"
+           0, // variable - "F"
+           0, // "F"
+           1, // stack - "[FX]"
+           1, // repeat - "FX"
+           0, // symbol - "F"
+           0, // variable - "F"
+           0, // "F"
+           0, // symbol - "X"
+           0, // variable - "X"
+           1, // "X"
+           0, // symbol - "X"
+           0, // variable - "X"
+           1, // "X"
+        ];
+
+        assert_eq!(
+            infer_selections("F[FX]X", &grammar, "axiom"),
+            Ok(genes)
+        );
+    }
 }
