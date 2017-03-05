@@ -5,7 +5,10 @@ const MAX_DEPTH: u32 = 50;
 
 pub trait SelectionStrategy {
     fn select_alternative(&mut self, num: usize) -> usize;
-    fn select_repetition(&mut self, min: u32, max: u32) -> u32;
+
+    fn select_repetition(&mut self, min: u32, max: u32) -> u32 {
+        self.select_alternative((max - min + 1) as usize) as u32 + min
+    }
 }
 
 pub fn expand_grammar<T>(grammar: &Ruleset, root: &str, strategy: &mut T) -> String

@@ -96,13 +96,6 @@ impl SelectionStrategy for Genotype {
 
         self.use_next_gene() as usize % num
     }
-
-    fn select_repetition(&mut self, min: u32, max: u32) -> u32 {
-        let max_value = u8::max_value() as u32;
-        let range = (max - min + 1) % max_value;
-
-        (self.use_next_gene() as u32 % range) + min
-    }
 }
 
 // Somehow make the below expansion functions a genetic part of abnf::expand?
@@ -308,7 +301,7 @@ fn infer_item_selections(item: &abnf::Item, mut index: usize, expanded: &str, gr
 
     if matched || times_repeated >= min_repeat {
         if repeat.is_some() {
-            selections.insert(0, times_repeated as usize);
+            selections.insert(0, (times_repeated - min_repeat) as usize);
         }
 
         Ok((selections, index))
@@ -357,7 +350,7 @@ mod test {
 
         assert_eq!(
             infer_item_selections(&item, 0, "valuevaluevalue", &grammar),
-            Ok((vec![2], 10))
+            Ok((vec![0], 10))
         );
     }
 
