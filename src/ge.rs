@@ -248,6 +248,8 @@ fn infer_item_selections(item: &abnf::Item, mut index: usize, expanded: &str, gr
     let mut times_repeated = 0;
 
     for _ in 0..max_repeat {
+        matched = false;
+
         match item.content {
             Content::Value(ref value) => {
                 let index_end = index + value.len();
@@ -293,7 +295,7 @@ fn infer_item_selections(item: &abnf::Item, mut index: usize, expanded: &str, gr
         } else {
             times_repeated += 1;
 
-            if times_repeated >= min_repeat {
+            if index == expanded.len() {
                 break;
             }
         }
@@ -350,7 +352,7 @@ mod test {
 
         assert_eq!(
             infer_item_selections(&item, 0, "valuevaluevalue", &grammar),
-            Ok((vec![0], 10))
+            Ok((vec![1], 15))
         );
     }
 
