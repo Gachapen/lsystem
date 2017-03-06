@@ -11,10 +11,21 @@ use lsys;
 use lsys::ol;
 use lsys::Rewriter;
 use lsys3d;
+use lsystems;
 
 pub fn run_ge(window: &mut Window, camera: &mut Camera) {
+    //run_print_abnf();
+    //run_random_genes(window, camera);
+    run_bush_inferred(window, camera);
+}
+
+fn run_print_abnf() {
     let lsys_abnf = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
-    //println!("{:#?}", lsys_abnf);
+    println!("{:#?}", lsys_abnf);
+}
+
+fn run_random_genes(window: &mut Window, camera: &mut Camera) {
+    let lsys_abnf = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
 
     let mut rng = rand::thread_rng();
     let gene_range = Range::new(u8::min_value(), u8::max_value());
@@ -26,12 +37,6 @@ pub fn run_ge(window: &mut Window, camera: &mut Camera) {
     }
 
     let mut genotype = Genotype::new(genes);
-
-    //let axiom = expand_list(&lsys_abnf["axiom"], 0, &lsys_abnf, &mut genotype);
-    //let productions = expand_list(&lsys_abnf["productions"], 0, &lsys_abnf, &mut genotype);
-    //println!("genotype: {:?}", genotype.genes);
-    //println!("axiom: {}", axiom);
-    //println!("productions:\n{}", productions);
 
     let settings = lsys::Settings {
         width: 0.05,
@@ -48,13 +53,57 @@ pub fn run_ge(window: &mut Window, camera: &mut Camera) {
 
     system.remove_redundancy();
 
-    println!("Commands:");
-    println!("{:?}", system.command_map['+' as usize]);
+    println!("Genotype: {:?}", genotype.genes);
     println!("");
     println!("LSystem:");
     println!("{}", system);
     println!("");
     println!("Rewritten: {}", system.rewrite(settings.iterations));
+
+    let instructions = system.instructions(settings.iterations);
+
+    let mut model = lsys3d::build_model(&instructions, &settings);
+    window.scene_mut().add_child(model.clone());
+
+    while window.render_with_camera(camera) {
+        model.append_rotation(&UnitQuaternion::from_euler_angles(0.0f32, 0.004, 0.0));
+    }
+}
+
+fn run_bush_inferred(window: &mut Window, camera: &mut Camera) {
+    let lsys_abnf = abnf::parse_file("bush.abnf").expect("Could not parse ABNF file");
+
+    let (system, settings) = {
+        let (system, settings) = lsystems::make_bush();
+
+        let axiom_gen = infer_selections(&system.axiom, &lsys_abnf, "axiom").unwrap();
+        let mut axiom_geno = Genotype::new(axiom_gen.iter().map(|g| *g as u8).collect());
+
+        let a_gen = infer_selections(&system.rules['A' as usize], &lsys_abnf, "successor").unwrap();
+        let mut a_geno = Genotype::new(a_gen.iter().map(|g| *g as u8).collect());
+
+        let f_gen = infer_selections(&system.rules['F' as usize], &lsys_abnf, "successor").unwrap();
+        let mut f_geno = Genotype::new(f_gen.iter().map(|g| *g as u8).collect());
+
+        let s_gen = infer_selections(&system.rules['S' as usize], &lsys_abnf, "successor").unwrap();
+        let mut s_geno = Genotype::new(s_gen.iter().map(|g| *g as u8).collect());
+
+        let l_gen = infer_selections(&system.rules['L' as usize], &lsys_abnf, "successor").unwrap();
+        let mut l_geno = Genotype::new(l_gen.iter().map(|g| *g as u8).collect());
+
+        let mut new_system = ol::LSystem {
+            axiom: expand_grammar(&lsys_abnf, "axiom", &mut axiom_geno),
+            ..ol::LSystem::new()
+        };
+
+        new_system.set_rule('A', &expand_grammar(&lsys_abnf, "successor", &mut a_geno));
+        new_system.set_rule('F', &expand_grammar(&lsys_abnf, "successor", &mut f_geno));
+        new_system.set_rule('S', &expand_grammar(&lsys_abnf, "successor", &mut s_geno));
+        new_system.set_rule('L', &expand_grammar(&lsys_abnf, "successor", &mut l_geno));
+        new_system.map_command('f', lsys::Command::Forward);
+
+        (new_system, settings)
+    };
 
     let instructions = system.instructions(settings.iterations);
 

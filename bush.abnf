@@ -1,0 +1,12 @@
+lsystem = axiom productions
+axiom = string
+productions = 1*4production
+production = predicate successor
+predicate = variable
+successor = string
+string = 1*15(symbol / stack / surface)
+stack = "[" string "]"
+surface = "{" string "}"
+symbol = variable / operation
+variable = "A" / "F" / "L" / "S" / "f"
+operation = "+" / "-" / "^" / "&" / ">" / "<" / "'" / "|" / "!"

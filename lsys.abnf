@@ -1,6 +1,6 @@
 lsystem = axiom productions
 axiom = string
-productions = 1*3production
+productions = 1*2production
 production = predicate successor
 predicate = variable
 successor = string
