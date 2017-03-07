@@ -449,3 +449,107 @@ pub fn make_anim_tree() -> (param::LSystem, lsys::Settings) {
     (sys, settings)
 }
 
+#[allow(dead_code)]
+pub fn make_straw_a() -> (ol::LSystem, lsys::Settings) {
+    let mut system = ol::LSystem::new();
+
+    system.set_rule('F', "F[+F]F[-F]F");
+    system.axiom = "F".to_string();
+
+    let settings = lsys::Settings {
+        angle: (25.7f32).to_radians(),
+        iterations: 5,
+        width: 0.03,
+        ..lsys::Settings::new()
+    };
+
+    (system, settings)
+}
+
+#[allow(dead_code)]
+pub fn make_straw_b() -> (ol::LSystem, lsys::Settings) {
+    let mut system = ol::LSystem::new();
+
+    system.set_rule('F', "F[+F]F[-F][F]");
+    system.axiom = "F".to_string();
+
+    let settings = lsys::Settings {
+        angle: (20.0f32).to_radians(),
+        iterations: 5,
+        width: 0.03,
+        ..lsys::Settings::new()
+    };
+
+    (system, settings)
+}
+
+#[allow(dead_code)]
+pub fn make_straw_c() -> (ol::LSystem, lsys::Settings) {
+    let mut system = ol::LSystem::new();
+
+    system.set_rule('F', "FF-[-F+F+F]+[+F-F-F]");
+    system.axiom = "F".to_string();
+
+    let settings = lsys::Settings {
+        angle: (22.5f32).to_radians(),
+        iterations: 4,
+        width: 0.03,
+        ..lsys::Settings::new()
+    };
+
+    (system, settings)
+}
+
+#[allow(dead_code)]
+pub fn make_straw_d() -> (ol::LSystem, lsys::Settings) {
+    let mut system = ol::LSystem::new();
+
+    system.axiom = "X".to_string();
+    system.set_rule('X', "F[+X]F[-X]+X");
+    system.set_rule('F', "FF");
+
+    let settings = lsys::Settings {
+        angle: (20.0f32).to_radians(),
+        iterations: 7,
+        width: 0.03,
+        ..lsys::Settings::new()
+    };
+
+    (system, settings)
+}
+
+#[allow(dead_code)]
+pub fn make_straw_e() -> (ol::LSystem, lsys::Settings) {
+    let mut system = ol::LSystem::new();
+
+    system.axiom = "X".to_string();
+    system.set_rule('X', "F[+X][-X]FX");
+    system.set_rule('F', "FF");
+
+    let settings = lsys::Settings {
+        angle: (25.7f32).to_radians(),
+        iterations: 7,
+        width: 0.03,
+        ..lsys::Settings::new()
+    };
+
+    (system, settings)
+}
+
+#[allow(dead_code)]
+pub fn make_straw_f() -> (ol::LSystem, lsys::Settings) {
+    let mut system = ol::LSystem::new();
+
+    system.axiom = "X".to_string();
+    system.set_rule('X', "F-[[X]+X]+F[+FX]-X");
+    system.set_rule('F', "FF");
+
+    let settings = lsys::Settings {
+        angle: (22.5f32).to_radians(),
+        iterations: 5,
+        width: 0.03,
+        ..lsys::Settings::new()
+    };
+
+    (system, settings)
+}
