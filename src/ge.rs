@@ -14,17 +14,20 @@ use lsys::Rewriter;
 use lsys3d;
 use lsystems;
 
+#[allow(dead_code)]
 pub fn run_ge(window: &mut Window, camera: &mut Camera) {
     //run_print_abnf();
     run_random_genes(window);
     //run_bush_inferred(window, camera);
 }
 
+#[allow(dead_code)]
 fn run_print_abnf() {
     let lsys_abnf = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
     println!("{:#?}", lsys_abnf);
 }
 
+#[allow(dead_code)]
 fn run_random_genes(window: &mut Window) {
     let lsys_abnf = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
 
@@ -78,6 +81,7 @@ fn run_random_genes(window: &mut Window) {
     }
 }
 
+#[allow(dead_code)]
 fn run_bush_inferred(window: &mut Window, camera: &mut Camera) {
     let lsys_abnf = abnf::parse_file("bush.abnf").expect("Could not parse ABNF file");
 
