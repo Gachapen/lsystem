@@ -38,6 +38,9 @@ fn run_random_genes(window: &mut Window, camera: &mut Camera) {
 
     let mut genotype = Genotype::new(genes);
 
+    println!("Genotype: {:?}", genotype.genes);
+    println!("");
+
     let settings = lsys::Settings {
         width: 0.05,
         angle: f32::consts::PI / 8.0,
@@ -53,8 +56,6 @@ fn run_random_genes(window: &mut Window, camera: &mut Camera) {
 
     system.remove_redundancy();
 
-    println!("Genotype: {:?}", genotype.genes);
-    println!("");
     println!("LSystem:");
     println!("{}", system);
     println!("");
