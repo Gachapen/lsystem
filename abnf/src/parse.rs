@@ -1,7 +1,7 @@
 use nom::{alphanumeric, digit, eol, space, hex_u32};
 use std::str;
 
-use syntax::{Repeat, CoreRule, Item, Content, Sequence, Ruleset, List};
+use syntax::{Repeat, Item, Content, Sequence, Ruleset, List};
 
 named!(pub string_literal<String>,
     delimited!(
@@ -64,12 +64,6 @@ named!(pub repeat<Repeat>,
     )
 );
 
-named!(pub core<CoreRule>,
-    alt!(
-        map!(tag!("ALPHA"), |_| CoreRule::Alpha)
-    )
-);
-
 named!(pub symbol<String>,
     map!(
         map_res!(
@@ -82,7 +76,6 @@ named!(pub symbol<String>,
 
 named!(pub content<Content>,
     alt!(
-        map!(call!(core), |c| Content::Core(c)) |
         map!(call!(hex_values), |s| Content::Value(s)) |
         map!(call!(string_literal), |s| Content::Value(s)) |
         map!(call!(symbol), |s| Content::Symbol(s)) |
@@ -242,14 +235,6 @@ mod tests {
         assert_eq!(
             parse::repeat(&b"4*8"[..]),
             Done(&b""[..], (Repeat{ min: Some(4), max: Some(8) }))
-        );
-    }
-
-    #[test]
-    fn test_core_parser() {
-        assert_eq!(
-            parse::core(&b"ALPHA"[..]),
-            Done(&b""[..], (CoreRule::Alpha))
         );
     }
 

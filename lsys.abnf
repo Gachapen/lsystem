@@ -1,8 +1,8 @@
 lsystem = axiom productions
 axiom = string
 productions = 1*2production
-production = predicate successor
-predicate = variable
+production = predecessor successor
+predecessor = variable
 successor = string
 string = 1*3(symbol / stack)
 stack = "[" string "]"

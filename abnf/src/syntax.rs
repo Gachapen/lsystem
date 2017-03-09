@@ -36,14 +36,8 @@ impl Repeat {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum CoreRule {
-    Alpha,
-}
-
 #[derive(Debug, PartialEq, Clone)]
 pub enum Content {
-    Core(CoreRule),
     Value(String),
     Symbol(String),
     Range(char, char),

@@ -6,7 +6,7 @@ use kiss3d::camera::Camera;
 use na::UnitQuaternion;
 
 use abnf;
-use abnf::expand::{SelectionStrategy, expand_grammar, expand_list};
+use abnf::expand::{SelectionStrategy, expand_grammar};
 use lsys;
 use lsys::ol;
 use lsys::Rewriter;
@@ -47,7 +47,7 @@ fn run_random_genes(window: &mut Window, camera: &mut Camera) {
 
     let mut system = ol::LSystem {
         axiom: expand_grammar(&lsys_abnf, "axiom", &mut genotype),
-        rules: expand_productions(&lsys_abnf, "productions", &mut genotype),
+        rules: expand_productions(&lsys_abnf, &mut genotype),
         ..ol::LSystem::new()
     };
 
@@ -149,24 +149,24 @@ impl SelectionStrategy for Genotype {
 
 // Somehow make the below expansion functions a genetic part of abnf::expand?
 
-fn expand_productions<T>(grammar: &abnf::Ruleset, root: &str, strategy: &mut T) -> ol::RuleMap
+fn expand_productions<T>(grammar: &abnf::Ruleset, strategy: &mut T) -> ol::RuleMap
     where T: SelectionStrategy
 {
     let mut rules = ol::create_rule_map();
-    let list = &grammar[root];
+    let list = &grammar["productions"];
 
     if let abnf::List::Sequence(ref seq) = *list {
-        assert!(seq.len() == 1);
+        assert_eq!(seq.len(), 1);
         let item = &seq[0];
 
-        if let abnf::Content::Symbol(ref prod_sym) = item.content {
+        if let abnf::Content::Symbol(_) = item.content {
             let repeat = item.repeat.unwrap_or_default();
             let min = repeat.min.unwrap_or(0);
             let max = repeat.max.unwrap_or(u32::max_value());
             let num = strategy.select_repetition(min, max);
 
             for _ in 0..num {
-                let (pred, succ) = expand_production(&grammar[prod_sym], 1, grammar, strategy);
+                let (pred, succ) = expand_production(grammar, strategy);
                 rules[pred as usize] = succ;
             }
         }
@@ -175,22 +175,24 @@ fn expand_productions<T>(grammar: &abnf::Ruleset, root: &str, strategy: &mut T) 
     rules
 }
 
-fn expand_production<T>(list: &abnf::List, depth: u32, grammar: &abnf::Ruleset, strategy: &mut T) -> (char, String)
+fn expand_production<T>(grammar: &abnf::Ruleset, strategy: &mut T) -> (char, String)
     where T: SelectionStrategy
 {
+    let list = &grammar["production"];
+
     if let abnf::List::Sequence(ref seq) = *list {
-        assert!(seq.len() == 2);
+        assert_eq!(seq.len(), 2);
         let pred_item = &seq[0];
         let succ_item = &seq[1];
 
-        let pred = if let abnf::Content::Symbol(ref pred_sym) = pred_item.content {
-            expand_predicate(&grammar[pred_sym], depth + 1, grammar, strategy)
+        let pred = if let abnf::Content::Symbol(_) = pred_item.content {
+            expand_predecessor(grammar, strategy)
         } else {
             0 as char
         };
 
-        let succ = if let abnf::Content::Symbol(ref succ_sym) = succ_item.content {
-            expand_successor(&grammar[succ_sym], depth + 1, grammar, strategy)
+        let succ = if let abnf::Content::Symbol(_) = succ_item.content {
+            expand_successor(grammar, strategy)
         } else {
             String::new()
         };
@@ -201,18 +203,18 @@ fn expand_production<T>(list: &abnf::List, depth: u32, grammar: &abnf::Ruleset, 
     }
 }
 
-fn expand_predicate<T>(list: &abnf::List, depth: u32, grammar: &abnf::Ruleset, strategy: &mut T) -> char
+fn expand_predecessor<T>(grammar: &abnf::Ruleset, strategy: &mut T) -> char
     where T: SelectionStrategy
 {
-    let value = expand_list(list, depth, grammar, strategy);
-    assert!(value.len() == 1);
+    let value = expand_grammar(grammar, "predecessor", strategy);
+    assert_eq!(value.len(), 1);
     value.as_bytes()[0] as char
 }
 
-fn expand_successor<T>(list: &abnf::List, depth: u32, grammar: &abnf::Ruleset, strategy: &mut T) -> String
+fn expand_successor<T>(grammar: &abnf::Ruleset, strategy: &mut T) -> String
     where T: SelectionStrategy
 {
-    expand_list(list, depth, grammar, strategy)
+    expand_grammar(grammar, "successor", strategy)
 }
 
 fn infer_selections(expanded: &str, grammar: &abnf::Ruleset, root: &str) -> Result<Vec<usize>, String> {
@@ -275,7 +277,6 @@ fn infer_list_selections(list: &abnf::List, mut index: usize, expanded: &str, gr
 // alternative/repetition results in a mismatch later.
 fn infer_item_selections(item: &abnf::Item, mut index: usize, expanded: &str, grammar: &abnf::Ruleset) -> Result<(Vec<usize>, usize), ()> {
     use abnf::Content;
-    use abnf::Item;
 
     let repeat = match item.repeat {
         Some(ref repeat) => {
@@ -317,15 +318,6 @@ fn infer_item_selections(item: &abnf::Item, mut index: usize, expanded: &str, gr
             },
             Content::Group(ref group) => {
                 let child_result = infer_list_selections(group, index, expanded, grammar);
-                if let Ok((child_selections, child_index)) = child_result {
-                    selections.extend(child_selections);
-                    index = child_index;
-                    matched = true;
-                }
-            },
-            Content::Core(rule) => {
-                let content = abnf::expand::expand_core_rule(rule);
-                let child_result = infer_item_selections(&Item::new(content), index, expanded, grammar);
                 if let Ok((child_selections, child_index)) = child_result {
                     selections.extend(child_selections);
                     index = child_index;
@@ -503,7 +495,7 @@ mod test {
     fn test_lsystem_ge_expansion() {
         let grammar = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
         let genes = vec![
-           2, // repeat - "F[FX]X"
+           2, // repeat 3 - "F[FX]X"
            0, // symbol - "F"
            0, // variable - "F"
            0, // "F"

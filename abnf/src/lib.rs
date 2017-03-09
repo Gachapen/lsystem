@@ -9,6 +9,7 @@ mod syntax;
 mod parse;
 
 pub mod expand;
+pub mod core;
 pub use self::syntax::*;
 
 #[derive(Debug)]
