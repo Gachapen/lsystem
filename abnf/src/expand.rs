@@ -2,16 +2,13 @@ use syntax::{Content, Item, List, Ruleset};
 use core;
 
 pub trait SelectionStrategy {
-    fn select_alternative(&mut self, num: usize) -> usize;
-
-    fn select_repetition(&mut self, min: u32, max: u32) -> u32 {
-        self.select_alternative((max - min + 1) as usize) as u32 + min
-    }
+    fn select_alternative(&mut self, num: usize, rulechain: &Vec<&str>) -> usize;
+    fn select_repetition(&mut self, min: u32, max: u32, rulechain: &Vec<&str>) -> u32;
 }
 
 enum Node<'a> {
-    List(&'a List),
-    Item(&'a Item),
+    List(Vec<&'a str>, &'a List),
+    Item(Vec<&'a str>, &'a Item),
 }
 
 pub fn expand_grammar<S>(grammar: &Ruleset, root: &str, strategy: &mut S) -> String
@@ -20,33 +17,32 @@ pub fn expand_grammar<S>(grammar: &Ruleset, root: &str, strategy: &mut S) -> Str
     let core_rules = core::rules();
 
     let mut string = String::new();
-    let mut visit_stack = Vec::with_capacity(1);
-    visit_stack.push(Node::List(&grammar[root]));
+    let mut visit_stack = vec![Node::List(vec![root], &grammar[root])];
 
     while !visit_stack.is_empty() {
         let node = visit_stack.pop().unwrap();
 
         match node {
-            Node::List(list) => {
+            Node::List(rulechain, list) => {
                 match *list {
                     List::Sequence(ref sequence) => {
                         for item in sequence.iter().rev() {
-                            visit_stack.push(Node::Item(item));
+                            visit_stack.push(Node::Item(rulechain.clone(), item));
                         }
                     },
                     List::Alternatives(ref alternatives) => {
-                        let index = strategy.select_alternative(alternatives.len());
-                        visit_stack.push(Node::Item(&alternatives[index]));
+                        let index = strategy.select_alternative(alternatives.len(), &rulechain);
+                        visit_stack.push(Node::Item(rulechain, &alternatives[index]));
                     },
                 }
             },
-            Node::Item(item) => {
+            Node::Item(rulechain, item) => {
                 let times = match item.repeat {
                     Some(ref repeat) => {
                         let min = repeat.min.unwrap_or(0);
                         let max = repeat.max.unwrap_or(u32::max_value());
 
-                        strategy.select_repetition(min, max)
+                        strategy.select_repetition(min, max, &rulechain)
                     },
                     None => 1,
                 };
@@ -66,13 +62,15 @@ pub fn expand_grammar<S>(grammar: &Ruleset, root: &str, strategy: &mut S) -> Str
                                 panic!(format!("Symbol '{}' does not exist in ABNF grammar and is not a core rule", symbol));
                             };
 
-                            visit_stack.push(Node::List(list));
+                            let mut updated_chain = rulechain.clone();
+                            updated_chain.push(symbol);
+                            visit_stack.push(Node::List(updated_chain, list));
                         },
                         Content::Group(ref group) => {
-                            visit_stack.push(Node::List(group));
+                            visit_stack.push(Node::List(rulechain.clone(), group));
                         },
                         Content::Range(min, max) => {
-                            let index = strategy.select_alternative(max as usize - min as usize);
+                            let index = strategy.select_alternative(max as usize - min as usize, &rulechain);
                             let character = (index + min as usize) as u8 as char;
                             string.push(character);
                         }
@@ -93,12 +91,12 @@ mod tests {
 
     impl SelectionStrategy for DummyStrategy {
         #[allow(unused_variables)]
-        fn select_alternative(&mut self, num: usize) -> usize {
+        fn select_alternative(&mut self, num: usize, rulechain: &Vec<&str>) -> usize {
             0
         }
 
         #[allow(unused_variables)]
-        fn select_repetition(&mut self, min: u32, max: u32) -> u32 {
+        fn select_repetition(&mut self, min: u32, max: u32, rulechain: &Vec<&str>) -> u32 {
             1
         }
     }

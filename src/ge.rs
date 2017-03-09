@@ -140,15 +140,24 @@ impl Genotype {
 }
 
 impl SelectionStrategy for Genotype {
-    fn select_alternative(&mut self, num: usize) -> usize {
+    fn select_alternative(&mut self, num: usize, rulechain: &Vec<&str>) -> usize {
         let max_value = u8::max_value() as usize;
         let num = num % max_value;
 
         self.use_next_gene() as usize % num
     }
+
+    fn select_repetition(&mut self, min: u32, max: u32, rulechain: &Vec<&str>) -> u32 {
+        let max_value = u8::max_value() as u32;
+        let num = (max - min + 1) % max_value;
+
+        let gene = self.use_next_gene();
+
+        (gene as u32 % num) + min
+    }
 }
 
-// Somehow make the below expansion functions a genetic part of abnf::expand?
+// Somehow make the below expansion functions a generic part of abnf::expand?
 
 fn expand_productions<T>(grammar: &abnf::Ruleset, strategy: &mut T) -> ol::RuleMap
     where T: SelectionStrategy
@@ -164,7 +173,7 @@ fn expand_productions<T>(grammar: &abnf::Ruleset, strategy: &mut T) -> ol::RuleM
             let repeat = item.repeat.unwrap_or_default();
             let min = repeat.min.unwrap_or(0);
             let max = repeat.max.unwrap_or(u32::max_value());
-            let num = strategy.select_repetition(min, max);
+            let num = strategy.select_repetition(min, max, &vec!["productions"]);
 
             for _ in 0..num {
                 let (pred, succ) = expand_production(grammar, strategy);
