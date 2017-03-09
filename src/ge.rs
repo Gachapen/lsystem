@@ -15,8 +15,8 @@ use lsystems;
 
 pub fn run_ge(window: &mut Window, camera: &mut Camera) {
     //run_print_abnf();
-    //run_random_genes(window, camera);
-    run_bush_inferred(window, camera);
+    run_random_genes(window, camera);
+    //run_bush_inferred(window, camera);
 }
 
 fn run_print_abnf() {
@@ -44,7 +44,7 @@ fn run_random_genes(window: &mut Window, camera: &mut Camera) {
     let settings = lsys::Settings {
         width: 0.05,
         angle: f32::consts::PI / 8.0,
-        iterations: 3,
+        iterations: 5,
         ..lsys::Settings::new()
     };
 
@@ -58,8 +58,8 @@ fn run_random_genes(window: &mut Window, camera: &mut Camera) {
 
     println!("LSystem:");
     println!("{}", system);
-    println!("");
-    println!("Rewritten: {}", system.rewrite(settings.iterations));
+    //println!("");
+    //println!("Rewritten: {}", system.rewrite(settings.iterations));
 
     let instructions = system.instructions(settings.iterations);
 
@@ -144,7 +144,17 @@ impl SelectionStrategy for Genotype {
         let max_value = u8::max_value() as usize;
         let num = num % max_value;
 
-        self.use_next_gene() as usize % num
+        let gene = self.use_next_gene();
+
+        if *rulechain.last().unwrap() == "string" {
+            let depth = rulechain.iter().fold(0, |count, r| if *r == "stack" { count + 1 } else { count });
+
+            if depth >= 2 {
+                return 0;
+            }
+        }
+
+        gene as usize % num
     }
 
     fn select_repetition(&mut self, min: u32, max: u32, rulechain: &Vec<&str>) -> u32 {
