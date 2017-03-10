@@ -2,8 +2,9 @@ use std::f32;
 use rand;
 use rand::distributions::{IndependentSample, Range};
 use kiss3d::window::Window;
-use kiss3d::camera::Camera;
-use na::UnitQuaternion;
+use kiss3d::camera::{Camera, ArcBall};
+use na;
+use na::{UnitQuaternion, Point3};
 
 use abnf;
 use abnf::expand::{SelectionStrategy, expand_grammar};
@@ -15,7 +16,7 @@ use lsystems;
 
 pub fn run_ge(window: &mut Window, camera: &mut Camera) {
     //run_print_abnf();
-    run_random_genes(window, camera);
+    run_random_genes(window);
     //run_bush_inferred(window, camera);
 }
 
@@ -24,7 +25,7 @@ fn run_print_abnf() {
     println!("{:#?}", lsys_abnf);
 }
 
-fn run_random_genes(window: &mut Window, camera: &mut Camera) {
+fn run_random_genes(window: &mut Window) {
     let lsys_abnf = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
 
     let mut rng = rand::thread_rng();
@@ -66,7 +67,13 @@ fn run_random_genes(window: &mut Window, camera: &mut Camera) {
     let mut model = lsys3d::build_model(&instructions, &settings);
     window.scene_mut().add_child(model.clone());
 
-    while window.render_with_camera(camera) {
+    let mut camera = {
+        let eye = Point3::new(0.0, 0.0, 5.0);
+        let at = Point3::new(0.0, 1.0, 0.0);
+        ArcBall::new(eye, at)
+    };
+
+    while window.render_with_camera(&mut camera) {
         model.append_rotation(&UnitQuaternion::from_euler_angles(0.0f32, 0.004, 0.0));
     }
 }
