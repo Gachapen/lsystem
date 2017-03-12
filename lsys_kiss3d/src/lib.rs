@@ -180,11 +180,6 @@ pub fn build_model(instructions: &Vec<lsys::Instruction>, settings: &lsys::Setti
                 surface_points.push(position);
             },
             Command::EndSurface => {
-                surface_points = surface_points.iter().map(|p| Point3::new(p.x, p.z, 0.0)).collect();
-
-                let mesh = nct::triangulate(&surface_points);
-                let mut node = model.add_trimesh(mesh, Vector3::new(1.0, 1.0, 1.0));
-
                 if let Some((stored_position, stored_rotation, stored_width, stored_color_index)) = states.pop() {
                     position = stored_position;
                     rotation = stored_rotation;
@@ -194,18 +189,25 @@ pub fn build_model(instructions: &Vec<lsys::Instruction>, settings: &lsys::Setti
                     panic!("Tried to pop empty state stack");
                 }
 
-                let surface_rot = rotation * UnitQuaternion::from_euler_angles(FRAC_PI_2, 0.0, 0.0);
+                if surface_points.len() >= 3 {
+                    surface_points = surface_points.iter().map(|p| Point3::new(p.x, p.z, 0.0)).collect();
 
-                node.enable_backface_culling(false);
-                node.append_transformation(
-                    &Isometry3::from_parts(
-                        Translation3::new(position.x, position.y, position.z),
-                        surface_rot,
-                    )
-                );
+                    let mesh = nct::triangulate(&surface_points);
+                    let mut node = model.add_trimesh(mesh, Vector3::new(1.0, 1.0, 1.0));
 
-                let color = settings.colors[color_index];
-                node.set_color(color.0, color.1, color.2);
+                    let surface_rot = rotation * UnitQuaternion::from_euler_angles(FRAC_PI_2, 0.0, 0.0);
+
+                    node.enable_backface_culling(false);
+                    node.append_transformation(
+                        &Isometry3::from_parts(
+                            Translation3::new(position.x, position.y, position.z),
+                            surface_rot,
+                        )
+                    );
+
+                    let color = settings.colors[color_index];
+                    node.set_color(color.0, color.1, color.2);
+                }
 
                 surface_points.clear();
                 filling = false;
