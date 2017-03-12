@@ -1,6 +1,7 @@
 extern crate kiss3d;
 extern crate nalgebra as na;
 extern crate rand;
+extern crate num;
 
 #[macro_use]
 extern crate lsys;

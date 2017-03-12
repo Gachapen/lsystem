@@ -1,9 +1,11 @@
-use std::f32;
+use std::f32::consts::PI;
 use rand;
 use rand::distributions::{IndependentSample, Range};
 use kiss3d::window::Window;
 use kiss3d::camera::{Camera, ArcBall};
 use na::{UnitQuaternion, Point3};
+use num;
+use num::{Unsigned, NumCast};
 
 use abnf;
 use abnf::expand::{SelectionStrategy, expand_grammar};
@@ -46,7 +48,7 @@ fn run_random_genes(window: &mut Window) {
 
     let settings = lsys::Settings {
         width: 0.05,
-        angle: f32::consts::PI / 8.0,
+        angle: PI / 8.0,
         iterations: 5,
         ..lsys::Settings::new()
     };
@@ -126,20 +128,47 @@ fn run_bush_inferred(window: &mut Window, camera: &mut Camera) {
     }
 }
 
-struct Genotype {
-    genes: Vec<u8>,
+trait MaxValue<V> {
+    fn max_value() -> V;
+}
+
+macro_rules! impl_max_value {
+    ($t:ident) => {
+        impl MaxValue<Self> for $t {
+            fn max_value() -> Self {
+                ::std::$t::MAX
+            }
+        }
+    };
+}
+
+impl_max_value!(i8);
+impl_max_value!(i16);
+impl_max_value!(i32);
+impl_max_value!(i64);
+impl_max_value!(isize);
+impl_max_value!(u8);
+impl_max_value!(u16);
+impl_max_value!(u32);
+impl_max_value!(u64);
+impl_max_value!(usize);
+impl_max_value!(f32);
+impl_max_value!(f64);
+
+struct Genotype<G> {
+    genes: Vec<G>,
     index: usize,
 }
 
-impl Genotype {
-    fn new(genes: Vec<u8>) -> Genotype {
+impl<G: Unsigned + Copy> Genotype<G> {
+    fn new(genes: Vec<G>) -> Genotype<G> {
         Genotype {
             genes: genes,
             index: 0,
         }
     }
 
-    fn use_next_gene(&mut self) -> u8 {
+    fn use_next_gene(&mut self) -> G {
         assert!(self.index < self.genes.len(), "Genotype index overflows gene list");
 
         let gene = self.genes[self.index];
@@ -149,9 +178,9 @@ impl Genotype {
     }
 }
 
-impl SelectionStrategy for Genotype {
+impl<G: Unsigned + NumCast + Copy + MaxValue<G>> SelectionStrategy for Genotype<G> {
     fn select_alternative(&mut self, num: usize, rulechain: &Vec<&str>) -> usize {
-        let max_value = u8::max_value() as usize;
+        let max_value = num::cast::<_, usize>(G::max_value()).unwrap();
         let num = num % max_value;
 
         let gene = self.use_next_gene();
@@ -164,16 +193,16 @@ impl SelectionStrategy for Genotype {
             }
         }
 
-        gene as usize % num
+        num::cast::<_, usize>(gene).unwrap() % num
     }
 
     fn select_repetition(&mut self, min: u32, max: u32, _: &Vec<&str>) -> u32 {
-        let max_value = u8::max_value() as u32;
+        let max_value = num::cast::<_, u32>(G::max_value()).unwrap();
         let num = (max - min + 1) % max_value;
 
         let gene = self.use_next_gene();
 
-        (gene as u32 % num) + min
+        (num::cast::<_, u32>(gene).unwrap() % num) + min
     }
 }
 

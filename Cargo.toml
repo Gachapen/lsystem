@@ -6,6 +6,7 @@ authors = [ "Magnus Bjerke Vik <mbvett@gmail.com>" ]
 [dependencies]
 kiss3d = "0.8"
 rand = "0.3"
+num = "0.1"
 
 # Dependencies of kiss3d also used by the project.
 # Dependencies must match the same versions kiss3d uses.
