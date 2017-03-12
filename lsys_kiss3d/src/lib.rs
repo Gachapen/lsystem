@@ -57,6 +57,7 @@ pub fn build_model(instructions: &Vec<lsys::Instruction>, settings: &lsys::Setti
                         )
                     );
 
+                    assert!(color_index < settings.colors.len(), "Color index is outside color palette");
                     let color = settings.colors[color_index];
                     segment.set_color(color.0, color.1, color.2);
 
@@ -205,6 +206,7 @@ pub fn build_model(instructions: &Vec<lsys::Instruction>, settings: &lsys::Setti
                         )
                     );
 
+                    assert!(color_index < settings.colors.len(), "Color index is outside color palette");
                     let color = settings.colors[color_index];
                     node.set_color(color.0, color.1, color.2);
                 }
