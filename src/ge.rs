@@ -3,7 +3,6 @@ use rand;
 use rand::distributions::{IndependentSample, Range};
 use kiss3d::window::Window;
 use kiss3d::camera::{Camera, ArcBall};
-use na;
 use na::{UnitQuaternion, Point3};
 
 use abnf;
@@ -14,7 +13,7 @@ use lsys::Rewriter;
 use lsys3d;
 use lsystems;
 
-#[allow(dead_code)]
+#[allow(dead_code, unused_variables)]
 pub fn run_ge(window: &mut Window, camera: &mut Camera) {
     //run_print_abnf();
     run_random_genes(window);
@@ -168,7 +167,7 @@ impl SelectionStrategy for Genotype {
         gene as usize % num
     }
 
-    fn select_repetition(&mut self, min: u32, max: u32, rulechain: &Vec<&str>) -> u32 {
+    fn select_repetition(&mut self, min: u32, max: u32, _: &Vec<&str>) -> u32 {
         let max_value = u8::max_value() as u32;
         let num = (max - min + 1) % max_value;
 
