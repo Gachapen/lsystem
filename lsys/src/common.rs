@@ -72,6 +72,7 @@ pub fn map_word_to_instructions(word: &str, command_map: &CommandMap) -> Vec<Ins
 pub struct Settings {
     pub iterations: u32,
     pub angle: f32,
+    pub step: f32,
     pub width: f32,
     pub shrink_rate: f32,
     pub colors: Vec<(f32, f32, f32)>,
@@ -82,7 +83,8 @@ impl Settings {
         Settings {
             iterations: 0,
             angle: 0.0,
-            width: 1.0,
+            step: 0.2,
+            width: 0.2,
             shrink_rate: 1.0,
             colors: vec![(50.0/255.0, 169.0/255.0, 18.0/255.0)],
         }

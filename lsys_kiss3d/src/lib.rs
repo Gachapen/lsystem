@@ -19,7 +19,7 @@ use lsys::param;
 pub fn build_model(instructions: &Vec<lsys::Instruction>, settings: &lsys::Settings) -> SceneNode {
     let mut model = SceneNode::new_empty();
 
-    let segment_length = 0.2;
+    let segment_length = settings.step;
 
     let mut position = Point3::new(0.0, 0.0, 0.0);
     let mut width = settings.width;
