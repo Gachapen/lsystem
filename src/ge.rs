@@ -1,4 +1,5 @@
 use std::f32::consts::PI;
+use std::cmp;
 use rand;
 use rand::distributions::{IndependentSample, Range};
 use kiss3d::window::Window;
@@ -155,12 +156,20 @@ impl_max_value!(usize);
 impl_max_value!(f32);
 impl_max_value!(f64);
 
+trait Gene: Unsigned + NumCast + Copy + MaxValue<Self> {}
+
+impl Gene for u8 {}
+impl Gene for u16 {}
+impl Gene for u32 {}
+impl Gene for u64 {}
+impl Gene for usize {}
+
 struct Genotype<G> {
     genes: Vec<G>,
     index: usize,
 }
 
-impl<G: Unsigned + Copy> Genotype<G> {
+impl<G: Gene> Genotype<G> {
     fn new(genes: Vec<G>) -> Genotype<G> {
         Genotype {
             genes: genes,
@@ -176,13 +185,19 @@ impl<G: Unsigned + Copy> Genotype<G> {
 
         gene
     }
+
+    fn max_selection_value<T: Gene>(num: T) -> G {
+        let rep_max_value = num::cast::<_, u64>(G::max_value()).unwrap();
+        let res_max_value = num::cast::<_, u64>(T::max_value()).unwrap();
+        let max_value = num::cast::<_, G>(cmp::min(rep_max_value, res_max_value)).unwrap();
+
+        num::cast::<_, G>(num).unwrap() % max_value
+    }
 }
 
-impl<G: Unsigned + NumCast + Copy + MaxValue<G>> SelectionStrategy for Genotype<G> {
+impl<G: Gene> SelectionStrategy for Genotype<G> {
     fn select_alternative(&mut self, num: usize, rulechain: &Vec<&str>) -> usize {
-        let max_value = num::cast::<_, usize>(G::max_value()).unwrap();
-        let num = num % max_value;
-
+        let limit = Self::max_selection_value(num);
         let gene = self.use_next_gene();
 
         if *rulechain.last().unwrap() == "string" {
@@ -193,16 +208,14 @@ impl<G: Unsigned + NumCast + Copy + MaxValue<G>> SelectionStrategy for Genotype<
             }
         }
 
-        num::cast::<_, usize>(gene).unwrap() % num
+        num::cast::<_, usize>(gene % limit).unwrap()
     }
 
     fn select_repetition(&mut self, min: u32, max: u32, _: &Vec<&str>) -> u32 {
-        let max_value = num::cast::<_, u32>(G::max_value()).unwrap();
-        let num = (max - min + 1) % max_value;
-
+        let limit = Self::max_selection_value(max - min + 1);
         let gene = self.use_next_gene();
 
-        (num::cast::<_, u32>(gene).unwrap() % num) + min
+        num::cast::<_, u32>(gene % limit).unwrap() + min
     }
 }
 
