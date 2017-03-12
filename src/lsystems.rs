@@ -554,3 +554,40 @@ pub fn make_straw_f() -> (ol::LSystem, lsys::Settings) {
 
     (system, settings)
 }
+
+#[allow(dead_code)]
+pub fn make_open_raceme() -> (ol::LSystem, lsys::Settings) {
+    let mut system = ol::LSystem::new();
+
+    system.axiom = "aA".to_string();
+    system.set_rule('a', "I[+++L]I[---L]a");
+    system.set_rule('A', "I[++K]I[--K]A");
+
+    // Internode
+    system.set_rule('I', "IF");
+
+    // Leaf
+    system.set_rule('L', "['>>>{+B-BB-B+|+B-BB-B}]");
+    system.set_rule('B', "BF"); // Leaf border
+
+    // Flower
+    system.set_rule('K', "[E''>W>>>>W>>>>W>>>>W>>>>W]"); // Flower
+    system.set_rule('E', "EF"); // Pedicel
+    system.set_rule('W', "['^F][&&&&{-F+F|-F+F}]"); // Wedge
+
+    let settings = lsys::Settings {
+        angle: (18f32).to_radians(),
+        step: 0.1,
+        iterations: 10,
+        width: 0.03,
+        colors: vec![
+            (193.0/255.0, 154.0/255.0, 107.0/255.0),
+            (0.3, 1.0, 0.2),
+            (1.5, 1.5, 1.4),
+            (1.5, 1.5, 0.5),
+        ],
+        ..lsys::Settings::new()
+    };
+
+    (system, settings)
+}
