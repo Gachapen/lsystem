@@ -211,11 +211,37 @@ impl<G: Gene> SelectionStrategy for Genotype<G> {
         num::cast::<_, usize>(gene % limit).unwrap()
     }
 
-    fn select_repetition(&mut self, min: u32, max: u32, _: &Vec<&str>) -> u32 {
-        let limit = Self::max_selection_value(max - min + 1);
-        let gene = self.use_next_gene();
+    fn select_repetition(&mut self, min: u32, max: u32, rulechain: &Vec<&str>) -> u32 {
+        if *rulechain.last().unwrap() == "productions" {
+            assert_eq!(min, 1);
+            assert_eq!(max, 2);
 
-        num::cast::<_, u32>(gene % limit).unwrap() + min
+            let weights = vec![0.25, 1.0];
+            let total_weight = weights.iter().fold(0.0, |acc, weight| acc + weight);
+
+            let gene = self.use_next_gene();
+            let gene_frac = num::cast::<_, f32>(gene).unwrap() / num::cast::<_, f32>(G::max_value()).unwrap();
+            let selector = gene_frac * total_weight;
+
+            let mut weight_acc = 0.0;
+            let mut selected = weights.len() - 1;
+            for (i, weight) in weights.into_iter().enumerate() {
+                weight_acc += weight;
+
+                if selector < weight_acc {
+                    selected = i;
+                    break;
+                }
+            }
+
+            assert!(selected <= (max - min) as usize);
+            num::cast::<_, u32>(selected).unwrap() + min
+        } else {
+            let limit = Self::max_selection_value(max - min + 1);
+            let gene = self.use_next_gene();
+
+            num::cast::<_, u32>(gene % limit).unwrap() + min
+        }
     }
 }
 
