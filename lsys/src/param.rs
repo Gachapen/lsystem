@@ -3,7 +3,6 @@ use std::fmt;
 use common::Command;
 use common::CommandMap;
 use common::Instruction;
-use common::create_command_map;
 use common::Rewriter;
 
 #[derive(Copy, Clone, Debug)]
@@ -332,7 +331,6 @@ pub fn step(prev: &Word, productions: &Vec<Production>, dt: f32) -> Word {
 }
 
 pub struct LSystem {
-    pub command_map: CommandMap,
     pub productions: Vec<Production>,
     pub axiom: Word,
 }
@@ -340,7 +338,6 @@ pub struct LSystem {
 impl LSystem {
     pub fn new() -> LSystem {
         LSystem {
-            command_map: create_command_map(),
             productions: Vec::new(),
             axiom: Word::new(),
         }
@@ -348,9 +345,9 @@ impl LSystem {
 }
 
 impl Rewriter for LSystem {
-    fn instructions(&self, iterations: u32) -> Vec<Instruction> {
+    fn instructions(&self, iterations: u32, command_map: &CommandMap) -> Vec<Instruction> {
         let word = expand_lsystem(&self.axiom, &self.productions, iterations);
-        map_word_to_instructions(&word, &self.command_map)
+        map_word_to_instructions(&word, &command_map)
     }
 }
 

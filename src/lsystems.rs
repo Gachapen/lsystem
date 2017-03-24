@@ -31,20 +31,20 @@ pub fn make_hilbert() -> (ol::LSystem, lsys::Settings) {
 pub fn make_plant1() -> (ol::LSystem, lsys::Settings) {
     let mut system = ol::LSystem::new();
 
-    system.command_map['X' as usize] = Command::Noop;
-
     system.rules['X' as usize] = String::from("F[+X][-X][&X][^X]FX");
     system.rules['F' as usize] = String::from("F!F!");
 
     system.axiom = String::from("X");
 
-    let settings = lsys::Settings {
+    let mut settings = lsys::Settings {
         angle: 0.4485496,
         width: 0.03,
         shrink_rate: 1.01,
         iterations: 6,
         ..lsys::Settings::new()
     };
+
+    settings.command_map['X' as usize] = Command::Noop;
 
     (system, settings)
 }
@@ -53,20 +53,20 @@ pub fn make_plant1() -> (ol::LSystem, lsys::Settings) {
 pub fn make_gosper_hexa() -> (ol::LSystem, lsys::Settings) {
     let mut system = ol::LSystem::new();
 
-    system.command_map['l' as usize] = Command::Forward;
-    system.command_map['r' as usize] = Command::Forward;
-
     system.rules['l' as usize] = String::from("l+r++r-l--ll-r+");
     system.rules['r' as usize] = String::from("-l+rr++r+l--l-r");
 
     system.axiom = String::from("l");
 
-    let settings = lsys::Settings {
+    let mut settings = lsys::Settings {
         angle: f32::to_radians(60.0),
         width: 0.02,
         iterations: 4,
         ..lsys::Settings::new()
     };
+
+    settings.command_map['l' as usize] = Command::Forward;
+    settings.command_map['r' as usize] = Command::Forward;
 
     (system, settings)
 }
@@ -250,9 +250,8 @@ pub fn make_bush() -> (ol::LSystem, lsys::Settings) {
     sys.set_rule('F', "S>>>>>F");
     sys.set_rule('S', "FL");
     sys.set_rule('L', "['^^{-f+f+f-|-f+f+f}]");
-    sys.map_command('f', Command::Forward);
 
-    let settings = lsys::Settings {
+    let mut settings = lsys::Settings {
         angle: f32::to_radians(22.5),
         width: 0.1,
         shrink_rate: 1.5,
@@ -263,6 +262,8 @@ pub fn make_bush() -> (ol::LSystem, lsys::Settings) {
         ],
         ..lsys::Settings::new()
     };
+
+    settings.map_command('f', Command::Forward);
 
     (sys, settings)
 }
@@ -341,7 +342,6 @@ pub fn make_anim_tree() -> (param::LSystem, lsys::Settings) {
     let mut sys = param::LSystem::new();
 
     sys.axiom = param::Word::from_str("#(0.01)F(0.0)>(0.593412)A(0.0)");
-    sys.command_map['f' as usize] = Command::Forward;
 
     let d1 = f32::to_radians(94.74);
     let d2 = f32::to_radians(132.63);
@@ -437,7 +437,7 @@ pub fn make_anim_tree() -> (param::LSystem, lsys::Settings) {
         ),
     ];
 
-    let settings = lsys::Settings {
+    let mut settings = lsys::Settings {
         width: 0.05,
         iterations: 7,
         colors: vec![
@@ -446,6 +446,8 @@ pub fn make_anim_tree() -> (param::LSystem, lsys::Settings) {
         ],
         ..lsys::Settings::new()
     };
+
+    settings.command_map['f' as usize] = Command::Forward;
 
     (sys, settings)
 }

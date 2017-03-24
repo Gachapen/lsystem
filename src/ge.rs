@@ -57,7 +57,6 @@ fn run_random_genes(window: &mut Window) {
     let mut system = ol::LSystem {
         axiom: expand_grammar(&lsys_abnf, "axiom", &mut genotype),
         rules: expand_productions(&lsys_abnf, &mut genotype),
-        ..ol::LSystem::new()
     };
 
     system.remove_redundancy();
@@ -67,7 +66,7 @@ fn run_random_genes(window: &mut Window) {
     //println!("");
     //println!("Rewritten: {}", system.rewrite(settings.iterations));
 
-    let instructions = system.instructions(settings.iterations);
+    let instructions = system.instructions(settings.iterations, &settings.command_map);
 
     let mut model = lsys3d::build_model(&instructions, &settings);
     window.scene_mut().add_child(model.clone());
@@ -88,7 +87,7 @@ fn run_bush_inferred(window: &mut Window, camera: &mut Camera) {
     let lsys_abnf = abnf::parse_file("bush.abnf").expect("Could not parse ABNF file");
 
     let (system, settings) = {
-        let (system, settings) = lsystems::make_bush();
+        let (system, mut settings) = lsystems::make_bush();
 
         let axiom_gen = infer_selections(&system.axiom, &lsys_abnf, "axiom").unwrap();
         let mut axiom_geno = Genotype::new(axiom_gen.iter().map(|g| *g as u8).collect());
@@ -114,12 +113,13 @@ fn run_bush_inferred(window: &mut Window, camera: &mut Camera) {
         new_system.set_rule('F', &expand_grammar(&lsys_abnf, "successor", &mut f_geno));
         new_system.set_rule('S', &expand_grammar(&lsys_abnf, "successor", &mut s_geno));
         new_system.set_rule('L', &expand_grammar(&lsys_abnf, "successor", &mut l_geno));
-        new_system.map_command('f', lsys::Command::Forward);
+
+        settings.map_command('f', lsys::Command::Forward);
 
         (new_system, settings)
     };
 
-    let instructions = system.instructions(settings.iterations);
+    let instructions = system.instructions(settings.iterations, &settings.command_map);
 
     let mut model = lsys3d::build_model(&instructions, &settings);
     window.scene_mut().add_child(model.clone());

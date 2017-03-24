@@ -76,6 +76,7 @@ pub struct Settings {
     pub width: f32,
     pub shrink_rate: f32,
     pub colors: Vec<(f32, f32, f32)>,
+    pub command_map: CommandMap,
 }
 
 impl Settings {
@@ -87,10 +88,15 @@ impl Settings {
             width: 0.2,
             shrink_rate: 1.0,
             colors: vec![(50.0/255.0, 169.0/255.0, 18.0/255.0)],
+            command_map: create_command_map(),
         }
+    }
+
+    pub fn map_command(&mut self, letter: char, command: Command) {
+        self.command_map[letter as u8 as usize] = command;
     }
 }
 
 pub trait Rewriter {
-    fn instructions(&self, iterations: u32) -> Vec<Instruction>;
+    fn instructions(&self, iterations: u32, command_map: &CommandMap) -> Vec<Instruction>;
 }

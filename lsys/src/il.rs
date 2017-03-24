@@ -4,7 +4,6 @@ use std::option::Option;
 
 use common::Instruction;
 use common::CommandMap;
-use common::create_command_map;
 use common::map_word_to_instructions;
 use common::Rewriter;
 
@@ -310,7 +309,6 @@ impl Production {
 }
 
 pub struct LSystem {
-    pub command_map: CommandMap,
     pub productions: Vec<Production>,
     pub axiom: String,
     ignore: Vec<u8>,
@@ -319,7 +317,6 @@ pub struct LSystem {
 impl LSystem {
     pub fn new() -> LSystem {
         LSystem {
-            command_map: create_command_map(),
             productions: Vec::new(),
             axiom: String::new(),
             ignore: Vec::new(),
@@ -335,9 +332,9 @@ impl LSystem {
 }
 
 impl Rewriter for LSystem {
-    fn instructions(&self, iterations: u32) -> Vec<Instruction> {
+    fn instructions(&self, iterations: u32, command_map: &CommandMap) -> Vec<Instruction> {
         let lword = expand_lsystem(&self.axiom, &self.productions, iterations, &self.ignore);
-        map_word_to_instructions(&lword, &self.command_map)
+        map_word_to_instructions(&lword, &command_map)
     }
 }
 

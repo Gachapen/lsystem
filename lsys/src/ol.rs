@@ -2,10 +2,8 @@ use std::mem;
 use std::ptr;
 use std::fmt;
 
-use common::Command;
 use common::Instruction;
 use common::CommandMap;
-use common::create_command_map;
 use common::map_word_to_instructions;
 use common::MAX_ALPHABET_SIZE;
 use common::Rewriter;
@@ -52,7 +50,6 @@ fn remove_redundancy(from: &str) -> String {
 }
 
 pub struct LSystem {
-    pub command_map: CommandMap,
     pub rules: RuleMap,
     pub axiom: String,
 }
@@ -60,14 +57,9 @@ pub struct LSystem {
 impl LSystem {
     pub fn new() -> LSystem {
         LSystem {
-            command_map: create_command_map(),
             rules: create_rule_map(),
             axiom: String::new(),
         }
-    }
-
-    pub fn map_command(&mut self, letter: char, command: Command) {
-        self.command_map[letter as u8 as usize] = command;
     }
 
     pub fn set_rule(&mut self, letter: char, expansion: &str) {
@@ -88,9 +80,9 @@ impl LSystem {
 }
 
 impl Rewriter for LSystem {
-    fn instructions(&self, iterations: u32) -> Vec<Instruction> {
+    fn instructions(&self, iterations: u32, command_map: &CommandMap) -> Vec<Instruction> {
         let lword = expand_lsystem(&self.axiom, &self.rules, iterations);
-        map_word_to_instructions(&lword, &self.command_map)
+        map_word_to_instructions(&lword, &command_map)
     }
 }
 

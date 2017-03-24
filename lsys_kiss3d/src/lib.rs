@@ -228,7 +228,7 @@ pub fn build_model(instructions: &Vec<lsys::Instruction>, settings: &lsys::Setti
 pub fn run_static<T>(window: &mut Window, camera: &mut Camera, (system, settings): (T, lsys::Settings))
     where T: lsys::Rewriter
 {
-    let instructions = system.instructions(settings.iterations);
+    let instructions = system.instructions(settings.iterations, &settings.command_map);
 
     let mut model = build_model(&instructions, &settings);
     window.scene_mut().add_child(model.clone());
@@ -252,7 +252,7 @@ pub fn run_animated(window: &mut Window, camera: &mut Camera, (system, settings)
         let dt = time - prev_time;
 
         word = param::step(&word, &system.productions, dt as f32 * 0.3);
-        let instructions = param::map_word_to_instructions(&word, &system.command_map);
+        let instructions = param::map_word_to_instructions(&word, &settings.command_map);
 
         model.unlink();
         model = build_model(&instructions, &settings);

@@ -158,7 +158,6 @@ fn parse_glp(root: &Item) -> Result<param::LSystem, ConvertGlpError> {
             Ok(param::LSystem{
                 axiom: parse_glp_stack(axiom)?,
                 productions: parse_glp_rules(rules)?,
-                ..param::LSystem::new()
             })
         },
         _ => Err(ConvertGlpError::from(format!("Expected LSystem, got {:?}", root))),
@@ -249,28 +248,28 @@ pub fn run_generated(window: &mut Window, camera: &mut Camera)
     let mut rng = rand::thread_rng();
     let root = rand_lsystem(&mut rng);
 
-    let settings = lsys::Settings {
+    let mut settings = lsys::Settings {
         width: 0.05,
         iterations: 7,
         ..lsys::Settings::new()
     };
 
-    let mut system = match parse_glp(&root) {
+    let system = match parse_glp(&root) {
         Ok(system) => system,
         Err(error) => panic!("Failed converting GLP: {}", error.description()),
     };
 
     println!("{}", system);
 
-    system.command_map[LETTER_BEGIN as usize] = lsys::Command::Forward;
-    system.command_map[(LETTER_BEGIN + 1) as usize] = lsys::Command::YawLeft;
-    system.command_map[(LETTER_BEGIN + 2) as usize] = lsys::Command::YawRight;
-    system.command_map[(LETTER_BEGIN + 3) as usize] = lsys::Command::RollLeft;
-    system.command_map[(LETTER_BEGIN + 4) as usize] = lsys::Command::RollRight;
-    system.command_map[(LETTER_BEGIN + 5) as usize] = lsys::Command::PitchUp;
-    system.command_map[(LETTER_BEGIN + 6) as usize] = lsys::Command::PitchDown;
+    settings.command_map[LETTER_BEGIN as usize] = lsys::Command::Forward;
+    settings.command_map[(LETTER_BEGIN + 1) as usize] = lsys::Command::YawLeft;
+    settings.command_map[(LETTER_BEGIN + 2) as usize] = lsys::Command::YawRight;
+    settings.command_map[(LETTER_BEGIN + 3) as usize] = lsys::Command::RollLeft;
+    settings.command_map[(LETTER_BEGIN + 4) as usize] = lsys::Command::RollRight;
+    settings.command_map[(LETTER_BEGIN + 5) as usize] = lsys::Command::PitchUp;
+    settings.command_map[(LETTER_BEGIN + 6) as usize] = lsys::Command::PitchDown;
 
-    let instructions = system.instructions(settings.iterations);
+    let instructions = system.instructions(settings.iterations, &settings.command_map);
 
     let mut model = lsys3d::build_model(&instructions, &settings);
     window.scene_mut().add_child(model.clone());
