@@ -10,10 +10,10 @@ use lsys::param::WordFromString;
 pub fn make_hilbert() -> (ol::LSystem, lsys::Settings) {
     let mut system = ol::LSystem::new();
 
-    system.rules['A' as usize] = String::from("B-F+CFC+F-D&F^D-F+&&CFC+F+B>>");
-    system.rules['B' as usize] = String::from("A&F^CFB^F^D^^-F-D^++F^B++FC^F^A>>");
-    system.rules['C' as usize] = String::from("++D^++F^-F+C^F^A&&FA&F^C+F+B^F^D>>");
-    system.rules['D' as usize] = String::from("++CFB-F+B++FA&F^A&&FB-F+B++FC>>");
+    system.rules['A'] = String::from("B-F+CFC+F-D&F^D-F+&&CFC+F+B>>");
+    system.rules['B'] = String::from("A&F^CFB^F^D^^-F-D^++F^B++FC^F^A>>");
+    system.rules['C'] = String::from("++D^++F^-F+C^F^A&&FA&F^C+F+B^F^D>>");
+    system.rules['D'] = String::from("++CFB-F+B++FA&F^A&&FB-F+B++FC>>");
 
     system.axiom = String::from("A");
 
@@ -31,8 +31,8 @@ pub fn make_hilbert() -> (ol::LSystem, lsys::Settings) {
 pub fn make_plant1() -> (ol::LSystem, lsys::Settings) {
     let mut system = ol::LSystem::new();
 
-    system.rules['X' as usize] = String::from("F[+X][-X][&X][^X]FX");
-    system.rules['F' as usize] = String::from("F!F!");
+    system.rules['X'] = String::from("F[+X][-X][&X][^X]FX");
+    system.rules['F'] = String::from("F!F!");
 
     system.axiom = String::from("X");
 
@@ -53,8 +53,8 @@ pub fn make_plant1() -> (ol::LSystem, lsys::Settings) {
 pub fn make_gosper_hexa() -> (ol::LSystem, lsys::Settings) {
     let mut system = ol::LSystem::new();
 
-    system.rules['l' as usize] = String::from("l+r++r-l--ll-r+");
-    system.rules['r' as usize] = String::from("-l+rr++r+l--l-r");
+    system.rules['l'] = String::from("l+r++r-l--ll-r+");
+    system.rules['r'] = String::from("-l+rr++r+l--l-r");
 
     system.axiom = String::from("l");
 

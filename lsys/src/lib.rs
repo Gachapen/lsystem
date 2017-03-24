@@ -1,3 +1,5 @@
+extern crate serde;
+
 pub mod common;
 pub mod ol;
 pub mod il;

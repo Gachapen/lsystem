@@ -1,6 +1,8 @@
-use std::mem;
-use std::ptr;
-use std::fmt;
+use std::{mem, ptr, fmt, slice};
+use std::ops::{Index, IndexMut};
+
+use serde::{Serialize, Serializer};
+use serde::ser::{SerializeStruct, SerializeMap};
 
 use common::Instruction;
 use common::CommandMap;
@@ -8,18 +10,86 @@ use common::map_word_to_instructions;
 use common::MAX_ALPHABET_SIZE;
 use common::Rewriter;
 
-pub type RuleMap = [String; MAX_ALPHABET_SIZE];
+pub struct RuleMap {
+    map: [String; MAX_ALPHABET_SIZE],
+}
 
-pub fn create_rule_map() -> RuleMap {
-    let mut rules: RuleMap = unsafe { mem::uninitialized() };
+impl RuleMap {
+    pub fn new() -> RuleMap {
+        let mut rules: [String; MAX_ALPHABET_SIZE] = unsafe { mem::uninitialized() };
 
-    for (i, v) in rules.iter_mut().enumerate() {
-        let mut rule = String::with_capacity(1);
-        rule.push(i as u8 as char);
-        unsafe { ptr::write(v, rule); }
+        for (i, v) in rules.iter_mut().enumerate() {
+            let mut rule = String::with_capacity(1);
+            rule.push(i as u8 as char);
+            unsafe { ptr::write(v, rule); }
+        }
+
+        RuleMap {
+            map: rules,
+        }
     }
 
-    rules
+    pub fn iter<'a>(&'a self) -> slice::Iter<'a, String> {
+        self.map.iter()
+    }
+
+    pub fn iter_mut<'a>(&'a mut self) -> slice::IterMut<'a, String> {
+        self.map.iter_mut()
+    }
+}
+
+impl Index<u8> for RuleMap {
+    type Output = String;
+
+    fn index<'a>(&'a self, index: u8) -> &'a String {
+        &self.map[index as usize]
+    }
+}
+
+impl Index<char> for RuleMap {
+    type Output = String;
+
+    fn index<'a>(&'a self, index: char) -> &'a String {
+        &self.map[index as usize]
+    }
+}
+
+impl IndexMut<u8> for RuleMap {
+    fn index_mut<'a>(&'a mut self, index: u8) -> &'a mut String {
+        &mut self.map[index as usize]
+    }
+}
+
+impl IndexMut<char> for RuleMap {
+    fn index_mut<'a>(&'a mut self, index: char) -> &'a mut String {
+        &mut self.map[index as usize]
+    }
+}
+
+impl fmt::Display for RuleMap {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for (pred, succ) in self.map.iter().enumerate() {
+            if !(succ.len() == 1 && succ.as_bytes()[0] == pred as u8) {
+                write!(f, "{} -> {}\n", pred as u8 as char, succ)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl Serialize for RuleMap {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut map = serializer.serialize_map(None)?;
+
+        for (pred, succ) in self.map.iter().enumerate() {
+            if !(succ.len() == 1 && succ.as_bytes()[0] == pred as u8) {
+                map.serialize_entry(&(pred as u8 as char), succ)?;
+            }
+        }
+
+        map.end()
+    }
 }
 
 fn expand_lsystem(axiom: &str, rules: &RuleMap, iterations: u32) -> String {
@@ -28,7 +98,7 @@ fn expand_lsystem(axiom: &str, rules: &RuleMap, iterations: u32) -> String {
     for _ in 0..iterations {
         let mut expanded_lword = String::with_capacity(lword.len());
         for lchar in lword.bytes() {
-            let expanded_lchar = &rules[lchar as usize];
+            let expanded_lchar = &rules[lchar];
             expanded_lword.push_str(&mut expanded_lchar.clone());
         }
         lword = expanded_lword;
@@ -57,13 +127,13 @@ pub struct LSystem {
 impl LSystem {
     pub fn new() -> LSystem {
         LSystem {
-            rules: create_rule_map(),
+            rules: RuleMap::new(),
             axiom: String::new(),
         }
     }
 
     pub fn set_rule(&mut self, letter: char, expansion: &str) {
-        self.rules[letter as usize] = String::from(expansion);
+        self.rules[letter] = String::from(expansion);
     }
 
     pub fn remove_redundancy(&mut self) {
@@ -93,12 +163,17 @@ impl fmt::Display for LSystem {
             write!(f, "{}", *letter as char)?;
         }
 
-        for (pred, succ) in self.rules.iter().enumerate() {
-            if !(succ.len() == 1 && succ.as_bytes()[0] == pred as u8) {
-                write!(f, "\n{} -> {}", pred as u8 as char, succ)?;
-            }
-        }
+        write!(f, "\n{}", self.rules)?;
 
         Ok(())
+    }
+}
+
+impl Serialize for LSystem {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut struc = serializer.serialize_struct("LSystem", 2)?;
+        struc.serialize_field("axiom", &self.axiom)?;
+        struc.serialize_field("productions", &self.rules)?;
+        struc.end()
     }
 }

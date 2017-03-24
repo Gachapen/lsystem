@@ -4,3 +4,4 @@ version = "0.1.0"
 authors = ["Magnus Bjerke Vik <mbvett@gmail.com>"]
 
 [dependencies]
+serde = "0.9"
