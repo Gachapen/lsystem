@@ -56,7 +56,7 @@ fn run_random_genes(window: &mut Window) {
 
     let mut system = ol::LSystem {
         axiom: expand_grammar(&lsys_abnf, "axiom", &mut genotype),
-        rules: expand_productions(&lsys_abnf, &mut genotype),
+        productions: expand_productions(&lsys_abnf, &mut genotype),
     };
 
     system.remove_redundancy();
@@ -92,16 +92,16 @@ fn run_bush_inferred(window: &mut Window, camera: &mut Camera) {
         let axiom_gen = infer_selections(&system.axiom, &lsys_abnf, "axiom").unwrap();
         let mut axiom_geno = Genotype::new(axiom_gen.iter().map(|g| *g as u8).collect());
 
-        let a_gen = infer_selections(&system.rules['A'], &lsys_abnf, "successor").unwrap();
+        let a_gen = infer_selections(&system.productions['A'], &lsys_abnf, "successor").unwrap();
         let mut a_geno = Genotype::new(a_gen.iter().map(|g| *g as u8).collect());
 
-        let f_gen = infer_selections(&system.rules['F'], &lsys_abnf, "successor").unwrap();
+        let f_gen = infer_selections(&system.productions['F'], &lsys_abnf, "successor").unwrap();
         let mut f_geno = Genotype::new(f_gen.iter().map(|g| *g as u8).collect());
 
-        let s_gen = infer_selections(&system.rules['S'], &lsys_abnf, "successor").unwrap();
+        let s_gen = infer_selections(&system.productions['S'], &lsys_abnf, "successor").unwrap();
         let mut s_geno = Genotype::new(s_gen.iter().map(|g| *g as u8).collect());
 
-        let l_gen = infer_selections(&system.rules['L'], &lsys_abnf, "successor").unwrap();
+        let l_gen = infer_selections(&system.productions['L'], &lsys_abnf, "successor").unwrap();
         let mut l_geno = Genotype::new(l_gen.iter().map(|g| *g as u8).collect());
 
         let mut new_system = ol::LSystem {

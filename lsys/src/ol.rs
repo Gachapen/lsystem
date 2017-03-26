@@ -2,7 +2,7 @@ use std::{mem, ptr, fmt, slice};
 use std::ops::{Index, IndexMut};
 
 use serde::{Serialize, Serializer};
-use serde::ser::{SerializeStruct, SerializeMap};
+use serde::ser::{SerializeMap};
 
 use common::Instruction;
 use common::CommandMap;
@@ -119,39 +119,40 @@ fn remove_redundancy(from: &str) -> String {
     trimmed
 }
 
+#[derive(Serialize)]
 pub struct LSystem {
-    pub rules: RuleMap,
+    pub productions: RuleMap,
     pub axiom: String,
 }
 
 impl LSystem {
     pub fn new() -> LSystem {
         LSystem {
-            rules: RuleMap::new(),
+            productions: RuleMap::new(),
             axiom: String::new(),
         }
     }
 
     pub fn set_rule(&mut self, letter: char, expansion: &str) {
-        self.rules[letter] = String::from(expansion);
+        self.productions[letter] = String::from(expansion);
     }
 
     pub fn remove_redundancy(&mut self) {
         self.axiom = remove_redundancy(&self.axiom);
 
-        for successor in self.rules.iter_mut() {
+        for successor in self.productions.iter_mut() {
             *successor = remove_redundancy(&successor);
         }
     }
 
     pub fn rewrite(&self, iterations: u32) -> String {
-        expand_lsystem(&self.axiom, &self.rules, iterations)
+        expand_lsystem(&self.axiom, &self.productions, iterations)
     }
 }
 
 impl Rewriter for LSystem {
     fn instructions(&self, iterations: u32, command_map: &CommandMap) -> Vec<Instruction> {
-        let lword = expand_lsystem(&self.axiom, &self.rules, iterations);
+        let lword = expand_lsystem(&self.axiom, &self.productions, iterations);
         map_word_to_instructions(&lword, &command_map)
     }
 }
@@ -163,17 +164,8 @@ impl fmt::Display for LSystem {
             write!(f, "{}", *letter as char)?;
         }
 
-        write!(f, "\n{}", self.rules)?;
+        write!(f, "\n{}", self.productions)?;
 
         Ok(())
-    }
-}
-
-impl Serialize for LSystem {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut struc = serializer.serialize_struct("LSystem", 2)?;
-        struc.serialize_field("axiom", &self.axiom)?;
-        struc.serialize_field("productions", &self.rules)?;
-        struc.end()
     }
 }
