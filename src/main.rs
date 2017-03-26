@@ -2,6 +2,9 @@ extern crate kiss3d;
 extern crate nalgebra as na;
 extern crate rand;
 extern crate num;
+extern crate serde_yaml;
+extern crate time;
+extern crate glfw;
 
 #[macro_use]
 extern crate lsys;

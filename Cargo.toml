@@ -7,10 +7,13 @@ authors = [ "Magnus Bjerke Vik <mbvett@gmail.com>" ]
 kiss3d = "0.8"
 rand = "0.3"
 num = "0.1"
+serde_yaml = "0.6"
+time = "0.1"
 
 # Dependencies of kiss3d also used by the project.
 # Dependencies must match the same versions kiss3d uses.
 nalgebra = "0.11"
+glfw = "0.8"
 
 # Local dependencies.
 lsys = { path = "lsys" }

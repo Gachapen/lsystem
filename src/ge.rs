@@ -1,12 +1,21 @@
 use std::f32::consts::PI;
-use std::cmp;
+use std::{cmp, fs};
+use std::collections::HashMap;
+use std::io::BufWriter;
+use std::fs::File;
+use std::path::Path;
+
 use rand;
 use rand::distributions::{IndependentSample, Range};
+use rand::Rng;
 use kiss3d::window::Window;
 use kiss3d::camera::{Camera, ArcBall};
 use na::{UnitQuaternion, Point3};
 use num;
 use num::{Unsigned, NumCast};
+use serde_yaml;
+use time;
+use glfw::{Key, WindowEvent, Action};
 
 use abnf;
 use abnf::expand::{SelectionStrategy, expand_grammar};
@@ -19,8 +28,122 @@ use lsystems;
 #[allow(dead_code, unused_variables)]
 pub fn run_ge(window: &mut Window, camera: &mut Camera) {
     //run_print_abnf();
-    run_random_genes(window);
+    //run_random_genes(window);
+    run_with_distribution(window);
     //run_bush_inferred(window, camera);
+}
+
+type GenePrimitive = u32;
+
+#[allow(dead_code)]
+fn generate_genome< R: Rng>(rng: &mut R, len: usize) -> Vec<GenePrimitive> {
+    let gene_range = Range::new(GenePrimitive::min_value(), GenePrimitive::max_value());
+
+    let mut genes = Vec::with_capacity(len);
+    for _ in 0..len {
+        genes.push(gene_range.ind_sample(rng));
+    }
+
+    genes
+}
+
+#[allow(dead_code)]
+fn generate_system<G>(grammar: &abnf::Ruleset, genotype: &mut G) -> ol::LSystem
+    where G: SelectionStrategy
+{
+    let mut system = ol::LSystem {
+        axiom: expand_grammar(grammar, "axiom", genotype),
+        productions: expand_productions(grammar, genotype),
+    };
+
+    system.remove_redundancy();
+
+    system
+}
+
+#[allow(dead_code)]
+fn run_with_distribution(window: &mut Window) {
+    let grammar = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
+
+    let mut rng = rand::thread_rng();
+
+    let mut distribution = Distribution::new();
+    distribution.set_default_weights("productions", 0, &[0.0, 1.0]);
+    distribution.set_default_weights("string", 0, &[1.0, 2.0, 2.0, 2.0, 1.0, 1.0]);
+    distribution.set_default_weights("string", 1, &[1.0, 0.0]);
+
+    distribution.set_weights(0, "string", 0, &[1.0, 1.0, 2.0, 2.0, 2.0, 2.0]);
+    distribution.set_weights(0, "string", 1, &[1.0, 1.0]);
+
+    distribution.set_weights(1, "string", 1, &[10.0, 1.0]);
+
+    let settings = lsys::Settings {
+        width: 0.05,
+        angle: PI / 8.0,
+        iterations: 5,
+        ..lsys::Settings::new()
+    };
+
+    let genes = generate_genome(&mut rng, 100);
+
+    println!("Genes: {:?}", genes);
+    println!("");
+
+    let mut genotype = WeightedGenotype::new(genes, distribution);
+    let system = generate_system(&grammar, &mut genotype);
+
+    println!("LSystem:");
+    println!("{}", system);
+
+    let instructions = system.instructions(settings.iterations, &settings.command_map);
+
+    let mut model = lsys3d::build_model(&instructions, &settings);
+    window.scene_mut().add_child(model.clone());
+
+    let mut camera = {
+        let eye = Point3::new(0.0, 0.0, 5.0);
+        let at = Point3::new(0.0, 1.0, 0.0);
+        ArcBall::new(eye, at)
+    };
+
+    while window.render_with_camera(&mut camera) {
+        model.append_rotation(&UnitQuaternion::from_euler_angles(0.0f32, 0.004, 0.0));
+
+        for event in window.events().iter() {
+            match event.value {
+                WindowEvent::Key(Key::S, _, Action::Release, _) => {
+                    let directory = Path::new("model");
+                    fs::create_dir_all(directory).unwrap();
+
+                    let filename = format!("{}.yaml", time::now().rfc3339());
+                    let path = directory.join(filename);
+
+                    let file = File::create(&path).unwrap();
+                    serde_yaml::to_writer(&mut BufWriter::new(file), &system).unwrap();
+
+                    println!("Saved to {}", path.to_str().unwrap());
+                },
+                WindowEvent::Key(Key::Space, _, Action::Release, _) => {
+                    let genes = generate_genome(&mut rng, 100);
+
+                    println!("Genes: {:?}", genes);
+                    println!("");
+
+                    genotype.genotype.genes = genes;
+                    let system = generate_system(&grammar, &mut genotype);
+
+                    println!("LSystem:");
+                    println!("{}", system);
+
+                    let instructions = system.instructions(settings.iterations, &settings.command_map);
+                    window.remove(&mut model);
+                    model = lsys3d::build_model(&instructions, &settings);
+                    window.scene_mut().add_child(model.clone());
+                },
+                _ => {}
+            }
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -33,18 +156,13 @@ fn run_print_abnf() {
 fn run_random_genes(window: &mut Window) {
     let lsys_abnf = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
 
-    let mut rng = rand::thread_rng();
-    let gene_range = Range::new(u8::min_value(), u8::max_value());
-    let gene_length = 100;
+    let mut genotype = {
+        let mut rng = rand::thread_rng();
+        let genome = generate_genome(&mut rng, 100);
+        Genotype::new(genome)
+    };
 
-    let mut genes = Vec::with_capacity(gene_length);
-    for _ in 0..gene_length {
-        genes.push(gene_range.ind_sample(&mut rng));
-    }
-
-    let mut genotype = Genotype::new(genes);
-
-    println!("Genotype: {:?}", genotype.genes);
+    println!("Genes: {:?}", genotype.genes);
     println!("");
 
     let settings = lsys::Settings {
@@ -63,8 +181,6 @@ fn run_random_genes(window: &mut Window) {
 
     println!("LSystem:");
     println!("{}", system);
-    //println!("");
-    //println!("Rewritten: {}", system.rewrite(settings.iterations));
 
     let instructions = system.instructions(settings.iterations, &settings.command_map);
 
@@ -196,51 +312,154 @@ impl<G: Gene> Genotype<G> {
 }
 
 impl<G: Gene> SelectionStrategy for Genotype<G> {
-    fn select_alternative(&mut self, num: usize, rulechain: &Vec<&str>) -> usize {
+    fn select_alternative(&mut self, num: usize, _: &Vec<&str>, _: u32) -> usize {
         let limit = Self::max_selection_value(num);
         let gene = self.use_next_gene();
-
-        if *rulechain.last().unwrap() == "string" {
-            let depth = rulechain.iter().fold(0, |count, r| if *r == "stack" { count + 1 } else { count });
-
-            if depth >= 2 {
-                return 0;
-            }
-        }
 
         num::cast::<_, usize>(gene % limit).unwrap()
     }
 
-    fn select_repetition(&mut self, min: u32, max: u32, rulechain: &Vec<&str>) -> u32 {
-        if *rulechain.last().unwrap() == "productions" {
-            assert_eq!(min, 1);
-            assert_eq!(max, 2);
+    fn select_repetition(&mut self, min: u32, max: u32, _: &Vec<&str>, _: u32) -> u32 {
+        let limit = Self::max_selection_value(max - min + 1);
+        let gene = self.use_next_gene();
 
-            let weights = vec![0.25, 1.0];
-            let total_weight = weights.iter().fold(0.0, |acc, weight| acc + weight);
+        num::cast::<_, u32>(gene % limit).unwrap() + min
+    }
+}
 
-            let gene = self.use_next_gene();
-            let gene_frac = num::cast::<_, f32>(gene).unwrap() / num::cast::<_, f32>(G::max_value()).unwrap();
-            let selector = gene_frac * total_weight;
+fn weighted_selection(weights: &[f32], selector: f32) -> usize {
+    let total_weight = weights.iter().fold(0.0, |acc, weight| acc + weight);
+    let selector = selector * total_weight;
 
-            let mut weight_acc = 0.0;
-            let mut selected = weights.len() - 1;
-            for (i, weight) in weights.into_iter().enumerate() {
-                weight_acc += weight;
+    let mut weight_acc = 0.0;
+    let mut selected = weights.len() - 1;
+    for (i, weight) in weights.iter().enumerate() {
+        weight_acc += *weight;
 
-                if selector < weight_acc {
-                    selected = i;
-                    break;
+        if selector < weight_acc {
+            selected = i;
+            break;
+        }
+    }
+
+    selected
+}
+
+struct Distribution {
+    depths: Vec<HashMap<String, Vec<Vec<f32>>>>,
+    defaults: HashMap<String, Vec<Vec<f32>>>,
+}
+
+impl Distribution {
+    fn new() -> Distribution {
+        Distribution {
+            depths: vec![],
+            defaults: HashMap::new(),
+        }
+    }
+
+    fn get_weights(&self, depth: usize, rule: &str, choice_num: u32) -> Option<&[f32]> {
+        if depth < self.depths.len() {
+            let rules = &self.depths[depth];
+            if let Some(choices) = rules.get(rule) {
+                if (choice_num as usize) < choices.len() {
+                    let weights = &choices[choice_num as usize];
+                    if !weights.is_empty() {
+                        return Some(weights);
+                    }
                 }
             }
+        }
 
-            assert!(selected <= (max - min) as usize);
-            num::cast::<_, u32>(selected).unwrap() + min
+        if let Some(choices) = self.defaults.get(rule) {
+            if (choice_num as usize) < choices.len() {
+                let weights = &choices[choice_num as usize];
+                if !weights.is_empty() {
+                    return Some(weights);
+                }
+            }
+        }
+
+        None
+    }
+
+    fn set_weights(&mut self, depth: usize, rule: &str, choice: u32, weights: &[f32]) {
+        while self.depths.len() < depth + 1 {
+            self.depths.push(HashMap::new());
+        }
+
+        let choices = self.depths[depth].entry(rule.to_string()).or_insert_with(Vec::new);
+        let choice = choice as usize;
+        while choices.len() < choice + 1 {
+            choices.push(Vec::new());
+        }
+
+        choices[choice] = weights.to_vec();
+    }
+
+    fn set_default_weights(&mut self, rule: &str, choice: u32, weights: &[f32]) {
+        let choices = self.defaults.entry(rule.to_string()).or_insert_with(Vec::new);
+        let choice = choice as usize;
+        while choices.len() < choice + 1 {
+            choices.push(Vec::new());
+        }
+
+        choices[choice] = weights.to_vec();
+    }
+}
+
+struct WeightedGenotype<G> {
+    genotype: Genotype<G>,
+    distribution: Distribution,
+}
+
+impl<G: Gene> WeightedGenotype<G> {
+    fn new(genes: Vec<G>, distribution: Distribution) -> WeightedGenotype<G> {
+        WeightedGenotype {
+            genotype: Genotype::new(genes),
+            distribution: distribution,
+        }
+    }
+
+    fn find_depth(rulechain: &[&str]) -> usize {
+        rulechain.iter().fold(0, |acc, r| if *r == "stack" { acc + 1 } else { acc })
+    }
+}
+
+impl<G: Gene> SelectionStrategy for WeightedGenotype<G> {
+    fn select_alternative(&mut self, num: usize, rulechain: &Vec<&str>, choice: u32) -> usize {
+        let gene = self.genotype.use_next_gene();
+
+        let depth = Self::find_depth(rulechain);
+        let rule = rulechain.last().unwrap();
+        let weights = self.distribution.get_weights(depth, rule, choice);
+
+        if let Some(weights) = weights {
+            assert_eq!(weights.len(), num, "Number of weights does not match number of alternatives");
+
+            let gene_frac = num::cast::<_, f32>(gene).unwrap() / num::cast::<_, f32>(G::max_value()).unwrap();
+            weighted_selection(weights, gene_frac)
         } else {
-            let limit = Self::max_selection_value(max - min + 1);
-            let gene = self.use_next_gene();
+            self.genotype.select_alternative(num, rulechain, choice)
+        }
+    }
 
-            num::cast::<_, u32>(gene % limit).unwrap() + min
+    fn select_repetition(&mut self, min: u32, max: u32, rulechain: &Vec<&str>, choice: u32) -> u32 {
+        let gene = self.genotype.use_next_gene();
+
+        let num = max - min + 1;
+
+        let depth = Self::find_depth(rulechain);
+        let rule = rulechain.last().unwrap();
+        let weights = self.distribution.get_weights(depth, rule, choice);
+
+        if let Some(weights) = weights {
+            assert_eq!(weights.len(), num as usize, "Number of weights does not match number of repetition alternatives");
+
+            let gene_frac = num::cast::<_, f32>(gene).unwrap() / num::cast::<_, f32>(G::max_value()).unwrap();
+            min + weighted_selection(weights, gene_frac) as u32
+        } else {
+            self.genotype.select_repetition(min, max, rulechain, choice)
         }
     }
 }
@@ -261,7 +480,7 @@ fn expand_productions<T>(grammar: &abnf::Ruleset, strategy: &mut T) -> ol::RuleM
             let repeat = item.repeat.unwrap_or_default();
             let min = repeat.min.unwrap_or(0);
             let max = repeat.max.unwrap_or(u32::max_value());
-            let num = strategy.select_repetition(min, max, &vec!["productions"]);
+            let num = strategy.select_repetition(min, max, &vec!["productions"], 0);
 
             for _ in 0..num {
                 let (pred, succ) = expand_production(grammar, strategy);
@@ -593,7 +812,7 @@ mod test {
     fn test_lsystem_ge_expansion() {
         let grammar = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
         let genes = vec![
-           2, // repeat 3 - "F[FX]X"
+           2u8, // repeat 3 - "F[FX]X"
            0, // symbol - "F"
            0, // variable - "F"
            0, // "F"
