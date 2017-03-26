@@ -15,7 +15,7 @@ dependencies = [
 name = "abnf"
 version = "0.1.0"
 dependencies = [
- "nom 2.1.0 (git+https://github.com/Geal/nom)",
+ "nom 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -361,8 +361,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "nom"
-version = "2.1.0"
-source = "git+https://github.com/Geal/nom#3000d54cc643289cc1d75e48a0f49a659a8dbe4a"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "num"
@@ -550,7 +550,7 @@ dependencies = [
 "checksum ncollide_transformation 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "94702c2234664d2e791db33434ebf86871b2fb6d3b32f85148fe69a9344c8d14"
 "checksum ncollide_utils 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "97a92d39f89be3cae42020959af582d8041b3e7acbede6848f49e0fdb1a59a44"
 "checksum nom 1.2.4 (registry+https://github.com/rust-lang/crates.io-index)" = "a5b8c256fd9471521bcb84c3cdba98921497f1a331cbc15b8030fc63b82050ce"
-"checksum nom 2.1.0 (git+https://github.com/Geal/nom)" = "<none>"
+"checksum nom 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "4fefff3588e844f63a54ec7b91872b8526ec06ffb760559744d032ccea4df002"
 "checksum num 0.1.37 (registry+https://github.com/rust-lang/crates.io-index)" = "98b15ba84e910ea7a1973bccd3df7b31ae282bf9d8bd2897779950c9b8303d40"
 "checksum num-bigint 0.1.36 (registry+https://github.com/rust-lang/crates.io-index)" = "5e2955fede25639c4f4f797e864b7585f20d98069c45e0c86b1d22a808eb9f77"
 "checksum num-complex 0.1.36 (registry+https://github.com/rust-lang/crates.io-index)" = "3534898d8a1f6b16c12f9fc2f4eaabc7ecdcc55f267213caa8988fdc7d60ff94"
