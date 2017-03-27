@@ -1,7 +1,7 @@
 use std::f32::consts::PI;
 use std::{cmp, fs};
 use std::collections::HashMap;
-use std::io::BufWriter;
+use std::io::{BufWriter, BufReader};
 use std::fs::File;
 use std::path::Path;
 
@@ -67,15 +67,24 @@ fn run_with_distribution(window: &mut Window) {
 
     let mut rng = rand::thread_rng();
 
-    let mut distribution = Distribution::new();
-    distribution.set_default_weights("productions", 0, &[0.0, 1.0]);
-    distribution.set_default_weights("string", 0, &[1.0, 2.0, 2.0, 2.0, 1.0, 1.0]);
-    distribution.set_default_weights("string", 1, &[1.0, 0.0]);
+    let mut genotype = {
+        let mut distribution = Distribution::new();
+        distribution.set_default_weights("productions", 0, &[0.0, 1.0]);
+        distribution.set_default_weights("string", 0, &[1.0, 2.0, 2.0, 2.0, 1.0, 1.0]);
+        distribution.set_default_weights("string", 1, &[1.0, 0.0]);
 
-    distribution.set_weights(0, "string", 0, &[1.0, 1.0, 2.0, 2.0, 2.0, 2.0]);
-    distribution.set_weights(0, "string", 1, &[1.0, 1.0]);
+        distribution.set_weights(0, "string", 0, &[1.0, 1.0, 2.0, 2.0, 2.0, 2.0]);
+        distribution.set_weights(0, "string", 1, &[1.0, 1.0]);
 
-    distribution.set_weights(1, "string", 1, &[10.0, 1.0]);
+        distribution.set_weights(1, "string", 1, &[10.0, 1.0]);
+
+        let genes = generate_genome(&mut rng, 100);
+
+        println!("Genes: {:?}", genes);
+        println!("");
+
+        WeightedGenotype::new(genes, distribution)
+    };
 
     let settings = lsys::Settings {
         width: 0.05,
@@ -84,20 +93,16 @@ fn run_with_distribution(window: &mut Window) {
         ..lsys::Settings::new()
     };
 
-    let genes = generate_genome(&mut rng, 100);
-
-    println!("Genes: {:?}", genes);
-    println!("");
-
-    let mut genotype = WeightedGenotype::new(genes, distribution);
-    let system = generate_system(&grammar, &mut genotype);
+    let mut system = generate_system(&grammar, &mut genotype);
 
     println!("LSystem:");
     println!("{}", system);
 
-    let instructions = system.instructions(settings.iterations, &settings.command_map);
+    let mut model = {
+        let instructions = system.instructions(settings.iterations, &settings.command_map);
+        lsys3d::build_model(&instructions, &settings)
+    };
 
-    let mut model = lsys3d::build_model(&instructions, &settings);
     window.scene_mut().add_child(model.clone());
 
     let mut camera = {
@@ -106,17 +111,18 @@ fn run_with_distribution(window: &mut Window) {
         ArcBall::new(eye, at)
     };
 
+    let model_dir = Path::new("model");
+    fs::create_dir_all(model_dir).unwrap();
+    let mut model_index = 0;
+
     while window.render_with_camera(&mut camera) {
         model.append_rotation(&UnitQuaternion::from_euler_angles(0.0f32, 0.004, 0.0));
 
         for event in window.events().iter() {
             match event.value {
                 WindowEvent::Key(Key::S, _, Action::Release, _) => {
-                    let directory = Path::new("model");
-                    fs::create_dir_all(directory).unwrap();
-
                     let filename = format!("{}.yaml", time::now().rfc3339());
-                    let path = directory.join(filename);
+                    let path = model_dir.join(filename);
 
                     let file = File::create(&path).unwrap();
                     serde_yaml::to_writer(&mut BufWriter::new(file), &system).unwrap();
@@ -130,7 +136,7 @@ fn run_with_distribution(window: &mut Window) {
                     println!("");
 
                     genotype.genotype.genes = genes;
-                    let system = generate_system(&grammar, &mut genotype);
+                    system = generate_system(&grammar, &mut genotype);
 
                     println!("LSystem:");
                     println!("{}", system);
@@ -139,6 +145,35 @@ fn run_with_distribution(window: &mut Window) {
                     window.remove(&mut model);
                     model = lsys3d::build_model(&instructions, &settings);
                     window.scene_mut().add_child(model.clone());
+
+                    model_index = 0;
+                },
+                WindowEvent::Key(Key::L, _, Action::Release, _) => {
+                    let mut models = fs::read_dir(model_dir).unwrap().map(|e| e.unwrap().path()).collect::<Vec<_>>();
+                    models.sort();
+                    let models = models;
+
+                    if model_index >= models.len() {
+                        model_index = 0;
+                    }
+
+                    if !models.is_empty() {
+                        let path = &models[model_index];
+                        let file = File::open(&path).unwrap();
+                        system = serde_yaml::from_reader(&mut BufReader::new(file)).unwrap();
+
+                        println!("Loaded {}", path.to_str().unwrap());
+
+                        println!("LSystem:");
+                        println!("{}", system);
+
+                        let instructions = system.instructions(settings.iterations, &settings.command_map);
+                        window.remove(&mut model);
+                        model = lsys3d::build_model(&instructions, &settings);
+                        window.scene_mut().add_child(model.clone());
+                    }
+
+                    model_index += 1;
                 },
                 _ => {}
             }
