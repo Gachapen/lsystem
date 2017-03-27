@@ -1,7 +1,7 @@
 use std::{mem, ptr, fmt, slice};
 use std::ops::{Index, IndexMut};
 
-use serde::{Serialize, Serializer};
+use serde::{Serialize, Serializer, Deserialize, Deserializer, de};
 use serde::ser::{SerializeMap};
 
 use common::Instruction;
@@ -92,6 +92,40 @@ impl Serialize for RuleMap {
     }
 }
 
+impl Deserialize for RuleMap {
+    fn deserialize<D: Deserializer>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_map(RuleMapVisitor{})
+    }
+}
+
+struct RuleMapVisitor {}
+
+impl de::Visitor for RuleMapVisitor {
+    type Value = RuleMap;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("an ol::RuleMap")
+    }
+
+    fn visit_map<M>(self, mut visitor: M) -> Result<Self::Value, M::Error>
+        where M: de::MapVisitor
+    {
+        let mut values = RuleMap::new();
+
+        while let Some((key, value)) = visitor.visit::<char, String>()? {
+            values[key] = value;
+        }
+
+        Ok(values)
+    }
+
+    fn visit_unit<E>(self) -> Result<Self::Value, E>
+        where E: de::Error
+    {
+        Ok(RuleMap::new())
+    }
+}
+
 fn expand_lsystem(axiom: &str, rules: &RuleMap, iterations: u32) -> String {
     let mut lword = String::from(axiom);
 
@@ -119,7 +153,7 @@ fn remove_redundancy(from: &str) -> String {
     trimmed
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct LSystem {
     pub productions: RuleMap,
     pub axiom: String,
