@@ -62,8 +62,50 @@ fn generate_system<G>(grammar: &abnf::Ruleset, genotype: &mut G) -> ol::LSystem
 }
 
 #[allow(dead_code)]
+fn is_nothing(lsystem: &ol::LSystem) -> bool {
+    // 'F' is rewritten as something not containing 'F'.
+    // Technically it can still be something if the iteration stops right after something has been
+    // expanded to 'F'. But it would still only be one to many single-length lines, and only at
+    // that number of iterations.
+    if !lsystem.productions['F'].as_bytes().iter().any(|s| *s == 'F' as u32 as u8) {
+        return true;
+    }
+
+    let mut visited = Vec::new();
+    let mut visit_stack = Vec::new();
+
+    // If some symbol in the axiom is 'F', then it draws something.
+    for symbol in lsystem.axiom.as_bytes() {
+        if *symbol as char == 'F' {
+            return false;
+        } else if !visited.iter().any(|s| *s == *symbol) {
+            visited.push(*symbol);
+            visit_stack.push(*symbol);
+        }
+    }
+
+    // If some symbol in the used productions is 'F', then it draws something.
+    while !visit_stack.is_empty() {
+        let predicate = visit_stack.pop().unwrap();
+        let string = &lsystem.productions[predicate];
+
+        for symbol in string.as_bytes() {
+            if *symbol == 'F' as u32 as u8 {
+                return false;
+            } else if !visited.iter().any(|s| *s == *symbol) {
+                visited.push(*symbol);
+                visit_stack.push(*symbol);
+            }
+        }
+    }
+
+    true
+}
+
+#[allow(dead_code)]
 fn run_with_distribution(window: &mut Window) {
     let grammar = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
+    let genome_length = 100;
 
     let mut rng = rand::thread_rng();
 
@@ -78,12 +120,7 @@ fn run_with_distribution(window: &mut Window) {
 
         distribution.set_weights(1, "string", 1, &[10.0, 1.0]);
 
-        let genes = generate_genome(&mut rng, 100);
-
-        println!("Genes: {:?}", genes);
-        println!("");
-
-        WeightedGenotype::new(genes, distribution)
+        WeightedGenotype::new(vec![], distribution)
     };
 
     let settings = lsys::Settings {
@@ -93,7 +130,14 @@ fn run_with_distribution(window: &mut Window) {
         ..lsys::Settings::new()
     };
 
-    let mut system = generate_system(&grammar, &mut genotype);
+    let mut system = ol::LSystem::new();
+    while is_nothing(&system) {
+        genotype.genotype.genes = generate_genome(&mut rng, genome_length);
+        system = generate_system(&grammar, &mut genotype);
+    }
+
+    println!("Genes: {:?}", genotype.genotype.genes);
+    println!("");
 
     println!("LSystem:");
     println!("{}", system);
@@ -135,8 +179,11 @@ fn run_with_distribution(window: &mut Window) {
                     println!("Genes: {:?}", genes);
                     println!("");
 
-                    genotype.genotype.genes = genes;
-                    system = generate_system(&grammar, &mut genotype);
+                    system = ol::LSystem::new();
+                    while is_nothing(&system) {
+                        genotype.genotype.genes = generate_genome(&mut rng, genome_length);
+                        system = generate_system(&grammar, &mut genotype);
+                    }
 
                     println!("LSystem:");
                     println!("{}", system);
