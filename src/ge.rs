@@ -120,7 +120,7 @@ fn run_with_distribution(window: &mut Window) {
 
     let mut genotype = {
         let mut distribution = Distribution::new();
-        distribution.set_default_weights("productions", 0, &[0.0, 1.0]);
+        distribution.set_default_weights("productions", 0, &[1.0, 1.0]);
         distribution.set_default_weights("string", 0, &[1.0, 2.0, 2.0, 2.0, 1.0, 1.0]);
         distribution.set_default_weights("string", 1, &[1.0, 0.0]);
 
