@@ -1,5 +1,5 @@
 use std::f32::consts::PI;
-use std::{cmp, fs};
+use std::{cmp, fs, fmt};
 use std::collections::HashMap;
 use std::io::{BufWriter, BufReader};
 use std::fs::File;
@@ -128,6 +128,9 @@ fn run_with_distribution(window: &mut Window) {
         distribution.set_weights(0, "string", 1, &[1.0, 1.0]);
 
         distribution.set_weights(1, "string", 1, &[10.0, 1.0]);
+
+        println!("Distribution:");
+        println!("{}", distribution);
 
         WeightedGenotype::new(vec![], distribution)
     };
@@ -496,6 +499,49 @@ impl Distribution {
         }
 
         choices[choice] = weights.to_vec();
+    }
+}
+
+impl fmt::Display for Distribution {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for (depth, rules) in self.depths.iter().enumerate() {
+            writeln!(f, "{}:", depth)?;
+
+            for (rule, choices) in rules {
+                let indent = "  ";
+                writeln!(f, "{}{}:", indent, rule)?;
+
+                for (choice, weights) in choices.iter().enumerate() {
+                    let indent = indent.to_string() + "  ";
+                    write!(f, "{}{}: ", indent, choice)?;
+
+                    for weight in weights {
+                        write!(f, "{}, ", weight)?;
+                    }
+
+                    writeln!(f)?;
+                }
+            }
+        }
+
+        writeln!(f, "Default:")?;
+        for (rule, choices) in &self.defaults {
+            let indent = "  ";
+            writeln!(f, "{}{}:", indent, rule)?;
+
+            for (choice, weights) in choices.iter().enumerate() {
+                let indent = indent.to_string() + "  ";
+                write!(f, "{}{}: ", indent, choice)?;
+
+                for weight in weights {
+                    write!(f, "{}, ", weight)?;
+                }
+
+                writeln!(f)?;
+            }
+        }
+
+        Ok(())
     }
 }
 
