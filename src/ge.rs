@@ -103,6 +103,15 @@ fn is_nothing(lsystem: &ol::LSystem) -> bool {
 }
 
 #[allow(dead_code)]
+fn fitness(lsystem: &ol::LSystem) -> f32 {
+    if is_nothing(lsystem) {
+        0.0
+    } else {
+        1.0
+    }
+}
+
+#[allow(dead_code)]
 fn run_with_distribution(window: &mut Window) {
     let grammar = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
     let genome_length = 100;
