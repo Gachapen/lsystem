@@ -16,7 +16,7 @@ use kiss3d::camera::Camera;
 use lsys::Command;
 use lsys::param;
 
-pub fn build_model(instructions: &Vec<lsys::Instruction>, settings: &lsys::Settings) -> SceneNode {
+pub fn build_model(instructions: &[lsys::Instruction], settings: &lsys::Settings) -> SceneNode {
     let mut model = SceneNode::new_empty();
 
     let segment_length = settings.step;
