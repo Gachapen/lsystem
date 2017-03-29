@@ -1,27 +1,23 @@
-use std::f32::consts::PI;
+use std::f32::consts::{PI, FRAC_PI_2, E};
 use std::{cmp, fs, fmt};
 use std::collections::HashMap;
 use std::io::{BufWriter, BufReader};
 use std::fs::File;
 use std::path::Path;
 
-use rand;
+use rand::{self, Rng};
 use rand::distributions::{IndependentSample, Range};
-use rand::Rng;
+use na::{UnitQuaternion, Point3, Vector3, Rotation3};
 use kiss3d::window::Window;
 use kiss3d::camera::{Camera, ArcBall};
-use na::{UnitQuaternion, Point3};
-use num;
-use num::{Unsigned, NumCast};
+use num::{self, Unsigned, NumCast};
+use glfw::{Key, WindowEvent, Action};
 use serde_yaml;
 use time;
-use glfw::{Key, WindowEvent, Action};
 
 use abnf;
 use abnf::expand::{SelectionStrategy, expand_grammar};
-use lsys;
-use lsys::ol;
-use lsys::Rewriter;
+use lsys::{self, ol, Rewriter, Command};
 use lsys3d;
 use lsystems;
 
@@ -102,13 +98,182 @@ fn is_nothing(lsystem: &ol::LSystem) -> bool {
     true
 }
 
-#[allow(dead_code)]
-fn fitness(lsystem: &ol::LSystem) -> f32 {
-    if is_nothing(lsystem) {
-        0.0
-    } else {
-        1.0
+pub struct Skeleton {
+    pub points: Vec<Point3<f32>>,
+    pub edges: Vec<Vec<usize>>,
+}
+
+impl Skeleton {
+    pub fn new() -> Skeleton {
+        Skeleton {
+            points: Vec::new(),
+            edges: Vec::new(),
+        }
     }
+}
+
+pub fn build_skeleton(instructions: &[lsys::Instruction], settings: &lsys::Settings) -> Skeleton {
+    let mut skeleton = Skeleton::new();
+
+    let segment_length = settings.step;
+
+    let mut position = Point3::new(0.0, 0.0, 0.0);
+    let mut rotation = UnitQuaternion::from_euler_angles(FRAC_PI_2, 0.0, 0.0);
+    let mut parent: Option<usize> = None;
+
+    let mut states = Vec::<(Point3<f32>, UnitQuaternion<f32>, Option<usize>)>::new();
+
+    for instruction in instructions {
+        let command = instruction.command;
+        match command {
+            Command::Forward => {
+                let segment_length = {
+                    if !instruction.args.is_empty() {
+                       instruction.args[0]
+                    } else {
+                        segment_length
+                    }
+                };
+
+                let direction = rotation * Vector3::new(0.0, 0.0, -1.0);
+                position = position + (direction * segment_length);
+
+                let index = skeleton.points.len();
+                skeleton.points.push(position);
+                skeleton.edges.push(Vec::new());
+
+                if let Some(parent) = parent {
+                    skeleton.edges[parent].push(index);
+                }
+
+                parent = Some(index);
+            },
+            Command::YawRight => {
+                let angle = {
+                    if !instruction.args.is_empty() {
+                       instruction.args[0]
+                    } else {
+                        settings.angle
+                    }
+                };
+                rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * -angle);
+            },
+            Command::YawLeft => {
+                let angle = {
+                    if !instruction.args.is_empty() {
+                       instruction.args[0]
+                    } else {
+                        settings.angle
+                    }
+                };
+                rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * angle);
+            },
+            Command::UTurn => {
+                let angle = PI;
+                rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * -angle);
+            },
+            Command::PitchUp => {
+                let angle = {
+                    if !instruction.args.is_empty() {
+                       instruction.args[0]
+                    } else {
+                        settings.angle
+                    }
+                };
+                rotation = rotation * Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * angle);
+            },
+            Command::PitchDown => {
+                let angle = {
+                    if !instruction.args.is_empty() {
+                       instruction.args[0]
+                    } else {
+                        settings.angle
+                    }
+                };
+                rotation = rotation * Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * -angle);
+            }
+            Command::RollRight => {
+                let angle = {
+                    if !instruction.args.is_empty() {
+                       instruction.args[0]
+                    } else {
+                        settings.angle
+                    }
+                };
+                rotation = rotation * Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * -angle);
+            },
+            Command::RollLeft => {
+                let angle = {
+                    if !instruction.args.is_empty() {
+                       instruction.args[0]
+                    } else {
+                        settings.angle
+                    }
+                };
+                rotation = rotation * Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * angle);
+            },
+            Command::Shrink => {
+            },
+            Command::Grow => {
+            },
+            Command::Width => {
+            },
+            Command::Push => {
+                states.push((position, rotation, parent));
+            },
+            Command::Pop => {
+                if let Some((stored_position, stored_rotation, stored_parent)) = states.pop() {
+                    position = stored_position;
+                    rotation = stored_rotation;
+                    parent = stored_parent;
+                } else {
+                    panic!("Tried to pop empty state stack");
+                }
+            },
+            Command::BeginSurface => {
+            },
+            Command::EndSurface => {
+            },
+            Command::NextColor => {
+            },
+            Command::Noop => {},
+        };
+    }
+
+    skeleton
+}
+
+fn gaussian(x: f32, mean: f32, sd: f32) -> f32 {
+    E.powf(-(x - mean).abs().sqrt() / (2.0 * sd.sqrt())) / ((2.0 * PI).sqrt() * sd)
+}
+
+#[allow(dead_code)]
+fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings, instructions: &[lsys::Instruction]) -> f32 {
+    fn vec2_length(x: f32, y: f32) -> f32 {
+        (x.powi(2) + y.powi(2)).sqrt()
+    }
+
+    if is_nothing(lsystem) {
+        return 0.0
+    }
+
+    let skeleton = build_skeleton(instructions, settings);
+
+    let reach = skeleton.points.iter().max_by(|a, b| a.y.partial_cmp(&b.y).unwrap()).unwrap().y;
+    let floor_distances = skeleton.points.iter().map(|p| vec2_length(p.x, p.z));
+    let spread = floor_distances.max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
+
+    println!("Reach: {}", reach);
+    println!("Spread: {}", spread);
+
+    let proportion = (reach - spread).abs();
+    println!("Proportion: {}", proportion);
+    //gaussian((reach - spread).abs(), 5.0, 2.0)
+    (proportion.min(10.0) / 10.0 * PI).sin()
+
+    // height - width ratio (cubic plants punished).
+    // balance: similar maximum stretch in oppisite directions rewarded (center close to origin).
+    // density: very dense structures punished.
 }
 
 #[allow(dead_code)]
@@ -201,6 +366,9 @@ fn run_with_distribution(window: &mut Window) {
                     println!("{}", system);
 
                     let instructions = system.instructions(settings.iterations, &settings.command_map);
+                    let score = fitness(&system, &settings, &instructions);
+                    println!("Score: {}", score);
+
                     window.remove(&mut model);
                     model = lsys3d::build_model(&instructions, &settings);
                     window.scene_mut().add_child(model.clone());
