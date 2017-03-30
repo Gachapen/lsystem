@@ -243,8 +243,17 @@ pub fn build_skeleton(instructions: &[lsys::Instruction], settings: &lsys::Setti
     skeleton
 }
 
+#[allow(dead_code)]
 fn gaussian(x: f32, mean: f32, sd: f32) -> f32 {
     E.powf(-(x - mean).abs().sqrt() / (2.0 * sd.sqrt())) / ((2.0 * PI).sqrt() * sd)
+}
+
+fn min_max<T: PartialOrd>(a: T, b: T) -> (T, T) {
+    if a < b {
+        (a, b)
+    } else {
+        (b, a)
+    }
 }
 
 #[allow(dead_code)]
@@ -266,10 +275,15 @@ fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings, instructions: &[lsy
     println!("Reach: {}", reach);
     println!("Spread: {}", spread);
 
-    let proportion = (reach - spread).abs();
+    const TARGET_PROPORTION: f32 = 3.0;
+    const PROPORTION_AREA: f32 = TARGET_PROPORTION * 2.0 - 2.0;
+    let proportion = {
+        let (min, max) = min_max(reach, spread);
+        max / min
+    };
     println!("Proportion: {}", proportion);
-    //gaussian((reach - spread).abs(), 5.0, 2.0)
-    (proportion.min(10.0) / 10.0 * PI).sin()
+    //gaussian((reach - spread).abs(), TARGET_PROPORTION, 2.0)
+    ((proportion - 1.0).min(PROPORTION_AREA) / PROPORTION_AREA * PI).sin()
 
     // height - width ratio (cubic plants punished).
     // balance: similar maximum stretch in oppisite directions rewarded (center close to origin).
