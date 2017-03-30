@@ -1,5 +1,6 @@
 extern crate kiss3d;
 extern crate nalgebra as na;
+extern crate ncollide_utils as ncu;
 extern crate rand;
 extern crate num;
 extern crate serde_yaml;

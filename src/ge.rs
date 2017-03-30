@@ -7,13 +7,15 @@ use std::path::Path;
 
 use rand::{self, Rng};
 use rand::distributions::{IndependentSample, Range};
-use na::{UnitQuaternion, Point3, Vector3, Rotation3};
+use na::{self, Unit, UnitQuaternion, Point2, Point3, Vector2, Vector3, Translation3, Rotation3};
 use kiss3d::window::Window;
 use kiss3d::camera::{Camera, ArcBall};
+use kiss3d::scene::SceneNode;
 use num::{self, Unsigned, NumCast};
 use glfw::{Key, WindowEvent, Action};
 use serde_yaml;
 use time;
+use ncu;
 
 use abnf;
 use abnf::expand::{SelectionStrategy, expand_grammar};
@@ -59,14 +61,6 @@ fn generate_system<G>(grammar: &abnf::Ruleset, genotype: &mut G) -> ol::LSystem
 
 #[allow(dead_code)]
 fn is_nothing(lsystem: &ol::LSystem) -> bool {
-    // 'F' is rewritten as something not containing 'F'.
-    // Technically it can still be something if the iteration stops right after something has been
-    // expanded to 'F'. But it would still only be one to many single-length lines, and only at
-    // that number of iterations.
-    if !lsystem.productions['F'].as_bytes().iter().any(|s| *s == 'F' as u32 as u8) {
-        return true;
-    }
-
     let mut visited = Vec::new();
     let mut visit_stack = Vec::new();
 
@@ -113,15 +107,16 @@ impl Skeleton {
 }
 
 pub fn build_skeleton(instructions: &[lsys::Instruction], settings: &lsys::Settings) -> Skeleton {
-    let mut skeleton = Skeleton::new();
-
     let segment_length = settings.step;
+
+    let mut skeleton = Skeleton::new();
+    skeleton.points.push(Point3::new(0.0, 0.0, 0.0));
 
     let mut position = Point3::new(0.0, 0.0, 0.0);
     let mut rotation = UnitQuaternion::from_euler_angles(FRAC_PI_2, 0.0, 0.0);
-    let mut parent: Option<usize> = None;
+    let mut parent = 0usize;
 
-    let mut states = Vec::<(Point3<f32>, UnitQuaternion<f32>, Option<usize>)>::new();
+    let mut states = Vec::<(Point3<f32>, UnitQuaternion<f32>, usize)>::new();
 
     for instruction in instructions {
         let command = instruction.command;
@@ -142,11 +137,8 @@ pub fn build_skeleton(instructions: &[lsys::Instruction], settings: &lsys::Setti
                 skeleton.points.push(position);
                 skeleton.edges.push(Vec::new());
 
-                if let Some(parent) = parent {
-                    skeleton.edges[parent].push(index);
-                }
-
-                parent = Some(index);
+                skeleton.edges[parent].push(index);
+                parent = index;
             },
             Command::YawRight => {
                 let angle = {
@@ -256,24 +248,48 @@ fn min_max<T: PartialOrd>(a: T, b: T) -> (T, T) {
     }
 }
 
+struct Properties {
+    reach: f32,
+    drop: f32,
+    spread: f32,
+    center: Point3<f32>,
+    center_spread: f32,
+}
+
+fn vec2_length(x: f32, y: f32) -> f32 {
+    (x.powi(2) + y.powi(2)).sqrt()
+}
+
 #[allow(dead_code)]
-fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings, instructions: &[lsys::Instruction]) -> f32 {
-    fn vec2_length(x: f32, y: f32) -> f32 {
-        (x.powi(2) + y.powi(2)).sqrt()
+fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings, instructions: &[lsys::Instruction]) -> (f32, Option<Properties>) {
+    fn project_onto(a: &Vector2<f32>, b: &Unit<Vector2<f32>>) -> f32 {
+        na::dot(a, &**b)
     }
 
     if is_nothing(lsystem) {
-        return 0.0
+        return (0.0, None)
     }
 
     let skeleton = build_skeleton(instructions, settings);
 
+    if skeleton.points.len() <= 1 {
+        return (0.0, None)
+    }
+
     let reach = skeleton.points.iter().max_by(|a, b| a.y.partial_cmp(&b.y).unwrap()).unwrap().y;
-    let floor_distances = skeleton.points.iter().map(|p| vec2_length(p.x, p.z));
+    let drop = skeleton.points.iter().min_by(|a, b| a.y.partial_cmp(&b.y).unwrap()).unwrap().y;
+    let floor_points: Vec<_> = skeleton.points.iter().map(|p| Point2::new(p.x, p.z)).collect();
+    let floor_distances = floor_points.iter().map(|p| vec2_length(p.x, p.y));
     let spread = floor_distances.max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
+    let center = ncu::center(&skeleton.points);
+    let floor_center = Point2::new(center.x, center.z);
 
     println!("Reach: {}", reach);
+    println!("Drop: {}", drop);
     println!("Spread: {}", spread);
+
+    let center_distance = vec2_length(floor_center.x, floor_center.y);
+    println!("Center: {} {}", floor_center, center_distance);
 
     const TARGET_PROPORTION: f32 = 3.0;
     const PROPORTION_AREA: f32 = TARGET_PROPORTION * 2.0 - 2.0;
@@ -281,13 +297,88 @@ fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings, instructions: &[lsy
         let (min, max) = min_max(reach, spread);
         max / min
     };
-    println!("Proportion: {}", proportion);
     //gaussian((reach - spread).abs(), TARGET_PROPORTION, 2.0)
-    ((proportion - 1.0).min(PROPORTION_AREA) / PROPORTION_AREA * PI).sin()
+    let proportion_fitness = ((proportion - 1.0).min(PROPORTION_AREA) / PROPORTION_AREA * PI).sin();
+
+    let center_direction = Unit::new_normalize(Vector2::new(center.x, center.z));
+    let center_spread = floor_points.iter().map(|p| {
+        Vector2::new(p.x, p.y)
+    }).map(|p| {
+        project_onto(&p, &center_direction)
+    }).max_by(|a, b| {
+        a.partial_cmp(b).unwrap()
+    }).unwrap();
+
+    println!("Center Spread: {}", center_spread);
+
+    let balance_fitness = (0.5 - (center_distance / center_spread)) * 2.0;
+
+    let drop_fitness = drop;
+
+    println!("Proportion: {}", proportion_fitness);
+    println!("Balance: {}", balance_fitness);
+
+    let fit = (proportion_fitness + balance_fitness + drop_fitness) / 2.0;
+    let prop = Properties {
+        reach: reach,
+        drop: drop,
+        spread: spread,
+        center: center,
+        center_spread: center_spread,
+    };
+
+    (fit, Some(prop))
 
     // height - width ratio (cubic plants punished).
     // balance: similar maximum stretch in oppisite directions rewarded (center close to origin).
     // density: very dense structures punished.
+}
+
+fn add_properties_rendering(node: &mut SceneNode, properties: &Properties) {
+    const LINE_LEN: f32 = 1.0;
+    const LINE_WIDTH: f32 = 0.02;
+
+    let mut center = SceneNode::new_empty();
+    center.add_cube(LINE_WIDTH, LINE_LEN, LINE_WIDTH);
+    center.add_cube(LINE_LEN, LINE_WIDTH, LINE_WIDTH);
+    center.add_cube(LINE_WIDTH, LINE_WIDTH, LINE_LEN);
+    center.set_local_translation(Translation3::new(properties.center.x, properties.center.y, properties.center.z));
+    node.add_child(center);
+
+    let mut reach = SceneNode::new_empty();
+    reach.add_cube(LINE_WIDTH, properties.reach, LINE_WIDTH);
+    reach.set_local_translation(Translation3::new(0.0, properties.reach / 2.0, 0.0));
+    node.add_child(reach);
+
+    let mut drop = SceneNode::new_empty();
+    drop.add_cube(LINE_WIDTH, properties.drop.abs(), LINE_WIDTH);
+    drop.set_local_translation(Translation3::new(0.0, properties.drop / 2.0, 0.0));
+    node.add_child(drop);
+
+    let mut spread = SceneNode::new_empty();
+    spread.add_cube(properties.spread * 2.0, LINE_WIDTH, LINE_WIDTH).set_color(0.8, 0.1, 0.1);
+    spread.add_cube(LINE_WIDTH, LINE_WIDTH, properties.spread * 2.0);
+    node.add_child(spread);
+
+    let mut balance = SceneNode::new_empty();
+    let center_vector = Vector2::new(properties.center.x, -properties.center.z);
+    let center_distance = vec2_length(center_vector.x, center_vector.y);
+    let center_direction = na::normalize(&center_vector);
+    let center_angle = center_direction.y.atan2(center_direction.x);
+    balance.append_rotation(&UnitQuaternion::from_euler_angles(0.0, center_angle, 0.0));
+
+    let mut center_dist = balance.add_cube(center_distance, LINE_WIDTH * 1.2, LINE_WIDTH * 1.2);
+    center_dist.set_color(0.1, 0.1, 0.8);
+    center_dist.set_local_translation(Translation3::new(center_distance / 2.0, 0.0, 0.0));
+
+    let mut center_imbalance = balance.add_cube(properties.center_spread / 2.0, LINE_WIDTH * 1.1, LINE_WIDTH * 1.1);
+    center_imbalance.set_color(0.1, 0.8, 0.1);
+    center_imbalance.set_local_translation(Translation3::new(properties.center_spread / 4.0, 0.0, 0.0));
+
+    let mut center_spread = balance.add_cube(properties.center_spread, LINE_WIDTH, LINE_WIDTH);
+    center_spread.set_local_translation(Translation3::new(properties.center_spread / 2.0, 0.0, 0.0));
+
+    node.add_child(balance);
 }
 
 #[allow(dead_code)]
@@ -351,7 +442,7 @@ fn run_with_distribution(window: &mut Window) {
     let mut model_index = 0;
 
     while window.render_with_camera(&mut camera) {
-        model.append_rotation(&UnitQuaternion::from_euler_angles(0.0f32, 0.004, 0.0));
+        //model.append_rotation(&UnitQuaternion::from_euler_angles(0.0f32, 0.004, 0.0));
 
         for event in window.events().iter() {
             match event.value {
@@ -373,12 +464,16 @@ fn run_with_distribution(window: &mut Window) {
                     system = ol::LSystem::new();
                     let mut instructions = vec![];
                     let mut score = 0.0;
-                    while score < 0.9 {
+                    let mut properties = None;
+                    while score <= 0.9 {
                         genotype.genotype.genes = generate_genome(&mut rng, genome_length);
                         system = generate_system(&grammar, &mut genotype);
                         instructions = system.instructions(settings.iterations, &settings.command_map);
 
-                        score = fitness(&system, &settings, &instructions);
+                        let (s, p) = fitness(&system, &settings, &instructions);
+                        score = s;
+                        properties = p;
+
                         println!("Score: {}", score);
                     }
 
@@ -387,6 +482,7 @@ fn run_with_distribution(window: &mut Window) {
 
                     window.remove(&mut model);
                     model = lsys3d::build_model(&instructions, &settings);
+                    add_properties_rendering(&mut model, &properties.unwrap());
                     window.scene_mut().add_child(model.clone());
 
                     model_index = 0;
@@ -411,8 +507,12 @@ fn run_with_distribution(window: &mut Window) {
                         println!("{}", system);
 
                         let instructions = system.instructions(settings.iterations, &settings.command_map);
+                        let (score, properties) = fitness(&system, &settings, &instructions);
+                        println!("Score: {}", score);
+
                         window.remove(&mut model);
                         model = lsys3d::build_model(&instructions, &settings);
+                        add_properties_rendering(&mut model, &properties.unwrap());
                         window.scene_mut().add_child(model.clone());
                     }
 
