@@ -371,17 +371,19 @@ fn run_with_distribution(window: &mut Window) {
                     println!("");
 
                     system = ol::LSystem::new();
-                    while is_nothing(&system) {
+                    let mut instructions = vec![];
+                    let mut score = 0.0;
+                    while score < 0.9 {
                         genotype.genotype.genes = generate_genome(&mut rng, genome_length);
                         system = generate_system(&grammar, &mut genotype);
+                        instructions = system.instructions(settings.iterations, &settings.command_map);
+
+                        score = fitness(&system, &settings, &instructions);
+                        println!("Score: {}", score);
                     }
 
                     println!("LSystem:");
                     println!("{}", system);
-
-                    let instructions = system.instructions(settings.iterations, &settings.command_map);
-                    let score = fitness(&system, &settings, &instructions);
-                    println!("Score: {}", score);
 
                     window.remove(&mut model);
                     model = lsys3d::build_model(&instructions, &settings);
