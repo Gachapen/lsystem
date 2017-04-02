@@ -284,12 +284,12 @@ fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings, instructions: &[lsy
     let center = ncu::center(&skeleton.points);
     let floor_center = Point2::new(center.x, center.z);
 
-    println!("Reach: {}", reach);
-    println!("Drop: {}", drop);
-    println!("Spread: {}", spread);
+    //println!("Reach: {}", reach);
+    //println!("Drop: {}", drop);
+    //println!("Spread: {}", spread);
 
     let center_distance = vec2_length(floor_center.x, floor_center.y);
-    println!("Center: {} {}", floor_center, center_distance);
+    //println!("Center: {} {}", floor_center, center_distance);
 
     const TARGET_PROPORTION: f32 = 3.0;
     const PROPORTION_AREA: f32 = TARGET_PROPORTION * 2.0 - 2.0;
@@ -309,14 +309,14 @@ fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings, instructions: &[lsy
         a.partial_cmp(b).unwrap()
     }).unwrap();
 
-    println!("Center Spread: {}", center_spread);
+    //println!("Center Spread: {}", center_spread);
 
     let balance_fitness = (0.5 - (center_distance / center_spread)) * 2.0;
 
     let drop_fitness = drop;
 
-    println!("Proportion: {}", proportion_fitness);
-    println!("Balance: {}", balance_fitness);
+    //println!("Proportion: {}", proportion_fitness);
+    //println!("Balance: {}", balance_fitness);
 
     let fit = (proportion_fitness + balance_fitness + drop_fitness) / 2.0;
     let prop = Properties {
@@ -383,8 +383,9 @@ fn add_properties_rendering(node: &mut SceneNode, properties: &Properties) {
 
 #[allow(dead_code)]
 fn run_with_distribution(window: &mut Window) {
+    const GENOME_LENGTH: usize = 100;
+
     let grammar = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
-    let genome_length = 100;
 
     let mut rng = rand::thread_rng();
 
@@ -414,20 +415,11 @@ fn run_with_distribution(window: &mut Window) {
 
     let mut system = ol::LSystem::new();
     while is_nothing(&system) {
-        genotype.genotype.genes = generate_genome(&mut rng, genome_length);
+        genotype.genotype.genes = generate_genome(&mut rng, GENOME_LENGTH);
         system = generate_system(&grammar, &mut genotype);
     }
 
-    println!("Genes: {:?}", genotype.genotype.genes);
-    println!("");
-
-    println!("LSystem:");
-    println!("{}", system);
-
-    let mut model = {
-        let instructions = system.instructions(settings.iterations, &settings.command_map);
-        lsys3d::build_model(&instructions, &settings)
-    };
+    let mut model = SceneNode::new_empty();
 
     window.scene_mut().add_child(model.clone());
 
@@ -456,34 +448,55 @@ fn run_with_distribution(window: &mut Window) {
                     println!("Saved to {}", path.to_str().unwrap());
                 },
                 WindowEvent::Key(Key::Space, _, Action::Release, _) => {
-                    let genes = generate_genome(&mut rng, 100);
+                    const NUM_SAMPLES: usize = 100;
 
-                    println!("Genes: {:?}", genes);
-                    println!("");
+                    println!("Generating {} samples...", NUM_SAMPLES);
 
-                    system = ol::LSystem::new();
-                    let mut instructions = vec![];
-                    let mut score = 0.0;
-                    let mut properties = None;
-                    while score <= 0.9 {
-                        genotype.genotype.genes = generate_genome(&mut rng, genome_length);
-                        system = generate_system(&grammar, &mut genotype);
-                        instructions = system.instructions(settings.iterations, &settings.command_map);
-
-                        let (s, p) = fitness(&system, &settings, &instructions);
-                        score = s;
-                        properties = p;
-
-                        println!("Score: {}", score);
+                    struct Sample {
+                        system: ol::LSystem,
+                        instructions: Vec<lsys::Instruction>,
+                        score: f32,
+                        properties: Properties,
                     }
 
-                    println!("LSystem:");
-                    println!("{}", system);
+                    let mut samples = Vec::with_capacity(NUM_SAMPLES);
+
+                    for _ in 0..NUM_SAMPLES {
+                        genotype.genotype.genes = generate_genome(&mut rng, GENOME_LENGTH);
+
+                        let system = generate_system(&grammar, &mut genotype);
+                        let instructions = system.instructions(settings.iterations, &settings.command_map);
+
+                        let (score, properties) = fitness(&system, &settings, &instructions);
+                        if let Some(properties) = properties {
+                            let sample = Sample {
+                                system: system,
+                                instructions: instructions,
+                                score: score,
+                                properties: properties,
+                            };
+
+                            samples.push(sample);
+                        }
+                    }
+
+                    samples.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
+
+                    let sample = samples.pop().unwrap();
+
+                    println!("Found sample with score {}.", sample.score);
+                    println!("Building model...");
 
                     window.remove(&mut model);
-                    model = lsys3d::build_model(&instructions, &settings);
-                    add_properties_rendering(&mut model, &properties.unwrap());
+                    model = lsys3d::build_model(&sample.instructions, &settings);
+                    add_properties_rendering(&mut model, &sample.properties);
                     window.scene_mut().add_child(model.clone());
+
+                    println!("");
+                    println!("LSystem:");
+                    println!("{}", sample.system);
+
+                    system = sample.system;
 
                     model_index = 0;
                 },
