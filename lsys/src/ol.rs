@@ -68,9 +68,18 @@ impl IndexMut<char> for RuleMap {
 
 impl fmt::Display for RuleMap {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for (pred, succ) in self.map.iter().enumerate() {
+        let rules = self.map.iter().enumerate().filter_map(|(pred, succ)| {
             if !(succ.len() == 1 && succ.as_bytes()[0] == pred as u8) {
-                write!(f, "{} -> {}\n", pred as u8 as char, succ)?;
+                Some(format!("{} -> {}", pred as u8 as char, succ))
+            } else {
+                None
+            }
+        }).collect::<Vec<_>>();
+
+        for (i, rule) in rules.iter().enumerate() {
+            write!(f, "{}", rule)?;
+            if i != rules.len() - 1 {
+                writeln!(f)?;
             }
         }
 
