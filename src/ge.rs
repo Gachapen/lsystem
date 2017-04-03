@@ -1,12 +1,12 @@
 use std::f32::consts::{PI, FRAC_PI_2, E};
-use std::{cmp, fs, fmt};
+use std::{cmp, fs, fmt, io};
 use std::collections::HashMap;
-use std::io::{BufWriter, BufReader};
+use std::io::{BufWriter, BufReader, Write};
 use std::fs::File;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use rand::{self, Rng};
+use rand::{self, Rng, XorShiftRng, SeedableRng};
 use rand::distributions::{IndependentSample, Range};
 use na::{self, Unit, UnitQuaternion, Point2, Point3, Vector2, Vector3, Translation3, Rotation3};
 use kiss3d::window::Window;
@@ -109,7 +109,7 @@ impl Skeleton {
     }
 }
 
-pub fn build_skeleton(instructions: &[lsys::Instruction], settings: &lsys::Settings) -> Skeleton {
+pub fn build_skeleton(instructions: ol::InstructionsIter, settings: &lsys::Settings, size_limit: usize) -> Option<Skeleton> {
     let segment_length = settings.step;
 
     let mut skeleton = Skeleton::new();
@@ -122,6 +122,10 @@ pub fn build_skeleton(instructions: &[lsys::Instruction], settings: &lsys::Setti
     let mut states = Vec::<(Point3<f32>, UnitQuaternion<f32>, usize)>::new();
 
     for instruction in instructions {
+        if skeleton.points.len() > size_limit {
+            return None;
+        }
+
         let command = instruction.command;
         match command {
             Command::Forward => {
@@ -235,7 +239,7 @@ pub fn build_skeleton(instructions: &[lsys::Instruction], settings: &lsys::Setti
         };
     }
 
-    skeleton
+    Some(skeleton)
 }
 
 #[allow(dead_code)]
@@ -263,74 +267,79 @@ fn vec2_length(x: f32, y: f32) -> f32 {
     (x.powi(2) + y.powi(2)).sqrt()
 }
 
+const SKELETON_LIMIT: usize = 5000000;
+
 #[allow(dead_code)]
-fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings, instructions: &[lsys::Instruction]) -> (f32, Option<Properties>) {
+fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32, Option<Properties>) {
     fn project_onto(a: &Vector2<f32>, b: &Unit<Vector2<f32>>) -> f32 {
         na::dot(a, &**b)
     }
 
     if is_nothing(lsystem) {
+        println!("\tNothing");
         return (0.0, None)
     }
 
-    let skeleton = build_skeleton(instructions, settings);
+    print!("\tBuilding skeleton... ");
+    io::stdout().flush().unwrap();
 
-    if skeleton.points.len() <= 1 {
-        return (0.0, None)
+    let instruction_iter = lsystem.instructions_iter(settings.iterations, &settings.command_map);
+    if let Some(skeleton) = build_skeleton(instruction_iter, settings, SKELETON_LIMIT) {
+        println!("{}", skeleton.points.len());
+
+        if skeleton.points.len() <= 1 {
+            return (0.0, None)
+        }
+
+        print!("\tMeasuring skeleton... ");
+        io::stdout().flush().unwrap();
+
+        let reach = skeleton.points.iter().max_by(|a, b| a.y.partial_cmp(&b.y).unwrap()).unwrap().y;
+        let drop = skeleton.points.iter().min_by(|a, b| a.y.partial_cmp(&b.y).unwrap()).unwrap().y;
+        let floor_points: Vec<_> = skeleton.points.iter().map(|p| Point2::new(p.x, p.z)).collect();
+        let floor_distances = floor_points.iter().map(|p| vec2_length(p.x, p.y));
+        let spread = floor_distances.max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
+        let center = ncu::center(&skeleton.points);
+        let floor_center = Point2::new(center.x, center.z);
+
+        let center_distance = vec2_length(floor_center.x, floor_center.y);
+
+        const TARGET_PROPORTION: f32 = 3.0;
+        const PROPORTION_AREA: f32 = TARGET_PROPORTION * 2.0 - 2.0;
+        let proportion = {
+            let (min, max) = min_max(reach, spread);
+            max / min
+        };
+        let proportion_fitness = ((proportion - 1.0).min(PROPORTION_AREA) / PROPORTION_AREA * PI).sin();
+
+        let center_direction = Unit::new_normalize(Vector2::new(center.x, center.z));
+        let center_spread = floor_points.iter().map(|p| {
+            Vector2::new(p.x, p.y)
+        }).map(|p| {
+            project_onto(&p, &center_direction)
+        }).max_by(|a, b| {
+            a.partial_cmp(b).unwrap()
+        }).unwrap();
+
+        let balance_fitness = (0.5 - (center_distance / center_spread)) * 2.0;
+
+        let drop_fitness = drop;
+
+        let fit = (proportion_fitness + balance_fitness + drop_fitness) / 2.0;
+        let prop = Properties {
+            reach: reach,
+            drop: drop,
+            spread: spread,
+            center: center,
+            center_spread: center_spread,
+        };
+
+        println!("{}", fit);
+        (fit, Some(prop))
+    } else {
+        println!("Skeleton too big.");
+        (0.0, None)
     }
-
-    let reach = skeleton.points.iter().max_by(|a, b| a.y.partial_cmp(&b.y).unwrap()).unwrap().y;
-    let drop = skeleton.points.iter().min_by(|a, b| a.y.partial_cmp(&b.y).unwrap()).unwrap().y;
-    let floor_points: Vec<_> = skeleton.points.iter().map(|p| Point2::new(p.x, p.z)).collect();
-    let floor_distances = floor_points.iter().map(|p| vec2_length(p.x, p.y));
-    let spread = floor_distances.max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
-    let center = ncu::center(&skeleton.points);
-    let floor_center = Point2::new(center.x, center.z);
-
-    //println!("Reach: {}", reach);
-    //println!("Drop: {}", drop);
-    //println!("Spread: {}", spread);
-
-    let center_distance = vec2_length(floor_center.x, floor_center.y);
-    //println!("Center: {} {}", floor_center, center_distance);
-
-    const TARGET_PROPORTION: f32 = 3.0;
-    const PROPORTION_AREA: f32 = TARGET_PROPORTION * 2.0 - 2.0;
-    let proportion = {
-        let (min, max) = min_max(reach, spread);
-        max / min
-    };
-    //gaussian((reach - spread).abs(), TARGET_PROPORTION, 2.0)
-    let proportion_fitness = ((proportion - 1.0).min(PROPORTION_AREA) / PROPORTION_AREA * PI).sin();
-
-    let center_direction = Unit::new_normalize(Vector2::new(center.x, center.z));
-    let center_spread = floor_points.iter().map(|p| {
-        Vector2::new(p.x, p.y)
-    }).map(|p| {
-        project_onto(&p, &center_direction)
-    }).max_by(|a, b| {
-        a.partial_cmp(b).unwrap()
-    }).unwrap();
-
-    //println!("Center Spread: {}", center_spread);
-
-    let balance_fitness = (0.5 - (center_distance / center_spread)) * 2.0;
-
-    let drop_fitness = drop;
-
-    //println!("Proportion: {}", proportion_fitness);
-    //println!("Balance: {}", balance_fitness);
-
-    let fit = (proportion_fitness + balance_fitness + drop_fitness) / 2.0;
-    let prop = Properties {
-        reach: reach,
-        drop: drop,
-        spread: spread,
-        center: center,
-        center_spread: center_spread,
-    };
-
-    (fit, Some(prop))
 
     // height - width ratio (cubic plants punished).
     // balance: similar maximum stretch in oppisite directions rewarded (center close to origin).
@@ -388,20 +397,13 @@ fn add_properties_rendering(node: &mut SceneNode, properties: &Properties) {
 fn run_with_distribution(window: &mut Window) {
     const GENOME_LENGTH: usize = 100;
 
-    let grammar = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
-
-    let mut rng = rand::thread_rng();
+    let grammar = abnf::parse_file("lsys2.abnf").expect("Could not parse ABNF file");
 
     let distribution = {
         let mut distribution = Distribution::new();
-        distribution.set_default_weights("productions", 0, &[1.0, 1.0]);
-        distribution.set_default_weights("string", 0, &[1.0, 2.0, 2.0, 2.0, 1.0, 1.0]);
-        distribution.set_default_weights("string", 1, &[1.0, 0.0]);
-
-        distribution.set_weights(0, "string", 0, &[1.0, 1.0, 2.0, 2.0, 2.0, 2.0]);
         distribution.set_weights(0, "string", 1, &[1.0, 1.0]);
-
-        distribution.set_weights(1, "string", 1, &[10.0, 1.0]);
+        distribution.set_weights(1, "string", 1, &[1.0, 1.0]);
+        distribution.set_default_weights("string", 1, &[1.0, 0.0]);
 
         println!("Distribution:");
         println!("{}", distribution);
@@ -420,7 +422,7 @@ fn run_with_distribution(window: &mut Window) {
 
     let mut system = ol::LSystem::new();
     while is_nothing(&system) {
-        genotype.genotype.genes = generate_genome(&mut rng, GENOME_LENGTH);
+        genotype.genotype.genes = generate_genome(&mut rand::thread_rng(), GENOME_LENGTH);
         system = generate_system(&grammar, &mut genotype);
     }
 
@@ -453,50 +455,59 @@ fn run_with_distribution(window: &mut Window) {
                     println!("Saved to {}", path.to_str().unwrap());
                 },
                 WindowEvent::Key(Key::Space, _, Action::Release, _) => {
-                    const NUM_SAMPLES: usize = 100;
+                    const NUM_SAMPLES: usize = 16;
 
                     println!("Generating {} samples...", NUM_SAMPLES);
 
                     struct Sample {
-                        system: ol::LSystem,
-                        instructions: Vec<lsys::Instruction>,
+                        seed: [u32; 4],
                         score: f32,
-                        properties: Option<Properties>,
                     }
 
-                    let samples = Arc::new(Mutex::new(Vec::<Sample>::with_capacity(NUM_SAMPLES)));
+                    let num_threads = 1;//num_cpus::get();
+                    let samples = Arc::new(Mutex::new(Vec::<Sample>::with_capacity(num_threads)));
 
                     crossbeam::scope(|scope| {
-                        let num_threads = num_cpus::get();
                         let num_per_thread = NUM_SAMPLES / num_threads;
                         let grammar = &grammar;
                         let settings = &settings;
                         let distribution = &distribution;
 
-                        for _ in 0..num_threads {
+                        for t in 0..num_threads {
                             let samples = samples.clone();
                             scope.spawn(move || {
-                                let mut rng = rand::thread_rng();
                                 let mut local_samples = Vec::<Sample>::with_capacity(num_per_thread);
 
-                                for _ in 0..num_per_thread {
-                                    let genes = generate_genome(&mut rng, GENOME_LENGTH);
-                                    let mut genotype = WeightedGenotype::new(genes, distribution);
-                                    let system = generate_system(grammar, &mut genotype);
-                                    let instructions = system.instructions(settings.iterations, &settings.command_map);
+                                for s in 0..num_per_thread {
+                                    let seed: [u32; 4] = [
+                                        rand::thread_rng().gen::<u32>(),
+                                        rand::thread_rng().gen::<u32>(),
+                                        rand::thread_rng().gen::<u32>(),
+                                        rand::thread_rng().gen::<u32>(),
+                                    ];
 
-                                    let (score, properties) = fitness(&system, settings, &instructions);
+                                    println!("{}.{}: Generating genome...", t, s);
+                                    let genes = generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
+                                    println!("{}.{}: Generating L-system...", t, s);
+                                    let system = generate_system(grammar, &mut WeightedGenotype::new(genes, distribution));
+
+                                    println!("{}.{}: Measuring fitness...", t, s);
+                                    let (score, _) = fitness(&system, settings);
                                     let sample = Sample {
-                                        system: system,
-                                        instructions: instructions,
+                                        seed: seed,
                                         score: score,
-                                        properties: properties,
                                     };
                                     local_samples.push(sample);
+
+                                    println!("{}.{}: Done...", t, s);
                                 }
 
+                                println!("{}: Sorting samples...", t);
+                                local_samples.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
+
                                 let mut samples = samples.lock().unwrap();
-                                samples.extend(local_samples);
+                                samples.push(local_samples.pop().unwrap());
+                                println!("{}: Done...", t);
                             });
                         }
                     });
@@ -510,15 +521,19 @@ fn run_with_distribution(window: &mut Window) {
                     println!("Building model...");
 
                     window.remove(&mut model);
-                    model = lsys3d::build_model(&sample.instructions, &settings);
-                    add_properties_rendering(&mut model, &sample.properties.unwrap());
+
+                    let genes = generate_genome(&mut XorShiftRng::from_seed(sample.seed), GENOME_LENGTH);
+                    system = generate_system(&grammar, &mut WeightedGenotype::new(genes, &distribution));
+                    let (_, properties) = fitness(&system, &settings);
+                    let instructions = system.instructions_iter(settings.iterations, &settings.command_map);
+
+                    model = lsys3d::build_model(instructions, &settings);
+                    add_properties_rendering(&mut model, &properties.unwrap());
                     window.scene_mut().add_child(model.clone());
 
                     println!("");
                     println!("LSystem:");
-                    println!("{}", sample.system);
-
-                    system = sample.system;
+                    println!("{}", system);
 
                     model_index = 0;
                 },
@@ -542,7 +557,7 @@ fn run_with_distribution(window: &mut Window) {
                         println!("{}", system);
 
                         let instructions = system.instructions(settings.iterations, &settings.command_map);
-                        let (score, properties) = fitness(&system, &settings, &instructions);
+                        let (score, properties) = fitness(&system, &settings);
                         println!("Score: {}", score);
 
                         window.remove(&mut model);
@@ -570,8 +585,7 @@ fn run_random_genes(window: &mut Window) {
     let lsys_abnf = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
 
     let mut genotype = {
-        let mut rng = rand::thread_rng();
-        let genome = generate_genome(&mut rng, 100);
+        let genome = generate_genome(&mut rand::thread_rng(), 100);
         Genotype::new(genome)
     };
 
@@ -891,15 +905,15 @@ impl<'a, G: Gene> SelectionStrategy for WeightedGenotype<'a, G> {
 
         let depth = Self::find_depth(rulechain);
         let rule = rulechain.last().unwrap();
+        let gene_frac = num::cast::<_, f32>(gene).unwrap() / num::cast::<_, f32>(G::max_value()).unwrap();
         let weights = self.distribution.get_weights(depth, rule, choice);
 
         if let Some(weights) = weights {
             assert_eq!(weights.len(), num, "Number of weights does not match number of alternatives");
-
-            let gene_frac = num::cast::<_, f32>(gene).unwrap() / num::cast::<_, f32>(G::max_value()).unwrap();
             weighted_selection(weights, gene_frac)
         } else {
-            self.genotype.select_alternative(num, rulechain, choice)
+            let weights = (0..num).map(|_| 1.0).collect::<Vec<_>>();
+            weighted_selection(&weights, gene_frac)
         }
     }
 
@@ -910,15 +924,15 @@ impl<'a, G: Gene> SelectionStrategy for WeightedGenotype<'a, G> {
 
         let depth = Self::find_depth(rulechain);
         let rule = rulechain.last().unwrap();
+        let gene_frac = num::cast::<_, f32>(gene).unwrap() / num::cast::<_, f32>(G::max_value()).unwrap();
         let weights = self.distribution.get_weights(depth, rule, choice);
 
         if let Some(weights) = weights {
             assert_eq!(weights.len(), num as usize, "Number of weights does not match number of repetition alternatives");
-
-            let gene_frac = num::cast::<_, f32>(gene).unwrap() / num::cast::<_, f32>(G::max_value()).unwrap();
             min + weighted_selection(weights, gene_frac) as u32
         } else {
-            self.genotype.select_repetition(min, max, rulechain, choice)
+            let weights = (0..num).map(|_| 1.0).collect::<Vec<_>>();
+            min + weighted_selection(&weights, gene_frac) as u32
         }
     }
 }

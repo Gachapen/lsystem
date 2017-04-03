@@ -21,7 +21,7 @@ named!(pub string_literal<String>,
     )
 );
 
-named!(pub hex_values<String>,
+named!(pub hex_value<char>,
     map!(
         do_parse!(
             tag!(&b"%x"[..]) >>
@@ -29,9 +29,22 @@ named!(pub hex_values<String>,
             (value)
         ),
         |v| {
-            let mut string = String::new();
-            string.push(v as u8 as char);
-            string
+            v as u8 as char
+        }
+    )
+);
+
+// TODO: Add support more ranges with other formats than hex.
+named!(pub range<(char, char)>,
+    map!(
+        do_parse!(
+            first: hex_value >>
+            char!('-') >>
+            last: call!(hex_u32) >>
+            (first, last)
+        ),
+        |(a, b)| {
+            (a, b as u8 as char)
         }
     )
 );
@@ -76,7 +89,8 @@ named!(pub symbol<String>,
 
 named!(pub content<Content>,
     alt!(
-        map!(call!(hex_values), |s| Content::Value(s)) |
+        map!(call!(range), |(a, b)| Content::Range(a, b)) |
+        map!(call!(hex_value), |c: char| Content::Value(c.to_string())) |
         map!(call!(string_literal), |s| Content::Value(s)) |
         map!(call!(symbol), |s| Content::Symbol(s)) |
         map!(call!(group), |g| Content::Group(g))
@@ -476,20 +490,28 @@ mod tests {
     #[test]
     fn test_hex_value_parser() {
         assert_eq!(
-            parse::hex_values(&b"%x41"[..]),
-            Done(&b""[..], ("A".to_string()))
+            parse::hex_value(&b"%x41"[..]),
+            Done(&b""[..], ('A'))
         );
         assert_eq!(
-            parse::hex_values(&b"%x2A"[..]),
-            Done(&b""[..], ("*".to_string()))
+            parse::hex_value(&b"%x2A"[..]),
+            Done(&b""[..], ('*'))
         );
         assert_eq!(
-            parse::hex_values(&b"%x2a"[..]),
-            Done(&b""[..], ("*".to_string()))
+            parse::hex_value(&b"%x2a"[..]),
+            Done(&b""[..], ('*'))
         );
         assert_eq!(
-            parse::hex_values(&b"%x0A"[..]),
-            Done(&b""[..], ("\n".to_string()))
+            parse::hex_value(&b"%x0A"[..]),
+            Done(&b""[..], ('\n'))
+        );
+    }
+
+    #[test]
+    fn test_range_parser() {
+        assert_eq!(
+            parse::range(&b"%x41-5A"[..]),
+            Done(&b""[..], ('A', 'Z'))
         );
     }
 }

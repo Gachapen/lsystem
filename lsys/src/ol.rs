@@ -191,6 +191,10 @@ impl LSystem {
     pub fn rewrite(&self, iterations: u32) -> String {
         expand_lsystem(&self.axiom, &self.productions, iterations)
     }
+
+    pub fn instructions_iter<'a, 'b>(&'a self, iterations: u32, command_map: &'b CommandMap) -> InstructionsIter<'a, 'b> {
+        InstructionsIter::new(self, command_map, iterations)
+    }
 }
 
 impl Rewriter for LSystem {
@@ -210,5 +214,78 @@ impl fmt::Display for LSystem {
         write!(f, "\n{}", self.productions)?;
 
         Ok(())
+    }
+}
+
+pub struct InstructionsIter<'a, 'b> {
+    lsystem: &'a LSystem,
+    command_map: &'b CommandMap,
+    num_iterations: u32,
+    visit_stack: Vec<(u32, u8)>,
+}
+
+impl<'a, 'b> InstructionsIter<'a, 'b> {
+    pub fn new(lsystem: &'a LSystem, command_map: &'b CommandMap, iterations: u32) -> InstructionsIter<'a, 'b> {
+        let mut iter = InstructionsIter {
+            lsystem: lsystem,
+            command_map: command_map,
+            num_iterations: iterations,
+            visit_stack: vec![],
+        };
+
+        for symbol in iter.lsystem.axiom.as_bytes().iter().rev() {
+            iter.visit_stack.push((0, *symbol));
+        }
+
+        iter
+    }
+}
+
+impl<'a, 'b> Iterator for InstructionsIter<'a, 'b> {
+    type Item = Instruction;
+
+    fn next(&mut self) -> Option<Instruction> {
+        let mut top = self.visit_stack.pop();
+
+        while top.is_some() && top.unwrap().0 < self.num_iterations {
+            let (lvl, sym) = top.unwrap();
+
+            let successor = &self.lsystem.productions[sym];
+            let next_lvl = lvl + 1;
+            for symbol in successor.as_bytes().iter().rev() {
+                self.visit_stack.push((next_lvl, *symbol));
+            }
+
+            top = self.visit_stack.pop();
+        }
+
+        if let Some((_, sym)) = top {
+            let command = self.command_map[sym as usize];
+            Some(Instruction::new(command))
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use common::{create_command_map, Command, Instruction};
+
+    #[test]
+    fn test_instructions_iter() {
+        let mut lsystem = LSystem::new();
+        lsystem.axiom = "F+F".to_string();
+        lsystem.set_rule('F', "+F");
+        lsystem.set_rule('+', "F+");
+
+        let command_map = create_command_map();
+
+        let instructions = lsystem.instructions_iter(5, &command_map).collect::<Vec<_>>();
+        assert_eq!(
+            instructions,
+            lsystem.instructions(5, &command_map)
+        )
     }
 }

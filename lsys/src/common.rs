@@ -19,13 +19,14 @@ pub enum Command {
     Noop,
 }
 
+#[derive(Debug, PartialEq, Clone)]
 pub struct Instruction {
     pub command: Command,
     pub args: Vec<f32>,
 }
 
 impl Instruction {
-    fn new(command: Command) -> Instruction {
+    pub fn new(command: Command) -> Instruction {
         Instruction {
             command: command,
             args: vec![],
