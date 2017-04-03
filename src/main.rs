@@ -6,6 +6,8 @@ extern crate num;
 extern crate serde_yaml;
 extern crate time;
 extern crate glfw;
+extern crate crossbeam;
+extern crate num_cpus;
 
 #[macro_use]
 extern crate lsys;

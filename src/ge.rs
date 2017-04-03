@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::io::{BufWriter, BufReader};
 use std::fs::File;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 use rand::{self, Rng};
 use rand::distributions::{IndependentSample, Range};
@@ -16,6 +17,8 @@ use glfw::{Key, WindowEvent, Action};
 use serde_yaml;
 use time;
 use ncu;
+use crossbeam;
+use num_cpus;
 
 use abnf;
 use abnf::expand::{SelectionStrategy, expand_grammar};
@@ -389,7 +392,7 @@ fn run_with_distribution(window: &mut Window) {
 
     let mut rng = rand::thread_rng();
 
-    let mut genotype = {
+    let distribution = {
         let mut distribution = Distribution::new();
         distribution.set_default_weights("productions", 0, &[1.0, 1.0]);
         distribution.set_default_weights("string", 0, &[1.0, 2.0, 2.0, 2.0, 1.0, 1.0]);
@@ -403,8 +406,10 @@ fn run_with_distribution(window: &mut Window) {
         println!("Distribution:");
         println!("{}", distribution);
 
-        WeightedGenotype::new(vec![], distribution)
+        distribution
     };
+
+    let mut genotype = WeightedGenotype::new(vec![], &distribution);
 
     let settings = lsys::Settings {
         width: 0.05,
@@ -456,30 +461,47 @@ fn run_with_distribution(window: &mut Window) {
                         system: ol::LSystem,
                         instructions: Vec<lsys::Instruction>,
                         score: f32,
-                        properties: Properties,
+                        properties: Option<Properties>,
                     }
 
-                    let mut samples = Vec::with_capacity(NUM_SAMPLES);
+                    let samples = Arc::new(Mutex::new(Vec::<Sample>::with_capacity(NUM_SAMPLES)));
 
-                    for _ in 0..NUM_SAMPLES {
-                        genotype.genotype.genes = generate_genome(&mut rng, GENOME_LENGTH);
+                    crossbeam::scope(|scope| {
+                        let num_threads = num_cpus::get();
+                        let num_per_thread = NUM_SAMPLES / num_threads;
+                        let grammar = &grammar;
+                        let settings = &settings;
+                        let distribution = &distribution;
 
-                        let system = generate_system(&grammar, &mut genotype);
-                        let instructions = system.instructions(settings.iterations, &settings.command_map);
+                        for _ in 0..num_threads {
+                            let samples = samples.clone();
+                            scope.spawn(move || {
+                                let mut rng = rand::thread_rng();
+                                let mut local_samples = Vec::<Sample>::with_capacity(num_per_thread);
 
-                        let (score, properties) = fitness(&system, &settings, &instructions);
-                        if let Some(properties) = properties {
-                            let sample = Sample {
-                                system: system,
-                                instructions: instructions,
-                                score: score,
-                                properties: properties,
-                            };
+                                for _ in 0..num_per_thread {
+                                    let genes = generate_genome(&mut rng, GENOME_LENGTH);
+                                    let mut genotype = WeightedGenotype::new(genes, distribution);
+                                    let system = generate_system(grammar, &mut genotype);
+                                    let instructions = system.instructions(settings.iterations, &settings.command_map);
 
-                            samples.push(sample);
+                                    let (score, properties) = fitness(&system, settings, &instructions);
+                                    let sample = Sample {
+                                        system: system,
+                                        instructions: instructions,
+                                        score: score,
+                                        properties: properties,
+                                    };
+                                    local_samples.push(sample);
+                                }
+
+                                let mut samples = samples.lock().unwrap();
+                                samples.extend(local_samples);
+                            });
                         }
-                    }
+                    });
 
+                    let mut samples = samples.lock().unwrap();
                     samples.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
 
                     let sample = samples.pop().unwrap();
@@ -489,7 +511,7 @@ fn run_with_distribution(window: &mut Window) {
 
                     window.remove(&mut model);
                     model = lsys3d::build_model(&sample.instructions, &settings);
-                    add_properties_rendering(&mut model, &sample.properties);
+                    add_properties_rendering(&mut model, &sample.properties.unwrap());
                     window.scene_mut().add_child(model.clone());
 
                     println!("");
@@ -671,6 +693,7 @@ impl Gene for u32 {}
 impl Gene for u64 {}
 impl Gene for usize {}
 
+#[derive(Clone)]
 struct Genotype<G> {
     genes: Vec<G>,
     index: usize,
@@ -736,6 +759,7 @@ fn weighted_selection(weights: &[f32], selector: f32) -> usize {
     selected
 }
 
+#[derive(Clone)]
 struct Distribution {
     depths: Vec<HashMap<String, Vec<Vec<f32>>>>,
     defaults: HashMap<String, Vec<Vec<f32>>>,
@@ -842,13 +866,14 @@ impl fmt::Display for Distribution {
     }
 }
 
-struct WeightedGenotype<G> {
+#[derive(Clone)]
+struct WeightedGenotype<'a, G> {
     genotype: Genotype<G>,
-    distribution: Distribution,
+    distribution: &'a Distribution,
 }
 
-impl<G: Gene> WeightedGenotype<G> {
-    fn new(genes: Vec<G>, distribution: Distribution) -> WeightedGenotype<G> {
+impl<'a, G: Gene> WeightedGenotype<'a, G> {
+    fn new(genes: Vec<G>, distribution: &'a Distribution) -> WeightedGenotype<G> {
         WeightedGenotype {
             genotype: Genotype::new(genes),
             distribution: distribution,
@@ -860,7 +885,7 @@ impl<G: Gene> WeightedGenotype<G> {
     }
 }
 
-impl<G: Gene> SelectionStrategy for WeightedGenotype<G> {
+impl<'a, G: Gene> SelectionStrategy for WeightedGenotype<'a, G> {
     fn select_alternative(&mut self, num: usize, rulechain: &Vec<&str>, choice: u32) -> usize {
         let gene = self.genotype.use_next_gene();
 

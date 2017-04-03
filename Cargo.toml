@@ -9,6 +9,8 @@ rand = "0.3"
 num = "0.1"
 serde_yaml = "0.6"
 time = "0.1"
+crossbeam = "0.2"
+num_cpus = "1"
 
 # Dependencies of kiss3d also used by the project.
 # Dependencies must match the same versions kiss3d uses.
