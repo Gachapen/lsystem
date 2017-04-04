@@ -7,5 +7,5 @@ successor = string
 string = 1*20(symbol / stack)
 stack = "[" string "]"
 symbol = variable / operation
-variable = %x41-5A
+variable = %x41-55
 operation = "+" / "-" / "^" / "&" / ">" / "<"

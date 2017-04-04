@@ -217,6 +217,7 @@ impl fmt::Display for LSystem {
     }
 }
 
+#[derive(Clone)]
 pub struct InstructionsIter<'a, 'b> {
     lsystem: &'a LSystem,
     command_map: &'b CommandMap,
@@ -271,7 +272,7 @@ impl<'a, 'b> Iterator for InstructionsIter<'a, 'b> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use common::{create_command_map, Command, Instruction};
+    use common::create_command_map;
 
     #[test]
     fn test_instructions_iter() {

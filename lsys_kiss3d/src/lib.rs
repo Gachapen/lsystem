@@ -7,7 +7,6 @@ extern crate time;
 extern crate lsys;
 
 use std::f32::consts::{PI, FRAC_PI_2};
-use std::borrow::Borrow;
 
 use na::{Vector3, Point3, Rotation3, Translation3, Isometry3, UnitQuaternion};
 use kiss3d::scene::SceneNode;
@@ -18,7 +17,7 @@ use lsys::Command;
 use lsys::param;
 
 pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
-    where I: Iterator<Item=Borrow<lsys::Instruction>>
+    where I: Iterator<Item=lsys::Instruction>
 {
     let mut model = SceneNode::new_empty();
 
@@ -233,7 +232,7 @@ pub fn run_static<T>(window: &mut Window, camera: &mut Camera, (system, settings
 {
     let instructions = system.instructions(settings.iterations, &settings.command_map);
 
-    let mut model = build_model(instructions.iter(), &settings);
+    let mut model = build_model(instructions.iter().cloned(), &settings);
     window.scene_mut().add_child(model.clone());
 
     while window.render_with_camera(camera) {
@@ -258,7 +257,7 @@ pub fn run_animated(window: &mut Window, camera: &mut Camera, (system, settings)
         let instructions = param::map_word_to_instructions(&word, &settings.command_map);
 
         model.unlink();
-        model = build_model(instructions.iter(), &settings);
+        model = build_model(instructions.iter().cloned(), &settings);
         window.scene_mut().add_child(model.clone());
     }
 }

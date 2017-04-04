@@ -4,7 +4,8 @@ use std::collections::HashMap;
 use std::io::{BufWriter, BufReader, Write};
 use std::fs::File;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use rand::{self, Rng, XorShiftRng, SeedableRng};
 use rand::distributions::{IndependentSample, Range};
@@ -17,12 +18,13 @@ use glfw::{Key, WindowEvent, Action};
 use serde_yaml;
 use time;
 use ncu;
-use crossbeam;
 use num_cpus;
+use futures::{Future, future};
+use futures_cpupool::CpuPool;
 
 use abnf;
 use abnf::expand::{SelectionStrategy, expand_grammar};
-use lsys::{self, ol, Rewriter, Command};
+use lsys::{self, ol, Command};
 use lsys3d;
 use lsystems;
 
@@ -261,13 +263,14 @@ struct Properties {
     spread: f32,
     center: Point3<f32>,
     center_spread: f32,
+    num_points: usize,
 }
 
 fn vec2_length(x: f32, y: f32) -> f32 {
     (x.powi(2) + y.powi(2)).sqrt()
 }
 
-const SKELETON_LIMIT: usize = 5000000;
+const SKELETON_LIMIT: usize = 100000;
 
 #[allow(dead_code)]
 fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32, Option<Properties>) {
@@ -276,22 +279,22 @@ fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32, Option<Pro
     }
 
     if is_nothing(lsystem) {
-        println!("\tNothing");
+        //println!("\tNothing");
         return (0.0, None)
     }
 
-    print!("\tBuilding skeleton... ");
+    //print!("\tBuilding skeleton... ");
     io::stdout().flush().unwrap();
 
     let instruction_iter = lsystem.instructions_iter(settings.iterations, &settings.command_map);
     if let Some(skeleton) = build_skeleton(instruction_iter, settings, SKELETON_LIMIT) {
-        println!("{}", skeleton.points.len());
+        //println!("{}", skeleton.points.len());
 
         if skeleton.points.len() <= 1 {
             return (0.0, None)
         }
 
-        print!("\tMeasuring skeleton... ");
+        //print!("\tMeasuring skeleton... ");
         io::stdout().flush().unwrap();
 
         let reach = skeleton.points.iter().max_by(|a, b| a.y.partial_cmp(&b.y).unwrap()).unwrap().y;
@@ -332,12 +335,13 @@ fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32, Option<Pro
             spread: spread,
             center: center,
             center_spread: center_spread,
+            num_points: skeleton.points.len(),
         };
 
-        println!("{}", fit);
+        //println!("{}", fit);
         (fit, Some(prop))
     } else {
-        println!("Skeleton too big.");
+        //println!("Skeleton too big.");
         (0.0, None)
     }
 
@@ -397,9 +401,9 @@ fn add_properties_rendering(node: &mut SceneNode, properties: &Properties) {
 fn run_with_distribution(window: &mut Window) {
     const GENOME_LENGTH: usize = 100;
 
-    let grammar = abnf::parse_file("lsys2.abnf").expect("Could not parse ABNF file");
+    let grammar = Arc::new(abnf::parse_file("lsys2.abnf").expect("Could not parse ABNF file"));
 
-    let distribution = {
+    let distribution = Arc::new({
         let mut distribution = Distribution::new();
         distribution.set_weights(0, "string", 1, &[1.0, 1.0]);
         distribution.set_weights(1, "string", 1, &[1.0, 1.0]);
@@ -409,16 +413,16 @@ fn run_with_distribution(window: &mut Window) {
         println!("{}", distribution);
 
         distribution
-    };
+    });
 
     let mut genotype = WeightedGenotype::new(vec![], &distribution);
 
-    let settings = lsys::Settings {
+    let settings = Arc::new(lsys::Settings {
         width: 0.05,
         angle: PI / 8.0,
         iterations: 5,
         ..lsys::Settings::new()
-    };
+    });
 
     let mut system = ol::LSystem::new();
     while is_nothing(&system) {
@@ -455,7 +459,7 @@ fn run_with_distribution(window: &mut Window) {
                     println!("Saved to {}", path.to_str().unwrap());
                 },
                 WindowEvent::Key(Key::Space, _, Action::Release, _) => {
-                    const NUM_SAMPLES: usize = 16;
+                    const NUM_SAMPLES: usize = 128;
 
                     println!("Generating {} samples...", NUM_SAMPLES);
 
@@ -464,55 +468,46 @@ fn run_with_distribution(window: &mut Window) {
                         score: f32,
                     }
 
-                    let num_threads = 1;//num_cpus::get();
-                    let samples = Arc::new(Mutex::new(Vec::<Sample>::with_capacity(num_threads)));
+                    let mut samples = {
+                        let pool = CpuPool::new(num_cpus::get());
+                        let mut tasks = Vec::with_capacity(NUM_SAMPLES);
+                        let remaining = Arc::new(AtomicUsize::new(NUM_SAMPLES));
 
-                    crossbeam::scope(|scope| {
-                        let num_per_thread = NUM_SAMPLES / num_threads;
-                        let grammar = &grammar;
-                        let settings = &settings;
-                        let distribution = &distribution;
+                        for _ in 0..NUM_SAMPLES {
+                            let distribution = distribution.clone();
+                            let grammar = grammar.clone();
+                            let settings = settings.clone();
+                            let remaining = remaining.clone();
 
-                        for t in 0..num_threads {
-                            let samples = samples.clone();
-                            scope.spawn(move || {
-                                let mut local_samples = Vec::<Sample>::with_capacity(num_per_thread);
+                            tasks.push(pool.spawn_fn(move || {
+                                let seed: [u32; 4] = [
+                                    rand::thread_rng().gen::<u32>(),
+                                    rand::thread_rng().gen::<u32>(),
+                                    rand::thread_rng().gen::<u32>(),
+                                    rand::thread_rng().gen::<u32>(),
+                                ];
 
-                                for s in 0..num_per_thread {
-                                    let seed: [u32; 4] = [
-                                        rand::thread_rng().gen::<u32>(),
-                                        rand::thread_rng().gen::<u32>(),
-                                        rand::thread_rng().gen::<u32>(),
-                                        rand::thread_rng().gen::<u32>(),
-                                    ];
+                                let genes = generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
+                                let system = generate_system(&grammar, &mut WeightedGenotype::new(genes, &distribution));
 
-                                    println!("{}.{}: Generating genome...", t, s);
-                                    let genes = generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
-                                    println!("{}.{}: Generating L-system...", t, s);
-                                    let system = generate_system(grammar, &mut WeightedGenotype::new(genes, distribution));
+                                let (score, _) = fitness(&system, &settings);
+                                let sample = Sample {
+                                    seed: seed,
+                                    score: score,
+                                };
 
-                                    println!("{}.{}: Measuring fitness...", t, s);
-                                    let (score, _) = fitness(&system, settings);
-                                    let sample = Sample {
-                                        seed: seed,
-                                        score: score,
-                                    };
-                                    local_samples.push(sample);
-
-                                    println!("{}.{}: Done...", t, s);
+                                {
+                                    let prev_remaining = remaining.fetch_sub(1, Ordering::Relaxed);
+                                    println!("Remaining: {}", prev_remaining - 1);
                                 }
 
-                                println!("{}: Sorting samples...", t);
-                                local_samples.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
-
-                                let mut samples = samples.lock().unwrap();
-                                samples.push(local_samples.pop().unwrap());
-                                println!("{}: Done...", t);
-                            });
+                                future::ok::<Sample, ()>(sample)
+                            }));
                         }
-                    });
 
-                    let mut samples = samples.lock().unwrap();
+                        future::join_all(tasks).wait().unwrap()
+                    };
+
                     samples.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
 
                     let sample = samples.pop().unwrap();
@@ -525,17 +520,20 @@ fn run_with_distribution(window: &mut Window) {
                     let genes = generate_genome(&mut XorShiftRng::from_seed(sample.seed), GENOME_LENGTH);
                     system = generate_system(&grammar, &mut WeightedGenotype::new(genes, &distribution));
                     let (_, properties) = fitness(&system, &settings);
-                    let instructions = system.instructions_iter(settings.iterations, &settings.command_map);
 
-                    model = lsys3d::build_model(instructions, &settings);
-                    add_properties_rendering(&mut model, &properties.unwrap());
-                    window.scene_mut().add_child(model.clone());
+                    if let Some(properties) = properties {
+                        println!("{} points.", properties.num_points);
+                        let instructions = system.instructions_iter(settings.iterations, &settings.command_map);
+                        model = lsys3d::build_model(instructions, &settings);
+                        add_properties_rendering(&mut model, &properties);
+                        window.scene_mut().add_child(model.clone());
 
-                    println!("");
-                    println!("LSystem:");
-                    println!("{}", system);
+                        println!("");
+                        println!("LSystem:");
+                        println!("{}", system);
 
-                    model_index = 0;
+                        model_index = 0;
+                    }
                 },
                 WindowEvent::Key(Key::L, _, Action::Release, _) => {
                     let mut models = fs::read_dir(model_dir).unwrap().map(|e| e.unwrap().path()).collect::<Vec<_>>();
@@ -556,12 +554,12 @@ fn run_with_distribution(window: &mut Window) {
                         println!("LSystem:");
                         println!("{}", system);
 
-                        let instructions = system.instructions(settings.iterations, &settings.command_map);
+                        let instructions = system.instructions_iter(settings.iterations, &settings.command_map);
                         let (score, properties) = fitness(&system, &settings);
                         println!("Score: {}", score);
 
                         window.remove(&mut model);
-                        model = lsys3d::build_model(&instructions, &settings);
+                        model = lsys3d::build_model(instructions, &settings);
                         add_properties_rendering(&mut model, &properties.unwrap());
                         window.scene_mut().add_child(model.clone());
                     }
@@ -609,9 +607,9 @@ fn run_random_genes(window: &mut Window) {
     println!("LSystem:");
     println!("{}", system);
 
-    let instructions = system.instructions(settings.iterations, &settings.command_map);
+    let instructions = system.instructions_iter(settings.iterations, &settings.command_map);
 
-    let mut model = lsys3d::build_model(&instructions, &settings);
+    let mut model = lsys3d::build_model(instructions, &settings);
     window.scene_mut().add_child(model.clone());
 
     let mut camera = {
@@ -662,9 +660,9 @@ fn run_bush_inferred(window: &mut Window, camera: &mut Camera) {
         (new_system, settings)
     };
 
-    let instructions = system.instructions(settings.iterations, &settings.command_map);
+    let instructions = system.instructions_iter(settings.iterations, &settings.command_map);
 
-    let mut model = lsys3d::build_model(&instructions, &settings);
+    let mut model = lsys3d::build_model(instructions, &settings);
     window.scene_mut().add_child(model.clone());
 
     while window.render_with_camera(camera) {

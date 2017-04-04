@@ -8,6 +8,8 @@ extern crate time;
 extern crate glfw;
 extern crate crossbeam;
 extern crate num_cpus;
+extern crate futures;
+extern crate futures_cpupool;
 
 #[macro_use]
 extern crate lsys;
