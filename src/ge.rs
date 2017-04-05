@@ -5,13 +5,12 @@ use std::io::{BufWriter, BufReader, Write};
 use std::fs::File;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use rand::{self, Rng, XorShiftRng, SeedableRng};
 use rand::distributions::{IndependentSample, Range};
 use na::{self, Unit, UnitQuaternion, Point2, Point3, Vector2, Vector3, Translation3, Rotation3};
-use kiss3d::window::Window;
-use kiss3d::camera::{Camera, ArcBall};
+use kiss3d::camera::ArcBall;
 use kiss3d::scene::SceneNode;
 use num::{self, Unsigned, NumCast};
 use glfw::{Key, WindowEvent, Action};
@@ -21,18 +20,22 @@ use ncu;
 use num_cpus;
 use futures::{Future, future};
 use futures_cpupool::CpuPool;
+use bincode;
+use crossbeam;
 
 use abnf;
 use abnf::expand::{SelectionStrategy, expand_grammar};
 use lsys::{self, ol, Command};
 use lsys3d;
 use lsystems;
+use super::setup_window;
 
 #[allow(dead_code, unused_variables)]
-pub fn run_ge(window: &mut Window, camera: &mut Camera) {
+pub fn run_ge() {
     //run_print_abnf();
     //run_random_genes(window);
-    run_with_distribution(window);
+    // run_with_distribution();
+    run_random_sampling();
     //run_bush_inferred(window, camera);
 }
 
@@ -111,7 +114,7 @@ impl Skeleton {
     }
 }
 
-pub fn build_skeleton(instructions: ol::InstructionsIter, settings: &lsys::Settings, size_limit: usize) -> Option<Skeleton> {
+pub fn build_skeleton(instructions: ol::InstructionsIter, settings: &lsys::Settings, size_limit: usize, instruction_limit: usize) -> Option<Skeleton> {
     let segment_length = settings.step;
 
     let mut skeleton = Skeleton::new();
@@ -123,8 +126,8 @@ pub fn build_skeleton(instructions: ol::InstructionsIter, settings: &lsys::Setti
 
     let mut states = Vec::<(Point3<f32>, UnitQuaternion<f32>, usize)>::new();
 
-    for instruction in instructions {
-        if skeleton.points.len() > size_limit {
+    for (iteration, instruction) in instructions.enumerate() {
+        if skeleton.points.len() > size_limit || iteration >= instruction_limit {
             return None;
         }
 
@@ -270,14 +273,33 @@ fn vec2_length(x: f32, y: f32) -> f32 {
     (x.powi(2) + y.powi(2)).sqrt()
 }
 
-const SKELETON_LIMIT: usize = 100000;
+const SKELETON_LIMIT: usize = 20000;
+const INSTRUCTION_LIMIT: usize = 10000000;
+
+fn project_onto(a: &Vector2<f32>, b: &Unit<Vector2<f32>>) -> f32 {
+    na::dot(a, &**b)
+}
+
+#[allow(dead_code)]
+fn is_crap(lsystem: &ol::LSystem, settings: &lsys::Settings) -> bool {
+    if is_nothing(lsystem){
+        return true;
+    }
+
+    let instruction_iter = lsystem.instructions_iter(settings.iterations, &settings.command_map);
+    if let Some(skeleton) = build_skeleton(instruction_iter, settings, SKELETON_LIMIT, INSTRUCTION_LIMIT) {
+        if skeleton.points.len() <= 1 {
+            return true;
+        }
+
+        return false;
+    } else {
+        return true;
+    }
+}
 
 #[allow(dead_code)]
 fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32, Option<Properties>) {
-    fn project_onto(a: &Vector2<f32>, b: &Unit<Vector2<f32>>) -> f32 {
-        na::dot(a, &**b)
-    }
-
     if is_nothing(lsystem) {
         //println!("\tNothing");
         return (0.0, None)
@@ -287,7 +309,7 @@ fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32, Option<Pro
     io::stdout().flush().unwrap();
 
     let instruction_iter = lsystem.instructions_iter(settings.iterations, &settings.command_map);
-    if let Some(skeleton) = build_skeleton(instruction_iter, settings, SKELETON_LIMIT) {
+    if let Some(skeleton) = build_skeleton(instruction_iter, settings, SKELETON_LIMIT, INSTRUCTION_LIMIT) {
         //println!("{}", skeleton.points.len());
 
         if skeleton.points.len() <= 1 {
@@ -397,16 +419,27 @@ fn add_properties_rendering(node: &mut SceneNode, properties: &Properties) {
     node.add_child(balance);
 }
 
+fn random_seed() -> [u32; 4] {
+    [
+        rand::thread_rng().gen::<u32>(),
+        rand::thread_rng().gen::<u32>(),
+        rand::thread_rng().gen::<u32>(),
+        rand::thread_rng().gen::<u32>(),
+    ]
+}
+
 #[allow(dead_code)]
-fn run_with_distribution(window: &mut Window) {
+fn run_with_distribution() {
+    let (mut window, _) = setup_window();
+
     const GENOME_LENGTH: usize = 100;
 
     let grammar = Arc::new(abnf::parse_file("lsys2.abnf").expect("Could not parse ABNF file"));
-
     let distribution = Arc::new({
         let mut distribution = Distribution::new();
         distribution.set_weights(0, "string", 1, &[1.0, 1.0]);
         distribution.set_weights(1, "string", 1, &[1.0, 1.0]);
+        distribution.set_weights(2, "string", 1, &[1.0, 1.0]);
         distribution.set_default_weights("string", 1, &[1.0, 0.0]);
 
         println!("Distribution:");
@@ -414,8 +447,6 @@ fn run_with_distribution(window: &mut Window) {
 
         distribution
     });
-
-    let mut genotype = WeightedGenotype::new(vec![], &distribution);
 
     let settings = Arc::new(lsys::Settings {
         width: 0.05,
@@ -425,11 +456,6 @@ fn run_with_distribution(window: &mut Window) {
     });
 
     let mut system = ol::LSystem::new();
-    while is_nothing(&system) {
-        genotype.genotype.genes = generate_genome(&mut rand::thread_rng(), GENOME_LENGTH);
-        system = generate_system(&grammar, &mut genotype);
-    }
-
     let mut model = SceneNode::new_empty();
 
     window.scene_mut().add_child(model.clone());
@@ -459,54 +485,55 @@ fn run_with_distribution(window: &mut Window) {
                     println!("Saved to {}", path.to_str().unwrap());
                 },
                 WindowEvent::Key(Key::Space, _, Action::Release, _) => {
-                    const NUM_SAMPLES: usize = 128;
-
-                    println!("Generating {} samples...", NUM_SAMPLES);
-
                     struct Sample {
                         seed: [u32; 4],
                         score: f32,
                     }
 
-                    let mut samples = {
-                        let pool = CpuPool::new(num_cpus::get());
-                        let mut tasks = Vec::with_capacity(NUM_SAMPLES);
-                        let remaining = Arc::new(AtomicUsize::new(NUM_SAMPLES));
-
-                        for _ in 0..NUM_SAMPLES {
-                            let distribution = distribution.clone();
-                            let grammar = grammar.clone();
-                            let settings = settings.clone();
-                            let remaining = remaining.clone();
-
-                            tasks.push(pool.spawn_fn(move || {
-                                let seed: [u32; 4] = [
-                                    rand::thread_rng().gen::<u32>(),
-                                    rand::thread_rng().gen::<u32>(),
-                                    rand::thread_rng().gen::<u32>(),
-                                    rand::thread_rng().gen::<u32>(),
-                                ];
-
-                                let genes = generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
-                                let system = generate_system(&grammar, &mut WeightedGenotype::new(genes, &distribution));
-
-                                let (score, _) = fitness(&system, &settings);
-                                let sample = Sample {
-                                    seed: seed,
-                                    score: score,
-                                };
-
-                                {
-                                    let prev_remaining = remaining.fetch_sub(1, Ordering::Relaxed);
-                                    println!("Remaining: {}", prev_remaining - 1);
-                                }
-
-                                future::ok::<Sample, ()>(sample)
-                            }));
+                    fn generate_sample(grammar: &abnf::Ruleset, distribution: &Distribution, settings: &lsys::Settings) -> Sample {
+                        let seed = random_seed();
+                        let genes = generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
+                        let system = generate_system(grammar, &mut WeightedGenotype::new(genes, distribution));
+                        let (score, _) = fitness(&system, settings);
+                        Sample {
+                            seed: seed,
+                            score: score,
                         }
+                    }
 
-                        future::join_all(tasks).wait().unwrap()
+                    const NUM_SAMPLES: usize = 128;
+                    println!("Generating {} samples...", NUM_SAMPLES);
+                    let start_time = time::now();
+
+                    let mut samples = {
+                        let workers = num_cpus::get();
+
+                        if workers == 1 {
+                            (0..NUM_SAMPLES).map(|_| {
+                                generate_sample(&grammar, &distribution, &settings)
+                            }).collect::<Vec<_>>()
+                        } else {
+                            let pool = CpuPool::new(workers);
+                            let mut tasks = Vec::with_capacity(NUM_SAMPLES);
+
+                            for _ in 0..NUM_SAMPLES {
+                                let distribution = distribution.clone();
+                                let grammar = grammar.clone();
+                                let settings = settings.clone();
+
+                                tasks.push(pool.spawn_fn(move || {
+                                    let sample = generate_sample(&grammar, &distribution, &settings);
+                                    future::ok::<Sample, ()>(sample)
+                                }));
+                            }
+
+                            future::join_all(tasks).wait().unwrap()
+                        }
                     };
+
+                    let end_time = time::now();
+                    let duration = end_time - start_time;
+                    println!("Duration: {}.{}", duration.num_seconds(), duration.num_milliseconds());
 
                     samples.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
 
@@ -573,13 +600,164 @@ fn run_with_distribution(window: &mut Window) {
 }
 
 #[allow(dead_code)]
+fn run_random_sampling() {
+    const GENOME_LENGTH: usize = 100;
+    const DEPTHS: usize = 4;
+
+    struct Sample {
+        seed: [u32; 4],
+        crap: bool,
+    }
+
+    fn generate_sample(grammar: &abnf::Ruleset, distribution: &Distribution, settings: &lsys::Settings) -> Sample {
+        let seed = random_seed();
+        let genes = generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
+        let system = generate_system(grammar, &mut WeightedGenotype::new(genes, distribution));
+        Sample {
+            seed: seed,
+            crap: is_crap(&system, settings)
+        }
+    }
+
+    let grammar = Arc::new(abnf::parse_file("lsys2.abnf").expect("Could not parse ABNF file"));
+
+    let distribution = Arc::new({
+        let mut distribution = Distribution::new();
+        for d in 0..DEPTHS-1 {
+            distribution.set_weights(d, "string", 1, &[1.0, 1.0]);
+        }
+        distribution.set_default_weights("string", 1, &[1.0, 0.0]);
+
+        println!("Distribution:");
+        println!("{}", distribution);
+
+        distribution
+    });
+
+    let settings = Arc::new(lsys::Settings {
+        width: 0.05,
+        angle: PI / 8.0,
+        iterations: 5,
+        ..lsys::Settings::new()
+    });
+
+    // const BATCH_SIZE: usize = 1024 / 8;
+    const BATCH_SIZE: usize = 16 / 8;
+    const SEQUENCE_SIZE: usize = 16;
+
+    let sample_dir = Path::new("sample").join(format!("{}", time::now().rfc3339()));
+    fs::create_dir_all(&sample_dir).unwrap();
+
+    println!("Starting random sampling...");
+
+    let num_workers = num_cpus::get() + 1;
+    let work = Arc::new(AtomicBool::new(true));
+    let num_samples = Arc::new(AtomicUsize::new(0));
+    let num_good_samples = Arc::new(AtomicUsize::new(0));
+
+    let start_time = time::now();
+
+    crossbeam::scope(|scope| {
+        let sample_dir = &sample_dir;
+
+        for worker_id in 0..num_workers {
+            let distribution = distribution.clone();
+            let grammar = grammar.clone();
+            let settings = settings.clone();
+            let work = work.clone();
+            let num_samples = num_samples.clone();
+            let num_good_samples = num_good_samples.clone();
+
+            scope.spawn(move || {
+                let dump_samples = |accepted_samples: &[Sample], sample_count: usize, batch: usize| {
+                    let filename = format!("{}.{}.sample", worker_id, batch);
+                    let path = sample_dir.join(filename);
+                    let file = File::create(&path).unwrap();
+
+                    #[derive(Serialize)]
+                    struct SampleBatch {
+                        sample_count: usize,
+                        accepted: Vec<[u32; 4]>,
+                    }
+
+                    let samples = SampleBatch {
+                        sample_count: sample_count,
+                        accepted: accepted_samples.iter().map(|s| s.seed).collect::<Vec<_>>(),
+                    };
+                    bincode::serialize_into(&mut BufWriter::new(file), &samples, bincode::Infinite).unwrap();
+                };
+
+                let mut accepted_samples = Vec::with_capacity(BATCH_SIZE / 200); // Room for 0.5% of samples.
+                let mut batch = 0;
+                let mut batch_num_samples = 0;
+
+                while work.load(Ordering::Relaxed) {
+                    for _ in 0..SEQUENCE_SIZE {
+                        let sample = generate_sample(&grammar, &distribution, &settings);
+                        if !sample.crap {
+                            accepted_samples.push(sample);
+                        }
+                    }
+
+                    batch_num_samples += SEQUENCE_SIZE;
+
+                    if accepted_samples.len() >= BATCH_SIZE {
+                        dump_samples(&accepted_samples, batch_num_samples, batch);
+
+                        num_samples.fetch_add(batch_num_samples, Ordering::Relaxed);
+
+                        accepted_samples.clear();
+                        batch += 1;
+                        batch_num_samples = 0;
+                    }
+                }
+
+                dump_samples(&accepted_samples, batch_num_samples, batch);
+                num_samples.fetch_add(batch_num_samples, Ordering::Relaxed);
+                num_good_samples.fetch_add(batch * BATCH_SIZE + accepted_samples.len() , Ordering::Relaxed);
+            });
+        }
+
+        println!("Spawned {} threads.", num_workers);
+
+        let mut input = String::new();
+        while input != "quit" {
+            input = String::new();
+            print!("> ");
+            io::stdout().flush().unwrap();
+            io::stdin().read_line(&mut input).unwrap();
+            input.pop().unwrap(); // remove '\n'.
+        }
+
+        println!("Quitting...");
+        work.store(false, Ordering::Relaxed);
+    });
+
+    let end_time = time::now();
+    let duration = end_time - start_time;
+    println!(
+        "Duration: {}:{}:{}.{}",
+        duration.num_hours(),
+        duration.num_minutes() % 60,
+        duration.num_seconds() % 60,
+        duration.num_milliseconds() % 1000
+    );
+
+    let num_samples = Arc::try_unwrap(num_samples).unwrap().into_inner();
+    let num_good_samples = Arc::try_unwrap(num_good_samples).unwrap().into_inner();
+    println!("Good samples: {}/{} ({:.*}%)", num_good_samples, num_samples, 1, num_good_samples as f32 / num_samples as f32 * 100.0);
+}
+
+#[allow(dead_code)]
 fn run_print_abnf() {
     let lsys_abnf = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
     println!("{:#?}", lsys_abnf);
 }
 
 #[allow(dead_code)]
-fn run_random_genes(window: &mut Window) {
+fn run_random_genes() {
+    let (mut window, _) = setup_window();
+
     let lsys_abnf = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
 
     let mut genotype = {
@@ -624,7 +802,9 @@ fn run_random_genes(window: &mut Window) {
 }
 
 #[allow(dead_code)]
-fn run_bush_inferred(window: &mut Window, camera: &mut Camera) {
+fn run_bush_inferred() {
+    let (mut window, mut camera) = setup_window();
+
     let lsys_abnf = abnf::parse_file("bush.abnf").expect("Could not parse ABNF file");
 
     let (system, settings) = {
@@ -665,7 +845,7 @@ fn run_bush_inferred(window: &mut Window, camera: &mut Camera) {
     let mut model = lsys3d::build_model(instructions, &settings);
     window.scene_mut().add_child(model.clone());
 
-    while window.render_with_camera(camera) {
+    while window.render_with_camera(&mut camera) {
         model.append_rotation(&UnitQuaternion::from_euler_angles(0.0f32, 0.004, 0.0));
     }
 }
