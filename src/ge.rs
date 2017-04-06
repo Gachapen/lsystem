@@ -34,19 +34,41 @@ use super::setup_window;
 pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
     SubCommand::with_name("ge")
         .about("Run random plant generation using GE")
+        .subcommand(SubCommand::with_name("abnf")
+            .about("Print the parsed ABNF structure")
+        )
+        .subcommand(SubCommand::with_name("random")
+            .about("Randomly generate plant based on random genes and ABNF")
+        )
+        .subcommand(SubCommand::with_name("distribution")
+            .about("Generate plants based on a predefined distribution")
+        )
+        .subcommand(SubCommand::with_name("sampling")
+            .about("Run random sampling program until you type 'quit'")
+        )
+        .subcommand(SubCommand::with_name("inferred")
+            .about("Run program that infers the genes of an L-system")
+        )
 }
 
 pub fn run_ge(matches: &ArgMatches) {
-    //run_print_abnf();
-    //run_random_genes(window);
-    // run_with_distribution();
-    run_random_sampling();
-    //run_bush_inferred(window, camera);
+    if matches.subcommand_matches("abnf").is_some() {
+        run_print_abnf();
+    } else if matches.subcommand_matches("random").is_some() {
+        run_random_genes();
+    } else if matches.subcommand_matches("distribution").is_some() {
+        run_with_distribution();
+    } else if matches.subcommand_matches("sampling").is_some() {
+        run_random_sampling();
+    } else if matches.subcommand_matches("inferred").is_some() {
+        run_bush_inferred();
+    } else {
+        println!("A subcommand must be specified. See help by passing -h.");
+    }
 }
 
 type GenePrimitive = u32;
 
-#[allow(dead_code)]
 fn generate_genome<R: Rng>(rng: &mut R, len: usize) -> Vec<GenePrimitive> {
     let gene_range = Range::new(GenePrimitive::min_value(), GenePrimitive::max_value());
 
@@ -58,7 +80,6 @@ fn generate_genome<R: Rng>(rng: &mut R, len: usize) -> Vec<GenePrimitive> {
     genes
 }
 
-#[allow(dead_code)]
 fn generate_system<G>(grammar: &abnf::Ruleset, genotype: &mut G) -> ol::LSystem
     where G: SelectionStrategy
 {
@@ -72,7 +93,6 @@ fn generate_system<G>(grammar: &abnf::Ruleset, genotype: &mut G) -> ol::LSystem
     system
 }
 
-#[allow(dead_code)]
 fn is_nothing(lsystem: &ol::LSystem) -> bool {
     let mut visited = Vec::new();
     let mut visit_stack = Vec::new();
@@ -285,7 +305,6 @@ fn project_onto(a: &Vector2<f32>, b: &Unit<Vector2<f32>>) -> f32 {
     na::dot(a, &**b)
 }
 
-#[allow(dead_code)]
 fn is_crap(lsystem: &ol::LSystem, settings: &lsys::Settings) -> bool {
     if is_nothing(lsystem){
         return true;
@@ -303,7 +322,6 @@ fn is_crap(lsystem: &ol::LSystem, settings: &lsys::Settings) -> bool {
     }
 }
 
-#[allow(dead_code)]
 fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32, Option<Properties>) {
     if is_nothing(lsystem) {
         //println!("\tNothing");
@@ -433,7 +451,6 @@ fn random_seed() -> [u32; 4] {
     ]
 }
 
-#[allow(dead_code)]
 fn run_with_distribution() {
     let (mut window, _) = setup_window();
 
@@ -604,7 +621,6 @@ fn run_with_distribution() {
     }
 }
 
-#[allow(dead_code)]
 fn run_random_sampling() {
     const GENOME_LENGTH: usize = 100;
     const DEPTHS: usize = 4;
@@ -753,13 +769,11 @@ fn run_random_sampling() {
     println!("Good samples: {}/{} ({:.*}%)", num_good_samples, num_samples, 1, num_good_samples as f32 / num_samples as f32 * 100.0);
 }
 
-#[allow(dead_code)]
 fn run_print_abnf() {
     let lsys_abnf = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
     println!("{:#?}", lsys_abnf);
 }
 
-#[allow(dead_code)]
 fn run_random_genes() {
     let (mut window, _) = setup_window();
 
@@ -806,7 +820,6 @@ fn run_random_genes() {
     }
 }
 
-#[allow(dead_code)]
 fn run_bush_inferred() {
     let (mut window, mut camera) = setup_window();
 
