@@ -242,7 +242,6 @@ fn parse_glp_param(param: &Item) -> Result<Option<f32>, ConvertGlpError> {
     }
 }
 
-#[allow(dead_code)]
 pub fn run_generated(window: &mut Window, camera: &mut Camera)
 {
     let mut rng = rand::thread_rng();

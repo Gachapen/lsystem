@@ -14,6 +14,7 @@ extern crate bincode;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+extern crate clap;
 
 #[macro_use]
 extern crate lsys;
@@ -24,17 +25,43 @@ use na::{Point3};
 use kiss3d::window::Window;
 use kiss3d::light::Light;
 use kiss3d::camera::ArcBall;
+use clap::{App, SubCommand};
 
 mod lsystems;
 mod gen;
 mod ge;
 
 fn main() {
-    //let (mut window, mut camera) = setup_window();
-    //lsys3d::run_static(&mut window, &mut camera, lsystems::make_bush());
-    //lsys3d::run_animated(&mut window, &mut camera, lsystems::make_anim_tree());
-    //gen::run_generated(&mut window, &mut camera);
-    ge::run_ge();
+    let matches = App::new("lsystem")
+        .version("0.0.1")
+        .author("Magnus Bjerke Vik <mbvett@gmail.com>")
+        .about("Various L-system generation and visualization experiments")
+        .subcommand(SubCommand::with_name("static")
+            .about("Run visualization of static plant")
+        )
+        .subcommand(SubCommand::with_name("animated")
+            .about("Run animated visualization of plant growth")
+        )
+        .subcommand(SubCommand::with_name("generated")
+            .about("Run random generation of plant")
+        )
+        .subcommand(ge::get_subcommand())
+        .get_matches();
+
+    if matches.subcommand_matches("static").is_some() {
+        let (mut window, mut camera) = setup_window();
+        lsys3d::run_static(&mut window, &mut camera, lsystems::make_bush());
+    } else if matches.subcommand_matches("animated").is_some() {
+        let (mut window, mut camera) = setup_window();
+        lsys3d::run_animated(&mut window, &mut camera, lsystems::make_anim_tree());
+    } else if matches.subcommand_matches("generated").is_some() {
+        let (mut window, mut camera) = setup_window();
+        gen::run_generated(&mut window, &mut camera);
+    } else if let Some(matches) = matches.subcommand_matches("ge") {
+        ge::run_ge(matches);
+    } else {
+        println!("A subcommand must be specified. See help by passing -h.");
+    }
 }
 
 fn setup_window() -> (Window, ArcBall) {

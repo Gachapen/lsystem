@@ -22,6 +22,7 @@ use futures::{Future, future};
 use futures_cpupool::CpuPool;
 use bincode;
 use crossbeam;
+use clap::{App, SubCommand, ArgMatches};
 
 use abnf;
 use abnf::expand::{SelectionStrategy, expand_grammar};
@@ -30,8 +31,12 @@ use lsys3d;
 use lsystems;
 use super::setup_window;
 
-#[allow(dead_code, unused_variables)]
-pub fn run_ge() {
+pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
+    SubCommand::with_name("ge")
+        .about("Run random plant generation using GE")
+}
+
+pub fn run_ge(matches: &ArgMatches) {
     //run_print_abnf();
     //run_random_genes(window);
     // run_with_distribution();
@@ -42,7 +47,7 @@ pub fn run_ge() {
 type GenePrimitive = u32;
 
 #[allow(dead_code)]
-fn generate_genome< R: Rng>(rng: &mut R, len: usize) -> Vec<GenePrimitive> {
+fn generate_genome<R: Rng>(rng: &mut R, len: usize) -> Vec<GenePrimitive> {
     let gene_range = Range::new(GenePrimitive::min_value(), GenePrimitive::max_value());
 
     let mut genes = Vec::with_capacity(len);
