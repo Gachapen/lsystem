@@ -193,6 +193,7 @@ pub fn build_skeleton(instructions: ol::InstructionsIter, settings: &lsys::Setti
     let mut position = Point3::new(0.0, 0.0, 0.0);
     let mut rotation = UnitQuaternion::from_euler_angles(FRAC_PI_2, 0.0, 0.0);
     let mut parent = 0usize;
+    let mut filling = false;
 
     let mut states = Vec::<(Point3<f32>, UnitQuaternion<f32>, usize)>::new();
 
@@ -212,15 +213,17 @@ pub fn build_skeleton(instructions: ol::InstructionsIter, settings: &lsys::Setti
                     }
                 };
 
-                let direction = rotation * Vector3::new(0.0, 0.0, -1.0);
-                position = position + (direction * segment_length);
+                if !filling {
+                    let direction = rotation * Vector3::new(0.0, 0.0, -1.0);
+                    position = position + (direction * segment_length);
 
-                let index = skeleton.points.len();
-                skeleton.points.push(position);
-                skeleton.edges.push(Vec::new());
+                    let index = skeleton.points.len();
+                    skeleton.points.push(position);
+                    skeleton.edges.push(Vec::new());
 
-                skeleton.edges[parent].push(index);
-                parent = index;
+                    skeleton.edges[parent].push(index);
+                    parent = index;
+                }
             },
             Command::YawRight => {
                 let angle = {
@@ -305,8 +308,19 @@ pub fn build_skeleton(instructions: ol::InstructionsIter, settings: &lsys::Setti
                 }
             },
             Command::BeginSurface => {
+                filling = true;
+                states.push((position, rotation, parent));
             },
             Command::EndSurface => {
+                if let Some((stored_position, stored_rotation, stored_parent)) = states.pop() {
+                    position = stored_position;
+                    rotation = stored_rotation;
+                    parent = stored_parent;
+                } else {
+                    panic!("Tried to pop empty state stack");
+                }
+
+                filling = false;
             },
             Command::NextColor => {
             },
