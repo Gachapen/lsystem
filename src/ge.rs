@@ -1,4 +1,5 @@
 use std::f32::consts::{PI, FRAC_PI_2, E};
+use std::f32;
 use std::{cmp, fs, fmt, io};
 use std::collections::HashMap;
 use std::io::{BufWriter, BufReader, Write};
@@ -362,7 +363,7 @@ fn is_crap(lsystem: &ol::LSystem, settings: &lsys::Settings) -> bool {
 fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32, Option<Properties>) {
     if is_nothing(lsystem) {
         //println!("\tNothing");
-        return (0.0, None)
+        return (f32::MIN, None)
     }
 
     //print!("\tBuilding skeleton... ");
@@ -373,7 +374,7 @@ fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32, Option<Pro
         //println!("{}", skeleton.points.len());
 
         if skeleton.points.len() <= 1 {
-            return (0.0, None)
+            return (f32::MIN, None)
         }
 
         //print!("\tMeasuring skeleton... ");
@@ -381,13 +382,46 @@ fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32, Option<Pro
 
         let reach = skeleton.points.iter().max_by(|a, b| a.y.partial_cmp(&b.y).unwrap()).unwrap().y;
         let drop = skeleton.points.iter().min_by(|a, b| a.y.partial_cmp(&b.y).unwrap()).unwrap().y;
+
         let floor_points: Vec<_> = skeleton.points.iter().map(|p| Point2::new(p.x, p.z)).collect();
-        let floor_distances = floor_points.iter().map(|p| vec2_length(p.x, p.y));
-        let spread = floor_distances.max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
+        let floor_distances_iter = floor_points.iter().map(|p| vec2_length(p.x, p.y));
+        let spread = floor_distances_iter.max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
+
         let center = ncu::center(&skeleton.points);
         let floor_center = Point2::new(center.x, center.z);
-
         let center_distance = vec2_length(floor_center.x, floor_center.y);
+
+        let closeness = skeleton.points.iter().enumerate().map(|(i, p)| {
+            if i >= skeleton.edges.len() {
+                return 0.0;
+            }
+
+            let edges = skeleton.edges[i].iter().map(|e| skeleton.points[*e]);
+
+            let segments: Vec<_> = edges.map(|e| (e - p).normalize()).collect();
+            let closeness = segments.iter().enumerate().map(|(a_i, a_s)| {
+                let mut closest = -1.0;
+                for (b_i, b_s) in segments.iter().enumerate() {
+                    if b_i != a_i {
+                        let dot = na::dot(a_s, b_s);
+                        closest = *na::partial_max(&dot, &closest).unwrap();
+                    }
+                }
+
+                const TRESHOLD: f32 = 0.9;
+                if closest < TRESHOLD {
+                    0.0
+                } else {
+                    (closest - TRESHOLD) * (1.0 / (1.0 - TRESHOLD))
+                }
+            }).max_by(|a, b| a.partial_cmp(b).unwrap());
+
+            if let Some(closeness) = closeness {
+                closeness
+            } else {
+                0.0
+            }
+        }).max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
 
         const TARGET_PROPORTION: f32 = 3.0;
         const PROPORTION_AREA: f32 = TARGET_PROPORTION * 2.0 - 2.0;
@@ -408,9 +442,12 @@ fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32, Option<Pro
 
         let balance_fitness = (0.5 - (center_distance / center_spread)) * 2.0;
 
-        let drop_fitness = drop;
+        let drop_fitness = -drop;
 
-        let fit = (proportion_fitness + balance_fitness + drop_fitness) / 2.0;
+        let reward = (proportion_fitness + balance_fitness) / 2.0;
+        let punishment = closeness + drop_fitness;
+        let fit = reward - punishment;
+
         let prop = Properties {
             reach: reach,
             drop: drop,
@@ -424,12 +461,10 @@ fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32, Option<Pro
         (fit, Some(prop))
     } else {
         //println!("Skeleton too big.");
-        (0.0, None)
+        (f32::MIN, None)
     }
 
-    // height - width ratio (cubic plants punished).
-    // balance: similar maximum stretch in oppisite directions rewarded (center close to origin).
-    // density: very dense structures punished.
+    // TODO: balanced number of branches.
 }
 
 fn add_properties_rendering(node: &mut SceneNode, properties: &Properties) {
