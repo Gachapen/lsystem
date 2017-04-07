@@ -6,6 +6,7 @@ use std::fs::File;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::ops::Add;
 
 use rand::{self, Rng, XorShiftRng, SeedableRng};
 use rand::distributions::{IndependentSample, Range};
@@ -22,7 +23,7 @@ use futures::{Future, future};
 use futures_cpupool::CpuPool;
 use bincode;
 use crossbeam;
-use clap::{App, SubCommand, ArgMatches};
+use clap::{App, SubCommand, Arg, ArgMatches};
 
 use abnf;
 use abnf::expand::{SelectionStrategy, expand_grammar};
@@ -40,14 +41,48 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
         .subcommand(SubCommand::with_name("random")
             .about("Randomly generate plant based on random genes and ABNF")
         )
+        .subcommand(SubCommand::with_name("inferred")
+            .about("Run program that infers the genes of an L-system")
+        )
         .subcommand(SubCommand::with_name("distribution")
             .about("Generate plants based on a predefined distribution")
+            .arg(Arg::with_name("distribution")
+                .short("d")
+                .long("distribution")
+                .takes_value(true)
+                .help("Distribution file to use. Otherwise default distribution is used.")
+            )
         )
         .subcommand(SubCommand::with_name("sampling")
             .about("Run random sampling program until you type 'quit'")
+            .arg(Arg::with_name("distribution")
+                .short("d")
+                .long("distribution")
+                .takes_value(true)
+                .help("Distribution file to use. Otherwise default distribution is used.")
+            )
         )
-        .subcommand(SubCommand::with_name("inferred")
-            .about("Run program that infers the genes of an L-system")
+        .subcommand(SubCommand::with_name("sampling-dist")
+            .about("Take samples from directory and output a distribution CSV file")
+            .arg(Arg::with_name("samples")
+                .short("s")
+                .long("samples")
+                .takes_value(true)
+                .default_value("sample")
+                .help("Directory of samples to use")
+            )
+            .arg(Arg::with_name("csv")
+                .long("csv")
+                .takes_value(true)
+                .default_value("distribution.csv")
+                .help("Name of the output CSV file")
+            )
+            .arg(Arg::with_name("bin")
+                .long("bin")
+                .takes_value(true)
+                .default_value("distribution.bin")
+                .help("Name of the output bincode file")
+            )
         )
 }
 
@@ -56,12 +91,14 @@ pub fn run_ge(matches: &ArgMatches) {
         run_print_abnf();
     } else if matches.subcommand_matches("random").is_some() {
         run_random_genes();
-    } else if matches.subcommand_matches("distribution").is_some() {
-        run_with_distribution();
-    } else if matches.subcommand_matches("sampling").is_some() {
-        run_random_sampling();
     } else if matches.subcommand_matches("inferred").is_some() {
         run_bush_inferred();
+    } else if let Some(matches) = matches.subcommand_matches("distribution") {
+        run_with_distribution(matches);
+    } else if let Some(matches) = matches.subcommand_matches("sampling") {
+        run_random_sampling(matches);
+    } else if let Some(matches) = matches.subcommand_matches("sampling-dist") {
+        run_sampling_distribution(matches);
     } else {
         println!("A subcommand must be specified. See help by passing -h.");
     }
@@ -451,24 +488,35 @@ fn random_seed() -> [u32; 4] {
     ]
 }
 
-fn run_with_distribution() {
+const GENOME_LENGTH: usize = 100;
+
+fn run_with_distribution(matches: &ArgMatches) {
     let (mut window, _) = setup_window();
 
-    const GENOME_LENGTH: usize = 100;
-
     let grammar = Arc::new(abnf::parse_file("lsys2.abnf").expect("Could not parse ABNF file"));
-    let distribution = Arc::new({
-        let mut distribution = Distribution::new();
-        distribution.set_weights(0, "string", 1, &[1.0, 1.0]);
-        distribution.set_weights(1, "string", 1, &[1.0, 1.0]);
-        distribution.set_weights(2, "string", 1, &[1.0, 1.0]);
-        distribution.set_default_weights("string", 1, &[1.0, 0.0]);
 
-        println!("Distribution:");
-        println!("{}", distribution);
+    let distribution = match matches.value_of("distribution") {
+        Some(filename) => {
+            println!("Using distribution from {}", filename);
+            let file = File::open(filename).unwrap();
+            let d: Distribution = bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite).unwrap();
+            Arc::new(d)
+        },
+        None => {
+            Arc::new({
+                let mut distribution = Distribution::new();
+                distribution.set_weights(0, "string", 1, &[1.0, 1.0]);
+                distribution.set_weights(1, "string", 1, &[1.0, 1.0]);
+                distribution.set_weights(2, "string", 1, &[1.0, 1.0]);
+                distribution.set_default_weights("string", 1, &[1.0, 0.0]);
 
-        distribution
-    });
+                distribution
+            })
+        }
+    };
+
+    println!("Distribution:");
+    println!("{}", distribution);
 
     let settings = Arc::new(lsys::Settings {
         width: 0.05,
@@ -523,14 +571,14 @@ fn run_with_distribution() {
                         }
                     }
 
-                    const NUM_SAMPLES: usize = 128;
+                    const NUM_SAMPLES: usize = 64;
                     println!("Generating {} samples...", NUM_SAMPLES);
                     let start_time = time::now();
 
                     let mut samples = {
                         let workers = num_cpus::get();
 
-                        if workers == 1 {
+                        if workers == 1 || NUM_SAMPLES <= 1 {
                             (0..NUM_SAMPLES).map(|_| {
                                 generate_sample(&grammar, &distribution, &settings)
                             }).collect::<Vec<_>>()
@@ -582,6 +630,8 @@ fn run_with_distribution() {
                         println!("{}", system);
 
                         model_index = 0;
+                    } else {
+                        println!("Plant was nothing or reached the limits.");
                     }
                 },
                 WindowEvent::Key(Key::L, _, Action::Release, _) => {
@@ -621,10 +671,30 @@ fn run_with_distribution() {
     }
 }
 
-fn run_random_sampling() {
-    const GENOME_LENGTH: usize = 100;
+#[derive(Serialize, Deserialize)]
+struct SampleBatch {
+    sample_count: usize,
+    accepted: Vec<[u32; 4]>,
+}
+
+fn get_sample_setup() -> (abnf::Ruleset, Distribution) {
     const DEPTHS: usize = 4;
 
+    let grammar = abnf::parse_file("lsys2.abnf").expect("Could not parse ABNF file");
+    let distribution = {
+        let mut distribution = Distribution::new();
+        for d in 0..DEPTHS-1 {
+            distribution.set_weights(d, "string", 1, &[1.0, 1.0]);
+        }
+        distribution.set_default_weights("string", 1, &[1.0, 0.0]);
+
+        distribution
+    };
+
+    (grammar, distribution)
+}
+
+fn run_random_sampling(matches: &ArgMatches) {
     struct Sample {
         seed: [u32; 4],
         crap: bool,
@@ -640,20 +710,21 @@ fn run_random_sampling() {
         }
     }
 
-    let grammar = Arc::new(abnf::parse_file("lsys2.abnf").expect("Could not parse ABNF file"));
+    let (grammar, distribution) = get_sample_setup();
 
-    let distribution = Arc::new({
-        let mut distribution = Distribution::new();
-        for d in 0..DEPTHS-1 {
-            distribution.set_weights(d, "string", 1, &[1.0, 1.0]);
-        }
-        distribution.set_default_weights("string", 1, &[1.0, 0.0]);
+    let grammar = Arc::new(grammar);
+    let distribution = match matches.value_of("distribution") {
+        Some(filename) => {
+            println!("Using distribution from {}", filename);
+            let file = File::open(filename).unwrap();
+            let d: Distribution = bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite).unwrap();
+            Arc::new(d)
+        },
+        None => Arc::new(distribution),
+    };
 
-        println!("Distribution:");
-        println!("{}", distribution);
-
-        distribution
-    });
+    println!("Distribution:");
+    println!("{}", distribution);
 
     let settings = Arc::new(lsys::Settings {
         width: 0.05,
@@ -694,12 +765,6 @@ fn run_random_sampling() {
                     let filename = format!("{}.{}.sample", worker_id, batch);
                     let path = sample_dir.join(filename);
                     let file = File::create(&path).unwrap();
-
-                    #[derive(Serialize)]
-                    struct SampleBatch {
-                        sample_count: usize,
-                        accepted: Vec<[u32; 4]>,
-                    }
 
                     let samples = SampleBatch {
                         sample_count: sample_count,
@@ -767,6 +832,314 @@ fn run_random_sampling() {
     let num_samples = Arc::try_unwrap(num_samples).unwrap().into_inner();
     let num_good_samples = Arc::try_unwrap(num_good_samples).unwrap().into_inner();
     println!("Good samples: {}/{} ({:.*}%)", num_good_samples, num_samples, 1, num_good_samples as f32 / num_samples as f32 * 100.0);
+}
+
+fn run_sampling_distribution(matches: &ArgMatches) {
+    let samples_path = Path::new(matches.value_of("samples").unwrap());
+    let csv_path = Path::new(matches.value_of("csv").unwrap());
+    let bin_path = Path::new(matches.value_of("bin").unwrap());
+
+    println!("Reading samples from {}.", samples_path.to_str().unwrap());
+
+    let sample_paths = read_dir_all(samples_path).unwrap().filter_map(|e| {
+        let path = e.unwrap().path();
+        if path.is_dir() {
+            return None;
+        }
+
+        if let Some(extension) = path.extension() {
+            if extension != "sample" {
+                return None;
+            }
+        } else {
+            return None;
+        }
+
+        Some(path)
+    });
+
+    let mut sample_count = 0;
+    let mut accepted_samples = Vec::new();
+
+    for batch_path in sample_paths {
+        let file = File::open(&batch_path).unwrap();
+        let batch: SampleBatch = bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite).unwrap();
+
+        accepted_samples.reserve(batch.accepted.len());
+        for sample in batch.accepted {
+            accepted_samples.push(sample);
+        }
+        sample_count += batch.sample_count;
+    }
+
+    println!("Read {} accepted samples from a total of {} samples.", accepted_samples.len(), sample_count);
+
+    let (grammar, distribution) = get_sample_setup();
+    let grammar = Arc::new(grammar);
+    let distribution = Arc::new(distribution);
+
+    let workers = num_cpus::get() + 1;
+    let pool = CpuPool::new(workers);
+    let mut tasks = Vec::with_capacity(accepted_samples.len());
+
+    for seed in accepted_samples {
+        let distribution = distribution.clone();
+        let grammar = grammar.clone();
+
+        tasks.push(pool.spawn_fn(move || {
+            let genes = generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
+            let mut stats_genotype = WeightedGenotypeStats::with_genes(genes, &distribution);
+            expand_grammar(&grammar, "axiom", &mut stats_genotype);
+            expand_productions(&grammar, &mut stats_genotype);
+
+            future::ok::<SelectionStats, ()>(stats_genotype.take_stats())
+        }));
+    }
+
+    let stats_collection = future::join_all(tasks).wait().unwrap();
+    let stats = stats_collection.iter().fold(SelectionStats::new(), |sum, stats| sum + stats);
+
+    let mut csv_file = File::create(csv_path).unwrap();
+    csv_file.write_all(stats.to_csv_normalized().as_bytes()).unwrap();
+
+    let mut distribution = stats.to_distribution();
+    distribution.set_default_weights("string", 1, &[1.0, 0.0]);
+    let dist_file = File::create(bin_path).unwrap();
+    bincode::serialize_into(&mut BufWriter::new(dist_file), &distribution, bincode::Infinite).unwrap();
+}
+
+struct SelectionStats {
+    data: Vec<HashMap<String, Vec<Vec<usize>>>>,
+}
+
+impl SelectionStats {
+    fn new() -> SelectionStats {
+        SelectionStats {
+            data: vec![],
+        }
+    }
+
+    fn make_room(&mut self, depth: usize, rule: &str, choice: u32, num: usize) {
+        while self.data.len() <= depth {
+            self.data.push(HashMap::new());
+        }
+
+        let choices = self.data[depth].entry(rule.to_string()).or_insert_with(Vec::new);
+        let choice = choice as usize;
+        while choices.len() <= choice {
+            choices.push(Vec::new());
+        }
+
+        let alternatives = &mut choices[choice];
+        while alternatives.len() < num {
+            alternatives.push(0);
+        }
+    }
+
+    fn add_selection(&mut self, selection: usize, depth: usize, rule: &str, choice: u32) {
+        assert!(depth < self.data.len(), format!("Depth {} is not available. Use make_room to make it.", depth));
+        let rules = &mut self.data[depth];
+
+        let choices = &mut rules.entry(rule.to_string()).or_insert_with(Vec::new);
+
+        let choice = choice as usize;
+        assert!(choice < choices.len(), format!("Choice {} is not available. Use make_room to make it.", choice));
+        let alternatives = &mut choices[choice];
+
+        assert!(selection < alternatives.len(), format!("Alternative {} is not available. Use make_room to make it.", selection));
+        alternatives[selection] += 1;
+    }
+
+    fn to_csv_normalized(&self) -> String {
+        let mut csv = "depth,rule,choice,alternative,weight\n".to_string();
+        for (depth, rules) in self.data.iter().enumerate() {
+            for (rule, choices) in rules {
+                for (choice, alternatives) in choices.iter().enumerate() {
+                    let mut total = 0;
+                    for count in alternatives {
+                        total += *count;
+                    }
+
+                    for (alternative, count) in alternatives.iter().enumerate() {
+                        let weight = *count as f32 / total as f32;
+                        csv += &format!("{},{},{},{},{}\n", depth, rule, choice, alternative, weight);
+                    }
+                }
+            }
+        }
+
+        csv
+    }
+
+    fn to_distribution(&self) -> Distribution {
+        let mut distribution = Distribution::new();
+
+        for (depth, rules) in self.data.iter().enumerate() {
+            for (rule, choices) in rules {
+                for (choice, alternatives) in choices.iter().enumerate() {
+                    let mut total = 0;
+                    for count in alternatives {
+                        total += *count;
+                    }
+
+                    let mut weights = Vec::new();
+
+                    for count in alternatives {
+                        let weight = *count as f32 / total as f32;
+                        weights.push(weight);
+                    }
+
+                    distribution.set_weights(depth, rule, choice as u32, &weights);
+                }
+            }
+        }
+
+        distribution
+    }
+}
+
+impl Add for SelectionStats {
+    type Output = SelectionStats;
+
+    fn add(self, other: SelectionStats) -> SelectionStats {
+        self.add(&other)
+    }
+}
+
+impl<'a> Add<&'a SelectionStats> for SelectionStats {
+    type Output = SelectionStats;
+
+    fn add(mut self, other: &SelectionStats) -> SelectionStats {
+        while self.data.len() < other.data.len() {
+            self.data.push(HashMap::new());
+        }
+
+        for (depth, other_rules) in other.data.iter().enumerate() {
+            for (rule, other_choices) in other_rules {
+                let choices = self.data[depth].entry(rule.to_string()).or_insert_with(Vec::new);
+                while choices.len() < other_choices.len() {
+                    choices.push(Vec::new());
+                }
+
+                for (choice, other_alternatives) in other_choices.iter().enumerate() {
+                    let alternatives = &mut choices[choice];
+                    while alternatives.len() < other_alternatives.len() {
+                        alternatives.push(0);
+                    }
+
+                    for (alternative, count) in other_alternatives.iter().enumerate() {
+                        alternatives[alternative] += *count;
+                    }
+                }
+            }
+        }
+
+        self
+    }
+}
+
+struct WeightedGenotypeStats<'a, G> {
+    weighted_genotype: WeightedGenotype<'a, G>,
+    stats: SelectionStats,
+}
+
+impl<'a, G: Gene> WeightedGenotypeStats<'a, G> {
+    fn with_genes(genes: Vec<G>, distribution: &'a Distribution) -> WeightedGenotypeStats<G> {
+        WeightedGenotypeStats {
+            weighted_genotype: WeightedGenotype::new(genes, distribution),
+            stats: SelectionStats::new(),
+        }
+    }
+
+    fn new(distribution: &'a Distribution) -> WeightedGenotypeStats<G> {
+        Self::with_genes(vec![], distribution)
+    }
+
+    fn take_stats(self) -> SelectionStats {
+        self.stats
+    }
+}
+
+impl<'a, G: Gene> SelectionStrategy for WeightedGenotypeStats<'a, G> {
+    fn select_alternative(&mut self, num: usize, rulechain: &Vec<&str>, choice: u32) -> usize {
+        let selection = self.weighted_genotype.select_alternative(num, rulechain, choice);
+
+        let depth = WeightedGenotype::<'a, G>::find_depth(rulechain);
+        let rule = rulechain.last().unwrap();
+
+        self.stats.make_room(depth, rule, choice, num);
+        self.stats.add_selection(selection, depth, rule, choice);
+
+        selection
+    }
+
+    fn select_repetition(&mut self, min: u32, max: u32, rulechain: &Vec<&str>, choice: u32) -> u32 {
+        let selection = self.weighted_genotype.select_repetition(min, max, rulechain, choice);
+
+        let depth = WeightedGenotype::<'a, G>::find_depth(rulechain);
+        let rule = rulechain.last().unwrap();
+        let num = (max - min + 1) as usize;
+
+        self.stats.make_room(depth, rule, choice, num);
+        self.stats.add_selection((selection - min) as usize, depth, rule, choice);
+
+        selection
+    }
+}
+
+struct ReadDirAll {
+    visit_stack: Vec<fs::ReadDir>,
+}
+
+impl Iterator for ReadDirAll {
+    type Item = io::Result<fs::DirEntry>;
+
+    fn next(&mut self) -> Option<io::Result<fs::DirEntry>> {
+        let mut iter = match self.visit_stack.pop() {
+            Some(iter) => iter,
+            None => return None,
+        };
+
+        let mut entry = iter.next();
+        while entry.is_none() {
+            iter = match self.visit_stack.pop() {
+                Some(iter) => iter,
+                None => return None,
+            };
+
+            entry = iter.next();
+        }
+
+        let entry = match entry {
+            Some(entry) => entry,
+            None => return None,
+        };
+
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(err) => return Some(Err(err)),
+        };
+
+        self.visit_stack.push(iter);
+
+        let path = entry.path();
+        if path.is_dir() {
+            match fs::read_dir(path) {
+                Ok(entries) => self.visit_stack.push(entries),
+                Err(err) => return Some(Err(err)),
+            }
+        }
+
+        Some(Ok(entry))
+    }
+}
+
+fn read_dir_all<P: AsRef<Path>>(path: P) -> io::Result<ReadDirAll> {
+    let top_dir = fs::read_dir(path)?;
+
+    Ok(ReadDirAll {
+        visit_stack: vec![top_dir],
+    })
 }
 
 fn run_print_abnf() {
@@ -969,7 +1342,7 @@ fn weighted_selection(weights: &[f32], selector: f32) -> usize {
     selected
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 struct Distribution {
     depths: Vec<HashMap<String, Vec<Vec<f32>>>>,
     defaults: HashMap<String, Vec<Vec<f32>>>,
@@ -1530,5 +1903,25 @@ mod test {
             infer_selections("F[FX]X", &grammar, "axiom"),
             Ok(genes)
         );
+    }
+
+    #[test]
+    fn test_read_dir_all() {
+        let entries_it = read_dir_all("testdata/read_dir_all").unwrap();
+        let paths = entries_it.map(|e| e.unwrap().path()).collect::<Vec<_>>();
+        let path_str = paths.iter().map(|p| p.to_str().unwrap()).collect::<Vec<_>>();
+        assert_eq!(
+            path_str,
+            vec![
+                "testdata/read_dir_all/a",
+                "testdata/read_dir_all/a/c",
+                "testdata/read_dir_all/a/c/d",
+                "testdata/read_dir_all/a/c/e",
+                "testdata/read_dir_all/a/b",
+                "testdata/read_dir_all/a/b/y",
+                "testdata/read_dir_all/a/b/z",
+                "testdata/read_dir_all/a/b/x",
+            ]
+        )
     }
 }

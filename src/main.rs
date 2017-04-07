@@ -12,8 +12,7 @@ extern crate futures;
 extern crate futures_cpupool;
 extern crate bincode;
 extern crate serde;
-#[macro_use]
-extern crate serde_derive;
+#[macro_use] extern crate serde_derive;
 extern crate clap;
 
 #[macro_use]
