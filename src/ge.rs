@@ -722,6 +722,22 @@ fn run_with_distribution(matches: &ArgMatches) {
 
                     model_index += 1;
                 },
+                WindowEvent::Key(Key::X, _, Action::Release, _) => {
+                    let (system, settings) = lsystems::make_bush();
+                    println!("LSystem:");
+                    println!("{}", system);
+
+                    let instructions = system.instructions_iter(settings.iterations, &settings.command_map);
+                    let (score, properties) = fitness(&system, &settings);
+                    println!("Score: {}", score);
+
+                    window.remove(&mut model);
+                    model = lsys3d::build_model(instructions, &settings);
+                    add_properties_rendering(&mut model, &properties.unwrap());
+                    window.scene_mut().add_child(model.clone());
+
+                    model_index = 0;
+                }
                 _ => {}
             }
         }
