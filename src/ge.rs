@@ -53,6 +53,13 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .takes_value(true)
                 .help("Distribution file to use. Otherwise default distribution is used.")
             )
+            .arg(Arg::with_name("num-samples")
+                .short("n")
+                .long("num-samples")
+                .takes_value(true)
+                .default_value("64")
+                .help("Number of samples to generate before visualizing the best")
+            )
         )
         .subcommand(SubCommand::with_name("sampling")
             .about("Run random sampling program until you type 'quit'")
@@ -553,6 +560,8 @@ fn run_with_distribution(matches: &ArgMatches) {
     println!("Distribution:");
     println!("{}", distribution);
 
+    let num_samples = usize::from_str_radix(matches.value_of("num-samples").unwrap(), 10).unwrap();
+
     let settings = Arc::new(lsys::Settings {
         width: 0.05,
         angle: PI / 8.0,
@@ -606,22 +615,21 @@ fn run_with_distribution(matches: &ArgMatches) {
                         }
                     }
 
-                    const NUM_SAMPLES: usize = 64;
-                    println!("Generating {} samples...", NUM_SAMPLES);
+                    println!("Generating {} samples...", num_samples);
                     let start_time = time::now();
 
                     let mut samples = {
-                        let workers = num_cpus::get();
+                        let workers = num_cpus::get() + 1;
 
-                        if workers == 1 || NUM_SAMPLES <= 1 {
-                            (0..NUM_SAMPLES).map(|_| {
+                        if workers == 1 || num_samples <= 1 {
+                            (0..num_samples).map(|_| {
                                 generate_sample(&grammar, &distribution, &settings)
                             }).collect::<Vec<_>>()
                         } else {
                             let pool = CpuPool::new(workers);
-                            let mut tasks = Vec::with_capacity(NUM_SAMPLES);
+                            let mut tasks = Vec::with_capacity(num_samples);
 
-                            for _ in 0..NUM_SAMPLES {
+                            for _ in 0..num_samples {
                                 let distribution = distribution.clone();
                                 let grammar = grammar.clone();
                                 let settings = settings.clone();
