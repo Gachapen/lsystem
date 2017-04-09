@@ -365,6 +365,16 @@ fn project_onto(a: &Vector2<f32>, b: &Unit<Vector2<f32>>) -> f32 {
     na::dot(a, &**b)
 }
 
+#[allow(dead_code)]
+fn interpolate_linear(a: f32, b: f32, t: f32) -> f32 {
+    a * (1.0 - t) + b * t
+}
+
+#[allow(dead_code)]
+fn interpolate_cos(a: f32, b: f32, t: f32) -> f32 {
+    interpolate_linear(a, b, (1.0 - (t * PI).cos()) / 2.0)
+}
+
 fn is_crap(lsystem: &ol::LSystem, settings: &lsys::Settings) -> bool {
     if is_nothing(lsystem){
         return true;
@@ -453,12 +463,59 @@ fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32, Option<Pro
             a.partial_cmp(b).unwrap()
         }).unwrap();
 
+
+        // First point is root, which we don't want to measure, so skip 1.
+        let branching_counts = skeleton.points.iter().skip(1).enumerate().filter_map(|(i, _)| {
+            if i >= skeleton.edges.len() {
+                return None;
+            }
+
+            if skeleton.edges[i].is_empty() {
+                return None;
+            }
+
+            Some(skeleton.edges[i].len())
+        }).collect::<Vec<_>>();
+
+        let total_branching_count = branching_counts.iter().fold(0, |total, b| total + b);
+        let branching_complexity = {
+            if !branching_counts.is_empty() {
+                total_branching_count as f32 / branching_counts.len() as f32
+            } else {
+                0.0
+            }
+        };
+        println!("Complexity: {}", branching_complexity);
+
+        let branching_fitness = {
+            if branching_complexity >= 1.0 && branching_complexity < 2.0 {
+                interpolate_cos(0.0, 1.0, branching_complexity - 1.0)
+            } else if branching_complexity < 3.0 {
+                1.0
+            } else if branching_complexity < 7.0 {
+                let t = (branching_complexity - 3.0) / (7.0 - 3.0);
+                interpolate_cos(1.0, -1.0, t)
+            } else {
+                // No branches, or 7 or more branches.
+                -1.0
+            }
+        };
+
+        let branching_reward = *na::partial_max(&branching_fitness, &0.0).unwrap();
+        let branching_punishment = *na::partial_max(&-branching_fitness, &0.0).unwrap();
+
         let balance_fitness = (0.5 - (center_distance / center_spread)) * 2.0;
 
         let drop_fitness = -drop;
 
-        let reward = (proportion_fitness + balance_fitness) / 2.0;
-        let punishment = closeness + drop_fitness;
+        println!("Branching fitness: {}", branching_fitness);
+        println!("Balance: {}", balance_fitness);
+        println!("Closeness: {}", closeness);
+        println!("Drop: {}", drop_fitness);
+
+        // let reward = (proportion_fitness + balance_fitness) / 2.0;
+        let reward = (balance_fitness + branching_reward) / 2.0;
+        let punishment = closeness + drop_fitness + branching_punishment;
         let fit = reward - punishment;
 
         let prop = Properties {
@@ -1986,5 +2043,21 @@ mod test {
                 "testdata/read_dir_all/a/b/x",
             ]
         )
+    }
+
+    #[test]
+    fn test_interpolate_linear() {
+        assert_eq!(interpolate_linear(0.0, 1.0, 0.0), 0.0);
+        assert_eq!(interpolate_linear(0.0, 1.0, 0.5), 0.5);
+        assert_eq!(interpolate_linear(0.0, 1.0, 1.0), 1.0);
+    }
+
+    #[test]
+    fn test_interpolate_cos() {
+        assert_eq!(interpolate_cos(0.0, 1.0, 0.0), 0.0);
+        assert_eq!(interpolate_cos(0.0, 1.0, 0.5), 0.5);
+        assert_eq!(interpolate_cos(0.0, 1.0, 1.0), 1.0);
+
+        assert_eq!(interpolate_cos(0.0, 1.0, 0.25), 0.146446609406726237799577818947575480357582031155762981705);
     }
 }
