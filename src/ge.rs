@@ -761,10 +761,12 @@ fn run_with_distribution(matches: &ArgMatches) {
                         let (score, properties) = fitness(&system, &settings);
                         println!("Score: {}", score);
 
-                        window.remove(&mut model);
-                        model = lsys3d::build_model(instructions, &settings);
-                        add_properties_rendering(&mut model, &properties.unwrap());
-                        window.scene_mut().add_child(model.clone());
+                        if let Some(properties) = properties {
+                            window.remove(&mut model);
+                            model = lsys3d::build_model(instructions, &settings);
+                            add_properties_rendering(&mut model, &properties);
+                            window.scene_mut().add_child(model.clone());
+                        }
                     }
 
                     model_index += 1;
