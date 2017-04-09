@@ -608,10 +608,22 @@ fn run_with_distribution(matches: &ArgMatches) {
         None => {
             Arc::new({
                 let mut distribution = Distribution::new();
+
+                // lsys2.abnf distribution
                 distribution.set_weights(0, "string", 1, &[1.0, 1.0]);
                 distribution.set_weights(1, "string", 1, &[1.0, 1.0]);
                 distribution.set_weights(2, "string", 1, &[1.0, 1.0]);
                 distribution.set_default_weights("string", 1, &[1.0, 0.0]);
+
+                // lsys.abnf distribution
+                // distribution.set_default_weights("productions", 0, &[1.0, 1.0]);
+                // distribution.set_default_weights("string", 0, &[1.0, 2.0, 2.0, 2.0, 1.0, 1.0]);
+                // distribution.set_default_weights("string", 1, &[1.0, 0.0]);
+                //
+                // distribution.set_weights(0, "string", 0, &[1.0, 1.0, 2.0, 2.0, 2.0, 2.0]);
+                // distribution.set_weights(0, "string", 1, &[1.0, 1.0]);
+                //
+                // distribution.set_weights(1, "string", 1, &[10.0, 1.0]);
 
                 distribution
             })
