@@ -336,6 +336,7 @@ fn gaussian(x: f32, mean: f32, sd: f32) -> f32 {
     E.powf(-(x - mean).abs().sqrt() / (2.0 * sd.sqrt())) / ((2.0 * PI).sqrt() * sd)
 }
 
+#[allow(dead_code)]
 fn min_max<T: PartialOrd>(a: T, b: T) -> (T, T) {
     if a < b {
         (a, b)
@@ -383,23 +384,14 @@ fn is_crap(lsystem: &ol::LSystem, settings: &lsys::Settings) -> bool {
 
 fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32, Option<Properties>) {
     if is_nothing(lsystem) {
-        //println!("\tNothing");
         return (f32::MIN, None)
     }
 
-    //print!("\tBuilding skeleton... ");
-    io::stdout().flush().unwrap();
-
     let instruction_iter = lsystem.instructions_iter(settings.iterations, &settings.command_map);
     if let Some(skeleton) = build_skeleton(instruction_iter, settings, SKELETON_LIMIT, INSTRUCTION_LIMIT) {
-        //println!("{}", skeleton.points.len());
-
         if skeleton.points.len() <= 1 {
             return (f32::MIN, None)
         }
-
-        //print!("\tMeasuring skeleton... ");
-        io::stdout().flush().unwrap();
 
         let reach = skeleton.points.iter().max_by(|a, b| a.y.partial_cmp(&b.y).unwrap()).unwrap().y;
         let drop = skeleton.points.iter().min_by(|a, b| a.y.partial_cmp(&b.y).unwrap()).unwrap().y;
@@ -444,13 +436,13 @@ fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32, Option<Pro
             }
         }).max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
 
-        const TARGET_PROPORTION: f32 = 3.0;
-        const PROPORTION_AREA: f32 = TARGET_PROPORTION * 2.0 - 2.0;
-        let proportion = {
-            let (min, max) = min_max(reach, spread);
-            max / min
-        };
-        let proportion_fitness = ((proportion - 1.0).min(PROPORTION_AREA) / PROPORTION_AREA * PI).sin();
+        // const TARGET_PROPORTION: f32 = 3.0;
+        // const PROPORTION_AREA: f32 = TARGET_PROPORTION * 2.0 - 2.0;
+        // let proportion = {
+        //     let (min, max) = min_max(reach, spread);
+        //     max / min
+        // };
+        // let proportion_fitness = ((proportion - 1.0).min(PROPORTION_AREA) / PROPORTION_AREA * PI).sin();
 
         let center_direction = Unit::new_normalize(Vector2::new(center.x, center.z));
         let center_spread = floor_points.iter().map(|p| {
@@ -478,10 +470,8 @@ fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32, Option<Pro
             num_points: skeleton.points.len(),
         };
 
-        //println!("{}", fit);
         (fit, Some(prop))
     } else {
-        //println!("Skeleton too big.");
         (f32::MIN, None)
     }
 
