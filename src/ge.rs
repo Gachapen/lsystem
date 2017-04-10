@@ -565,7 +565,7 @@ const GENOME_LENGTH: usize = 100;
 fn run_with_distribution(matches: &ArgMatches) {
     let (mut window, _) = setup_window();
 
-    let grammar = Arc::new(abnf::parse_file("lsys2.abnf").expect("Could not parse ABNF file"));
+    let grammar = Arc::new(abnf::parse_file("grammar/lsys2.abnf").expect("Could not parse ABNF file"));
 
     let distribution = match matches.value_of("distribution") {
         Some(filename) => {
@@ -783,7 +783,7 @@ struct SampleBatch {
 fn get_sample_setup() -> (abnf::Ruleset, Distribution) {
     const DEPTHS: usize = 4;
 
-    let grammar = abnf::parse_file("lsys2.abnf").expect("Could not parse ABNF file");
+    let grammar = abnf::parse_file("grammar/lsys2.abnf").expect("Could not parse ABNF file");
     let distribution = {
         let mut distribution = Distribution::new();
         for d in 0..DEPTHS-1 {
@@ -1246,14 +1246,14 @@ fn read_dir_all<P: AsRef<Path>>(path: P) -> io::Result<ReadDirAll> {
 }
 
 fn run_print_abnf() {
-    let lsys_abnf = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
+    let lsys_abnf = abnf::parse_file("grammar/lsys.abnf").expect("Could not parse ABNF file");
     println!("{:#?}", lsys_abnf);
 }
 
 fn run_random_genes() {
     let (mut window, _) = setup_window();
 
-    let lsys_abnf = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
+    let lsys_abnf = abnf::parse_file("grammar/lsys.abnf").expect("Could not parse ABNF file");
 
     let mut genotype = {
         let genome = generate_genome(&mut rand::thread_rng(), 100);
@@ -1299,7 +1299,7 @@ fn run_random_genes() {
 fn run_bush_inferred() {
     let (mut window, mut camera) = setup_window();
 
-    let lsys_abnf = abnf::parse_file("bush.abnf").expect("Could not parse ABNF file");
+    let lsys_abnf = abnf::parse_file("grammar/bush.abnf").expect("Could not parse ABNF file");
 
     let (system, settings) = {
         let (system, mut settings) = lsystems::make_bush();
@@ -1955,7 +1955,7 @@ mod test {
 
     #[test]
     fn test_lsystem_ge_expansion() {
-        let grammar = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
+        let grammar = abnf::parse_file("grammar/lsys.abnf").expect("Could not parse ABNF file");
         let genes = vec![
            2u8, // repeat 3 - "F[FX]X"
            0, // symbol - "F"
@@ -1983,7 +1983,7 @@ mod test {
 
     #[test]
     fn test_lsystem_ge_inference() {
-        let grammar = abnf::parse_file("lsys.abnf").expect("Could not parse ABNF file");
+        let grammar = abnf::parse_file("grammar/lsys.abnf").expect("Could not parse ABNF file");
         let genes = vec![
            2, // repeat - "F[FX]X"
            0, // symbol - "F"

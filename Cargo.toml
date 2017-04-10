@@ -25,7 +25,7 @@ glfw = "0.8"
 ncollide_utils = "0.6"
 
 # Local dependencies.
-yobun = { path = "yobun" }
-lsys = { path = "lsys" }
-lsys_kiss3d = { path = "lsys_kiss3d" }
-abnf = { path = "abnf" }
+yobun = { path = "crates/yobun" }
+lsys = { path = "crates/lsys" }
+lsys_kiss3d = { path = "crates/lsys_kiss3d" }
+abnf = { path = "crates/abnf" }
