@@ -5,8 +5,8 @@ use syntax::{Content, Item, List, Ruleset};
 use core;
 
 pub trait SelectionStrategy {
-    fn select_alternative(&mut self, num: usize, rulechain: &Vec<&str>, choice: u32) -> usize;
-    fn select_repetition(&mut self, min: u32, max: u32, rulechain: &Vec<&str>, choice: u32) -> u32;
+    fn select_alternative(&mut self, num: usize, rulechain: &[&str], choice: u32) -> usize;
+    fn select_repetition(&mut self, min: u32, max: u32, rulechain: &[&str], choice: u32) -> u32;
 }
 
 enum Node<'a> {
@@ -32,16 +32,20 @@ pub fn expand_grammar<S>(grammar: &Ruleset, root: &str, strategy: &mut S) -> Str
                         for item in sequence.iter().rev() {
                             visit_stack.push(Node::Item(rulechain.clone(), choice.clone(), item));
                         }
-                    },
+                    }
                     List::Alternatives(ref alternatives) => {
-                        let selection = strategy.select_alternative(alternatives.len(), &rulechain, choice.get());
+                        let selection = strategy.select_alternative(alternatives.len(),
+                                                                    &rulechain,
+                                                                    choice.get());
                         let alternative = &alternatives[selection];
-                        visit_stack.push(Node::Item(rulechain.clone(), choice.clone(), alternative));
+                        visit_stack.push(Node::Item(rulechain.clone(),
+                                                    choice.clone(),
+                                                    alternative));
 
                         choice.set(choice.get() + 1);
-                    },
+                    }
                 }
-            },
+            }
             Node::Item(rulechain, choice, item) => {
                 let times = match item.repeat {
                     Some(ref repeat) => {
@@ -52,7 +56,7 @@ pub fn expand_grammar<S>(grammar: &Ruleset, root: &str, strategy: &mut S) -> Str
                         choice.set(choice.get() + 1);
 
                         times
-                    },
+                    }
                     None => 1,
                 };
 
@@ -60,7 +64,7 @@ pub fn expand_grammar<S>(grammar: &Ruleset, root: &str, strategy: &mut S) -> Str
                     match item.content {
                         Content::Value(ref value) => {
                             string.push_str(value);
-                        },
+                        }
                         Content::Symbol(ref symbol) => {
                             let list = if let Some(list) = grammar.get(symbol) {
                                 list
@@ -68,14 +72,18 @@ pub fn expand_grammar<S>(grammar: &Ruleset, root: &str, strategy: &mut S) -> Str
                                 list
                             } else {
                                 // TODO: Return Result instead of panicing.
-                                panic!(format!("Symbol '{}' does not exist in ABNF grammar and is not a core rule", symbol));
+                                panic!(format!("Symbol '{}' does not exist in ABNF grammar and is \
+                                                not a core rule",
+                                               symbol));
                             };
 
                             let mut updated_chain = rulechain.clone();
                             updated_chain.push(symbol);
 
-                            visit_stack.push(Node::List(updated_chain, Rc::new(Cell::new(0)), list));
-                        },
+                            visit_stack.push(Node::List(updated_chain,
+                                                        Rc::new(Cell::new(0)),
+                                                        list));
+                        }
                         Content::Group(ref group) => {
                             // Hacky mack hack to prevent each repeat to count towards the total
                             // choice number. Now only the first will.
@@ -87,9 +95,11 @@ pub fn expand_grammar<S>(grammar: &Ruleset, root: &str, strategy: &mut S) -> Str
                                 }
                             };
                             visit_stack.push(Node::List(rulechain.clone(), choice_clone, group));
-                        },
+                        }
                         Content::Range(min, max) => {
-                            let index = strategy.select_alternative(max as usize - min as usize, &rulechain, choice.get());
+                            let index = strategy.select_alternative(max as usize - min as usize,
+                                                                    &rulechain,
+                                                                    choice.get());
                             let character = (index + min as usize) as u8 as char;
                             string.push(character);
 
@@ -97,7 +107,7 @@ pub fn expand_grammar<S>(grammar: &Ruleset, root: &str, strategy: &mut S) -> Str
                         }
                     }
                 }
-            },
+            }
         }
     }
 
@@ -108,15 +118,17 @@ pub fn expand_grammar<S>(grammar: &Ruleset, root: &str, strategy: &mut S) -> Str
 mod tests {
     use super::*;
     use syntax::Repeat;
+    use List::{Sequence, Alternatives};
+    use Content::{Value, Symbol, Group};
 
     struct DummyStrategy {}
 
     impl SelectionStrategy for DummyStrategy {
-        fn select_alternative(&mut self, _: usize, _: &Vec<&str>, _: u32) -> usize {
+        fn select_alternative(&mut self, _: usize, _: &[&str], _: u32) -> usize {
             0
         }
 
-        fn select_repetition(&mut self, min: u32, _: u32, _: &Vec<&str>, _: u32) -> u32 {
+        fn select_repetition(&mut self, min: u32, _: u32, _: &[&str], _: u32) -> u32 {
             min
         }
     }
@@ -125,14 +137,11 @@ mod tests {
     fn test_expand_value() {
         let mut strategy = DummyStrategy {};
         let mut grammar = Ruleset::new();
-        grammar.insert(
-            "test".to_string(),
-            List::Sequence(vec![
-                Item::new(Content::Value("value".to_string())),
-            ])
-        );
+        grammar.insert("test".to_string(),
+                       Sequence(vec![Item::new(Value("value".to_string()))]));
 
-        assert_eq!(expand_grammar(&grammar, "test", &mut strategy), "value".to_string());
+        assert_eq!(expand_grammar(&grammar, "test", &mut strategy),
+                   "value".to_string());
     }
 
     #[test]
@@ -140,86 +149,63 @@ mod tests {
         let mut strategy = DummyStrategy {};
 
         let mut rules = Ruleset::new();
-        rules.insert(
-            "symbol".to_string(),
-            List::Sequence(vec![
-                Item::new(Content::Value("value".to_string())),
-            ])
-        );
-        rules.insert(
-            "test".to_string(),
-            List::Sequence(vec![
-                Item::new(Content::Symbol("symbol".to_string())),
-            ])
-        );
+        rules.insert("symbol".to_string(),
+                     Sequence(vec![Item::new(Value("value".to_string()))]));
+        rules.insert("test".to_string(),
+                     Sequence(vec![Item::new(Symbol("symbol".to_string()))]));
 
-        assert_eq!(expand_grammar(&rules, "test", &mut strategy), "value".to_string());
+        assert_eq!(expand_grammar(&rules, "test", &mut strategy),
+                   "value".to_string());
     }
 
     #[test]
     fn test_expand_sequence() {
         let mut strategy = DummyStrategy {};
         let mut rules = Ruleset::new();
-        rules.insert(
-            "test".to_string(),
-            List::Sequence(vec![
-                Item::new(Content::Value("value".to_string())),
-                Item::new(Content::Value("value".to_string())),
-            ])
-        );
+        rules.insert("test".to_string(),
+                     Sequence(vec![Item::new(Value("value".to_string())),
+                                   Item::new(Value("value".to_string()))]));
 
-        assert_eq!(expand_grammar(&rules, "test", &mut strategy), "valuevalue".to_string());
+        assert_eq!(expand_grammar(&rules, "test", &mut strategy),
+                   "valuevalue".to_string());
     }
 
     #[test]
     fn test_expand_alternatives() {
         let mut strategy = DummyStrategy {};
         let mut rules = Ruleset::new();
-        rules.insert(
-            "test".to_string(),
-            List::Alternatives(vec![
-                Item::new(Content::Value("one".to_string())),
-                Item::new(Content::Value("two".to_string())),
-            ])
-        );
+        rules.insert("test".to_string(),
+                     Alternatives(vec![Item::new(Value("one".to_string())),
+                                       Item::new(Value("two".to_string()))]));
 
-        assert_eq!(expand_grammar(&rules, "test", &mut strategy), "one".to_string());
+        assert_eq!(expand_grammar(&rules, "test", &mut strategy),
+                   "one".to_string());
     }
 
     #[test]
     fn test_expand_group() {
         let mut strategy = DummyStrategy {};
         let mut rules = Ruleset::new();
-        rules.insert(
-            "test".to_string(),
-            List::Sequence(vec![
-                Item::new(Content::Group(
-                    List::Sequence(vec![
-                        Item::new(Content::Value("value".to_string())),
-                        Item::new(Content::Value("value".to_string())),
-                    ])
-                ))
-            ])
-        );
+        rules.insert("test".to_string(),
+                     Sequence(vec![Item::new(Group(Sequence(vec![
+                        Item::new(Value("value".to_string())),
+                        Item::new(Value("value".to_string())),
+                     ])))]));
 
-        assert_eq!(expand_grammar(&rules, "test", &mut strategy), "valuevalue".to_string());
+        assert_eq!(expand_grammar(&rules, "test", &mut strategy),
+                   "valuevalue".to_string());
     }
 
     #[test]
     fn test_expand_repeat() {
         let mut strategy = DummyStrategy {};
         let mut rules = Ruleset::new();
-        rules.insert(
-            "test".to_string(),
-            List::Sequence(vec![
-                Item::repeated(
-                    Content::Value("value".to_string()),
-                    Repeat::with_limits(2, 2)
-                ),
-            ])
-        );
+        rules.insert("test".to_string(),
+                     Sequence(vec![Item::repeated(Value("value".to_string()),
+                                                  Repeat::with_limits(2, 2))]));
 
-        assert_eq!(expand_grammar(&rules, "test", &mut strategy), "valuevalue".to_string());
+        assert_eq!(expand_grammar(&rules, "test", &mut strategy),
+                   "valuevalue".to_string());
     }
 
     struct VisitsStrategy {
@@ -228,20 +214,23 @@ mod tests {
 
     impl VisitsStrategy {
         fn new() -> VisitsStrategy {
-            VisitsStrategy {
-                visits: vec![],
-            }
+            VisitsStrategy { visits: vec![] }
         }
     }
 
     impl SelectionStrategy for VisitsStrategy {
-        fn select_alternative(&mut self, _: usize, rulechain: &Vec<&str>, choice: u32) -> usize {
+        fn select_alternative(&mut self, _: usize, rulechain: &[&str], choice: u32) -> usize {
             self.visits.push((rulechain.last().unwrap().to_string(), choice));
 
             0
         }
 
-        fn select_repetition(&mut self, min: u32, _: u32, rulechain: &Vec<&str>, choice: u32) -> u32 {
+        fn select_repetition(&mut self,
+                             min: u32,
+                             _: u32,
+                             rulechain: &[&str],
+                             choice: u32)
+                             -> u32 {
             self.visits.push((rulechain.last().unwrap().to_string(), choice));
 
             min
@@ -253,13 +242,9 @@ mod tests {
         let mut strategy = VisitsStrategy::new();
         let mut rules = Ruleset::new();
 
-        rules.insert(
-            "test".to_string(),
-            List::Alternatives(vec![
-                Item::new(Content::Value("value".to_string())),
-                Item::new(Content::Value("value".to_string())),
-            ])
-        );
+        rules.insert("test".to_string(),
+                     Alternatives(vec![Item::new(Value("value".to_string())),
+                                       Item::new(Value("value".to_string()))]));
 
         expand_grammar(&rules, "test", &mut strategy);
         assert_eq!(strategy.visits.len(), 1);
@@ -271,15 +256,9 @@ mod tests {
         let mut strategy = VisitsStrategy::new();
         let mut rules = Ruleset::new();
 
-        rules.insert(
-            "test".to_string(),
-            List::Sequence(vec![
-                Item::repeated(
-                    Content::Value("value".to_string()),
-                    Repeat::with_limits(0, 1)
-                )
-            ])
-        );
+        rules.insert("test".to_string(),
+                     Sequence(vec![Item::repeated(Value("value".to_string()),
+                                                  Repeat::with_limits(0, 1))]));
 
         expand_grammar(&rules, "test", &mut strategy);
         assert_eq!(strategy.visits, vec![("test".to_string(), 0)]);
@@ -291,30 +270,18 @@ mod tests {
         let mut rules = Ruleset::new();
 
         // test = 2*2("value" / "value")
-        rules.insert(
-            "test".to_string(),
-            List::Sequence(vec![
-                Item::repeated(
-                    Content::Group(
-                        List::Alternatives(vec![
-                            Item::new(Content::Value("value".to_string())),
-                            Item::new(Content::Value("value".to_string())),
-                        ])
-                    ),
-                    Repeat::with_limits(2, 2)
-                ),
-            ])
-        );
+        rules.insert("test".to_string(),
+                     Sequence(vec![Item::repeated(Group(Alternatives(vec![
+                                                    Item::new(Value("value".to_string())),
+                                                    Item::new(Value("value".to_string())),
+                                                  ])),
+                                                  Repeat::with_limits(2, 2))]));
 
         expand_grammar(&rules, "test", &mut strategy);
-        assert_eq!(
-            strategy.visits,
-            vec![
-                ("test".to_string(), 0),
-                ("test".to_string(), 1),
-                ("test".to_string(), 1),
-            ]
-        );
+        assert_eq!(strategy.visits,
+                   vec![("test".to_string(), 0),
+                        ("test".to_string(), 1),
+                        ("test".to_string(), 1)]);
     }
 
     #[test]
@@ -324,33 +291,18 @@ mod tests {
 
         // a = ("value" / "value") b
         // b = "value" / value
-        rules.insert(
-            "a".to_string(),
-            List::Sequence(vec![
-                Item::new(Content::Group(
-                    List::Alternatives(vec![
-                        Item::new(Content::Value("value".to_string())),
-                        Item::new(Content::Value("value".to_string())),
-                    ])
-                )),
-                Item::new(Content::Symbol("b".to_string())),
-            ])
-        );
-        rules.insert(
-            "b".to_string(),
-            List::Alternatives(vec![
-                Item::new(Content::Value("value".to_string())),
-                Item::new(Content::Value("value".to_string())),
-            ])
-        );
+        rules.insert("a".to_string(),
+                     Sequence(vec![Item::new(Group(Alternatives(vec![
+                                    Item::new(Value("value".to_string())),
+                                    Item::new(Value("value".to_string())),
+                                   ]))),
+                                   Item::new(Symbol("b".to_string()))]));
+        rules.insert("b".to_string(),
+                     Alternatives(vec![Item::new(Value("value".to_string())),
+                                       Item::new(Value("value".to_string()))]));
 
         expand_grammar(&rules, "a", &mut strategy);
-        assert_eq!(
-            strategy.visits,
-            vec![
-                ("a".to_string(), 0),
-                ("b".to_string(), 0),
-            ]
-        );
+        assert_eq!(strategy.visits,
+                   vec![("a".to_string(), 0), ("b".to_string(), 0)]);
     }
 }

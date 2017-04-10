@@ -2,7 +2,7 @@ use std::{mem, ptr, fmt, slice};
 use std::ops::{Index, IndexMut};
 
 use serde::{Serialize, Serializer, Deserialize, Deserializer, de};
-use serde::ser::{SerializeMap};
+use serde::ser::SerializeMap;
 
 use common::Instruction;
 use common::CommandMap;
@@ -16,32 +16,38 @@ pub struct RuleMap {
 
 impl RuleMap {
     pub fn new() -> RuleMap {
+        Default::default()
+    }
+
+    pub fn iter(&self) -> slice::Iter<String> {
+        self.map.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> slice::IterMut<String> {
+        self.map.iter_mut()
+    }
+}
+
+impl Default for RuleMap {
+    fn default() -> RuleMap {
         let mut rules: [String; MAX_ALPHABET_SIZE] = unsafe { mem::uninitialized() };
 
         for (i, v) in rules.iter_mut().enumerate() {
             let mut rule = String::with_capacity(1);
             rule.push(i as u8 as char);
-            unsafe { ptr::write(v, rule); }
+            unsafe {
+                ptr::write(v, rule);
+            }
         }
 
-        RuleMap {
-            map: rules,
-        }
-    }
-
-    pub fn iter<'a>(&'a self) -> slice::Iter<'a, String> {
-        self.map.iter()
-    }
-
-    pub fn iter_mut<'a>(&'a mut self) -> slice::IterMut<'a, String> {
-        self.map.iter_mut()
+        RuleMap { map: rules }
     }
 }
 
 impl Index<u8> for RuleMap {
     type Output = String;
 
-    fn index<'a>(&'a self, index: u8) -> &'a String {
+    fn index(&self, index: u8) -> &String {
         &self.map[index as usize]
     }
 }
@@ -49,32 +55,34 @@ impl Index<u8> for RuleMap {
 impl Index<char> for RuleMap {
     type Output = String;
 
-    fn index<'a>(&'a self, index: char) -> &'a String {
+    fn index(&self, index: char) -> &String {
         &self.map[index as usize]
     }
 }
 
 impl IndexMut<u8> for RuleMap {
-    fn index_mut<'a>(&'a mut self, index: u8) -> &'a mut String {
+    fn index_mut(&mut self, index: u8) -> &mut String {
         &mut self.map[index as usize]
     }
 }
 
 impl IndexMut<char> for RuleMap {
-    fn index_mut<'a>(&'a mut self, index: char) -> &'a mut String {
+    fn index_mut(&mut self, index: char) -> &mut String {
         &mut self.map[index as usize]
     }
 }
 
 impl fmt::Display for RuleMap {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let rules = self.map.iter().enumerate().filter_map(|(pred, succ)| {
-            if !(succ.len() == 1 && succ.as_bytes()[0] == pred as u8) {
-                Some(format!("{} -> {}", pred as u8 as char, succ))
-            } else {
-                None
-            }
-        }).collect::<Vec<_>>();
+        let rules = self.map
+            .iter()
+            .enumerate()
+            .filter_map(|(pred, succ)| if !(succ.len() == 1 && succ.as_bytes()[0] == pred as u8) {
+                            Some(format!("{} -> {}", pred as u8 as char, succ))
+                        } else {
+                            None
+                        })
+            .collect::<Vec<_>>();
 
         for (i, rule) in rules.iter().enumerate() {
             write!(f, "{}", rule)?;
@@ -103,7 +111,7 @@ impl Serialize for RuleMap {
 
 impl Deserialize for RuleMap {
     fn deserialize<D: Deserializer>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer.deserialize_map(RuleMapVisitor{})
+        deserializer.deserialize_map(RuleMapVisitor {})
     }
 }
 
@@ -142,7 +150,7 @@ fn expand_lsystem(axiom: &str, rules: &RuleMap, iterations: u32) -> String {
         let mut expanded_lword = String::with_capacity(lword.len());
         for lchar in lword.bytes() {
             let expanded_lchar = &rules[lchar];
-            expanded_lword.push_str(&mut expanded_lchar.clone());
+            expanded_lword.push_str(&expanded_lchar.clone());
         }
         lword = expanded_lword;
     }
@@ -170,10 +178,7 @@ pub struct LSystem {
 
 impl LSystem {
     pub fn new() -> LSystem {
-        LSystem {
-            productions: RuleMap::new(),
-            axiom: String::new(),
-        }
+        Default::default()
     }
 
     pub fn set_rule(&mut self, letter: char, expansion: &str) {
@@ -184,7 +189,7 @@ impl LSystem {
         self.axiom = remove_redundancy(&self.axiom);
 
         for successor in self.productions.iter_mut() {
-            *successor = remove_redundancy(&successor);
+            *successor = remove_redundancy(successor);
         }
     }
 
@@ -192,15 +197,27 @@ impl LSystem {
         expand_lsystem(&self.axiom, &self.productions, iterations)
     }
 
-    pub fn instructions_iter<'a, 'b>(&'a self, iterations: u32, command_map: &'b CommandMap) -> InstructionsIter<'a, 'b> {
+    pub fn instructions_iter<'a, 'b>(&'a self,
+                                     iterations: u32,
+                                     command_map: &'b CommandMap)
+                                     -> InstructionsIter<'a, 'b> {
         InstructionsIter::new(self, command_map, iterations)
+    }
+}
+
+impl Default for LSystem {
+    fn default() -> LSystem {
+        LSystem {
+            productions: RuleMap::new(),
+            axiom: String::new(),
+        }
     }
 }
 
 impl Rewriter for LSystem {
     fn instructions(&self, iterations: u32, command_map: &CommandMap) -> Vec<Instruction> {
         let lword = expand_lsystem(&self.axiom, &self.productions, iterations);
-        map_word_to_instructions(&lword, &command_map)
+        map_word_to_instructions(&lword, command_map)
     }
 }
 
@@ -226,7 +243,10 @@ pub struct InstructionsIter<'a, 'b> {
 }
 
 impl<'a, 'b> InstructionsIter<'a, 'b> {
-    pub fn new(lsystem: &'a LSystem, command_map: &'b CommandMap, iterations: u32) -> InstructionsIter<'a, 'b> {
+    pub fn new(lsystem: &'a LSystem,
+               command_map: &'b CommandMap,
+               iterations: u32)
+               -> InstructionsIter<'a, 'b> {
         let mut iter = InstructionsIter {
             lsystem: lsystem,
             command_map: command_map,
@@ -283,10 +303,9 @@ mod test {
 
         let command_map = create_command_map();
 
-        let instructions = lsystem.instructions_iter(5, &command_map).collect::<Vec<_>>();
-        assert_eq!(
-            instructions,
-            lsystem.instructions(5, &command_map)
-        )
+        let instructions = lsystem
+            .instructions_iter(5, &command_map)
+            .collect::<Vec<_>>();
+        assert_eq!(instructions, lsystem.instructions(5, &command_map))
     }
 }

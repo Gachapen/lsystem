@@ -7,7 +7,7 @@ use common::CommandMap;
 use common::map_word_to_instructions;
 use common::Rewriter;
 
-fn matches_left_context(word_left: &str, context: u8, ignores: &Vec<u8>) -> bool {
+fn matches_left_context(word_left: &str, context: u8, ignores: &[u8]) -> bool {
     let bytes = word_left.as_bytes();
 
     let mut i = word_left.len();
@@ -104,7 +104,7 @@ fn matches_left_context(word_left: &str, context: u8, ignores: &Vec<u8>) -> bool
 //    found_match
 //}
 
-fn matches_right_context(word_right: &str, context: u8, ignores: &Vec<u8>) -> bool {
+fn matches_right_context(word_right: &str, context: u8, ignores: &[u8]) -> bool {
     let bytes = word_right.as_bytes();
     let length = word_right.len();
 
@@ -151,7 +151,7 @@ fn matches_right_context(word_right: &str, context: u8, ignores: &Vec<u8>) -> bo
     found_match
 }
 
-fn matches_predecessor(word: &str, i: usize, pred: &Predecessor, ignores: &Vec<u8>) -> bool {
+fn matches_predecessor(word: &str, i: usize, pred: &Predecessor, ignores: &[u8]) -> bool {
     let bytes = word.as_bytes();
 
     if pred.strict != bytes[i] {
@@ -159,11 +159,11 @@ fn matches_predecessor(word: &str, i: usize, pred: &Predecessor, ignores: &Vec<u
     }
 
     if let Some(left) = pred.left {
-        if i <= 0 {
+        if i == 0 {
             return false;
         }
 
-        if !matches_left_context(&word[0..i], left, &ignores) {
+        if !matches_left_context(&word[0..i], left, ignores) {
             return false;
         }
     }
@@ -173,7 +173,7 @@ fn matches_predecessor(word: &str, i: usize, pred: &Predecessor, ignores: &Vec<u
             return false;
         }
 
-        if !matches_right_context(&word[i+1..], right, &ignores) {
+        if !matches_right_context(&word[i + 1..], right, ignores) {
             return false;
         }
     }
@@ -182,7 +182,7 @@ fn matches_predecessor(word: &str, i: usize, pred: &Predecessor, ignores: &Vec<u
     true
 }
 
-fn expand_lsystem(axiom: &str, rules: &Vec<Production>, iterations: u32, ignore: &Vec<u8>) -> String {
+fn expand_lsystem(axiom: &str, rules: &[Production], iterations: u32, ignore: &[u8]) -> String {
     let mut lword = String::from(axiom);
     //println!("0: {}", lword);
 
@@ -190,9 +190,9 @@ fn expand_lsystem(axiom: &str, rules: &Vec<Production>, iterations: u32, ignore:
         let mut expanded_lword = String::with_capacity(lword.len());
 
         for (i, lchar) in lword.as_bytes().iter().cloned().enumerate() {
-            let prod = rules.iter().find(|&prod| {
-                matches_predecessor(&lword, i, &prod.predecessor, &ignore)
-            });
+            let prod = rules
+                .iter()
+                .find(|&prod| matches_predecessor(&lword, i, &prod.predecessor, ignore));
 
             if let Some(prod) = prod {
                 expanded_lword.push_str(&prod.successor.clone());
@@ -316,11 +316,7 @@ pub struct LSystem {
 
 impl LSystem {
     pub fn new() -> LSystem {
-        LSystem {
-            productions: Vec::new(),
-            axiom: String::new(),
-            ignore: Vec::new(),
-        }
+        Default::default()
     }
 
     pub fn ignore_from_context(&mut self, ignore: &str) {
@@ -331,10 +327,20 @@ impl LSystem {
     }
 }
 
+impl Default for LSystem {
+    fn default() -> LSystem {
+        LSystem {
+            productions: Vec::new(),
+            axiom: String::new(),
+            ignore: Vec::new(),
+        }
+    }
+}
+
 impl Rewriter for LSystem {
     fn instructions(&self, iterations: u32, command_map: &CommandMap) -> Vec<Instruction> {
         let lword = expand_lsystem(&self.axiom, &self.productions, iterations, &self.ignore);
-        map_word_to_instructions(&lword, &command_map)
+        map_word_to_instructions(&lword, command_map)
     }
 }
 
@@ -362,7 +368,9 @@ mod tests {
 
     #[test]
     fn matches_left_context_test_branch_ignore() {
-        assert!(super::matches_left_context("AF[[B]C]F[D[E]]F", 'A' as u8, &vec!['C' as u8, 'F' as u8]));
+        assert!(super::matches_left_context("AF[[B]C]F[D[E]]F",
+                                            'A' as u8,
+                                            &vec!['C' as u8, 'F' as u8]));
     }
 
     #[test]
@@ -389,7 +397,9 @@ mod tests {
 
     #[test]
     fn matches_right_context_test_branch_ignore() {
-        assert!(super::matches_right_context("F[[B]C]F[D[E]]FA", 'A' as u8, &vec!['C' as u8, 'F' as u8]));
+        assert!(super::matches_right_context("F[[B]C]F[D[E]]FA",
+                                             'A' as u8,
+                                             &vec!['C' as u8, 'F' as u8]));
     }
 
     #[test]

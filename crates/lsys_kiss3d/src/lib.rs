@@ -17,7 +17,7 @@ use lsys::Command;
 use lsys::param;
 
 pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
-    where I: Iterator<Item=lsys::Instruction>
+    where I: Iterator<Item = lsys::Instruction>
 {
     let mut model = SceneNode::new_empty();
 
@@ -39,7 +39,7 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
             Command::Forward => {
                 let segment_length = {
                     if !instruction.args.is_empty() {
-                       instruction.args[0]
+                        instruction.args[0]
                     } else {
                         segment_length
                     }
@@ -59,7 +59,8 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
                         )
                     );
 
-                    assert!(color_index < settings.colors.len(), "Color index is outside color palette");
+                    assert!(color_index < settings.colors.len(),
+                            "Color index is outside color palette");
                     let color = settings.colors[color_index];
                     segment.set_color(color.0, color.1, color.2);
 
@@ -71,45 +72,45 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
 
                     surface_points.push(position);
                 }
-            },
+            }
             Command::YawRight => {
                 let angle = {
                     if !instruction.args.is_empty() {
-                       instruction.args[0]
+                        instruction.args[0]
                     } else {
                         settings.angle
                     }
                 };
                 rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * -angle);
-            },
+            }
             Command::YawLeft => {
                 let angle = {
                     if !instruction.args.is_empty() {
-                       instruction.args[0]
+                        instruction.args[0]
                     } else {
                         settings.angle
                     }
                 };
                 rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * angle);
-            },
+            }
             Command::UTurn => {
                 let angle = PI;
                 rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * -angle);
-            },
+            }
             Command::PitchUp => {
                 let angle = {
                     if !instruction.args.is_empty() {
-                       instruction.args[0]
+                        instruction.args[0]
                     } else {
                         settings.angle
                     }
                 };
                 rotation = rotation * Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * angle);
-            },
+            }
             Command::PitchDown => {
                 let angle = {
                     if !instruction.args.is_empty() {
-                       instruction.args[0]
+                        instruction.args[0]
                     } else {
                         settings.angle
                     }
@@ -119,51 +120,54 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
             Command::RollRight => {
                 let angle = {
                     if !instruction.args.is_empty() {
-                       instruction.args[0]
+                        instruction.args[0]
                     } else {
                         settings.angle
                     }
                 };
                 rotation = rotation * Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * -angle);
-            },
+            }
             Command::RollLeft => {
                 let angle = {
                     if !instruction.args.is_empty() {
-                       instruction.args[0]
+                        instruction.args[0]
                     } else {
                         settings.angle
                     }
                 };
                 rotation = rotation * Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * angle);
-            },
+            }
             Command::Shrink => {
                 let rate = {
                     if !instruction.args.is_empty() {
-                       instruction.args[0]
+                        instruction.args[0]
                     } else {
                         settings.shrink_rate
                     }
                 };
-                width = width / rate;
-            },
+                width /= rate;
+            }
             Command::Grow => {
                 let rate = {
                     if !instruction.args.is_empty() {
-                       instruction.args[0]
+                        instruction.args[0]
                     } else {
                         settings.shrink_rate
                     }
                 };
-                width = width * rate;
-            },
+                width *= rate;
+            }
             Command::Width => {
                 width = instruction.args[0];
-            },
+            }
             Command::Push => {
                 states.push((position, rotation, width, color_index));
-            },
+            }
             Command::Pop => {
-                if let Some((stored_position, stored_rotation, stored_width, stored_color_index)) = states.pop() {
+                if let Some((stored_position,
+                             stored_rotation,
+                             stored_width,
+                             stored_color_index)) = states.pop() {
                     position = stored_position;
                     rotation = stored_rotation;
                     width = stored_width;
@@ -171,7 +175,7 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
                 } else {
                     panic!("Tried to pop empty state stack");
                 }
-            },
+            }
             Command::BeginSurface => {
                 filling = true;
 
@@ -181,9 +185,12 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
                 width = settings.width;
 
                 surface_points.push(position);
-            },
+            }
             Command::EndSurface => {
-                if let Some((stored_position, stored_rotation, stored_width, stored_color_index)) = states.pop() {
+                if let Some((stored_position,
+                             stored_rotation,
+                             stored_width,
+                             stored_color_index)) = states.pop() {
                     position = stored_position;
                     rotation = stored_rotation;
                     width = stored_width;
@@ -193,12 +200,16 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
                 }
 
                 if surface_points.len() >= 3 {
-                    surface_points = surface_points.iter().map(|p| Point3::new(p.x, p.z, 0.0)).collect();
+                    surface_points = surface_points
+                        .iter()
+                        .map(|p| Point3::new(p.x, p.z, 0.0))
+                        .collect();
 
                     let mesh = nct::triangulate(&surface_points);
                     let mut node = model.add_trimesh(mesh, Vector3::new(1.0, 1.0, 1.0));
 
-                    let surface_rot = rotation * UnitQuaternion::from_euler_angles(FRAC_PI_2, 0.0, 0.0);
+                    let surface_rot = rotation *
+                                      UnitQuaternion::from_euler_angles(FRAC_PI_2, 0.0, 0.0);
 
                     node.enable_backface_culling(false);
                     node.append_transformation(
@@ -208,18 +219,19 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
                         )
                     );
 
-                    assert!(color_index < settings.colors.len(), "Color index is outside color palette");
+                    assert!(color_index < settings.colors.len(),
+                            "Color index is outside color palette");
                     let color = settings.colors[color_index];
                     node.set_color(color.0, color.1, color.2);
                 }
 
                 surface_points.clear();
                 filling = false;
-            },
+            }
             Command::NextColor => {
                 color_index += 1;
-            },
-            Command::Noop => {},
+            }
+            Command::Noop => {}
         };
     }
 
@@ -227,7 +239,9 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
 }
 
 #[allow(dead_code)]
-pub fn run_static<T>(window: &mut Window, camera: &mut Camera, (system, settings): (T, lsys::Settings))
+pub fn run_static<T>(window: &mut Window,
+                     camera: &mut Camera,
+                     (system, settings): (T, lsys::Settings))
     where T: lsys::Rewriter
 {
     let instructions = system.instructions(settings.iterations, &settings.command_map);
@@ -241,8 +255,9 @@ pub fn run_static<T>(window: &mut Window, camera: &mut Camera, (system, settings
 }
 
 #[allow(dead_code)]
-pub fn run_animated(window: &mut Window, camera: &mut Camera, (system, settings): (param::LSystem, lsys::Settings))
-{
+pub fn run_animated(window: &mut Window,
+                    camera: &mut Camera,
+                    (system, settings): (param::LSystem, lsys::Settings)) {
     let mut model = SceneNode::new_empty();
 
     let mut word = system.axiom.clone();

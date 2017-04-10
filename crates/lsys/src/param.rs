@@ -96,6 +96,7 @@ impl fmt::Display for Letter {
 }
 
 pub type Word = Vec<Letter>;
+pub type WordSlice = [Letter];
 
 pub trait WordFromString {
     fn from_str(string: &str) -> Word;
@@ -114,11 +115,17 @@ impl WordFromString for Word {
                 if *next == '(' as u8 {
                     iter.next();
 
-                    let param_list_end = iter.clone().position(|b| b == ')' as u8).expect("Syntax error: Parameter has no end paranthesis ')'");
+                    let param_list_end =
+                        iter.clone()
+                            .position(|b| b == ')' as u8)
+                            .expect("Syntax error: Parameter has no end paranthesis ')'");
                     // Iterator for parameter, including ending ')', e.g. "A(50,3)" => "50,3)"
                     let mut param_list_iter = iter.clone().take(param_list_end + 1);
 
-                    while let Some(param_end) = param_list_iter.clone().position(|b| b == ',' as u8 || b == ')' as u8) {
+                    while let Some(param_end) =
+                        param_list_iter
+                            .clone()
+                            .position(|b| b == ',' as u8 || b == ')' as u8) {
                         let param_iter = param_list_iter.clone().take(param_end);
 
                         let mut param_str = String::new();
@@ -155,7 +162,7 @@ impl WordFromString for Word {
 
 type Condition = Fn(&Vec<Param>) -> bool;
 
-type ParamTransform = Fn(&Vec<Param>, f32) -> Vec<Param>;
+type ParamTransform = Fn(&[Param], f32) -> Vec<Param>;
 
 pub struct ProductionLetter {
     character: u8,
@@ -165,11 +172,11 @@ pub struct ProductionLetter {
 pub mod transform {
     use super::Param;
 
-    pub fn identity(params: &Vec<Param>, _: f32) -> Vec<Param> {
-        params.clone()
+    pub fn identity(params: &[Param], _: f32) -> Vec<Param> {
+        params.to_vec()
     }
 
-    pub fn empty(_: &Vec<Param>, _: f32) -> Vec<Param> {
+    pub fn empty(_: &[Param], _: f32) -> Vec<Param> {
         vec![]
     }
 }
@@ -180,7 +187,8 @@ impl ProductionLetter {
     }
 
     pub fn with_transform<F>(character: char, transformer: F) -> ProductionLetter
-        where F: Fn(&Vec<Param>, f32) -> Vec<Param> + 'static {
+        where F: Fn(&[Param], f32) -> Vec<Param> + 'static
+    {
 
         ProductionLetter {
             character: character as u8,
@@ -189,11 +197,11 @@ impl ProductionLetter {
     }
 
     pub fn with_params(character: char, params: Vec<Param>) -> ProductionLetter {
-        ProductionLetter::with_transform(character, move |_,_| params.clone())
+        ProductionLetter::with_transform(character, move |_, _| params.clone())
     }
 }
 
-/// Convert from Letter to ProductionLetter, changing params to transforms that
+/// Convert from `Letter` to `ProductionLetter`, changing params to transforms that
 /// return the params.
 impl From<Letter> for ProductionLetter {
     fn from(letter: Letter) -> ProductionLetter {
@@ -201,7 +209,7 @@ impl From<Letter> for ProductionLetter {
     }
 }
 
-/// Convert from &Letter to ProductionLetter, changing params to transforms that
+/// Convert from `&Letter` to `ProductionLetter`, changing params to transforms that
 /// return the params.
 impl<'a> From<&'a Letter> for ProductionLetter {
     fn from(letter: &Letter) -> ProductionLetter {
@@ -243,8 +251,12 @@ pub struct Production {
 }
 
 impl Production {
-    pub fn with_condition<F>(predecessor: char, condition: F, successor: ProductionWord) -> Production
-        where F: Fn(&Vec<Param>) -> bool + 'static {
+    pub fn with_condition<F>(predecessor: char,
+                             condition: F,
+                             successor: ProductionWord)
+                             -> Production
+        where F: Fn(&Vec<Param>) -> bool + 'static
+    {
 
         Production {
             predecessor: predecessor as u8,
@@ -260,62 +272,67 @@ impl Production {
 
 impl fmt::Display for Production {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let prod_str = self.successor.iter().fold(
-            String::new(),
-            |mut word, l|  {
+        let prod_str = self.successor
+            .iter()
+            .fold(String::new(), |mut word, l| {
                 word.push_str(&format!("{}", l));
                 word
-            }
-        );
+            });
         write!(f, "{} -> {}", self.predecessor as char, prod_str)
     }
 }
 
-fn expand_lsystem(axiom: &Word, productions: &Vec<Production>, iterations: u32) -> Word {
-    let mut word = axiom.clone();
+fn expand_lsystem(axiom: &WordSlice, productions: &[Production], iterations: u32) -> Word {
+    let mut word = axiom.to_vec();
 
     for _ in 0..iterations {
-        word = step(&word, &productions, 1.0);
+        word = step(&word, productions, 1.0);
     }
 
     word
 }
 
-fn params_to_args(params: &Vec<Param>) -> Vec<f32> {
-    params.iter().map(|p| {
-        match *p {
-            Param::I(x) => x as f32,
-            Param::F(x) => x,
-        }
-    }).collect()
+fn params_to_args(params: &[Param]) -> Vec<f32> {
+    params
+        .iter()
+        .map(|p| match *p {
+                 Param::I(x) => x as f32,
+                 Param::F(x) => x,
+             })
+        .collect()
 }
 
-pub fn map_word_to_instructions(word: &Word, command_map: &CommandMap) -> Vec<Instruction> {
+pub fn map_word_to_instructions(word: &WordSlice, command_map: &CommandMap) -> Vec<Instruction> {
     let mut instructions = Vec::with_capacity(word.len());
     for letter in word {
         let command = command_map[letter.character as usize];
         if command != Command::Noop {
-            instructions.push(Instruction{ command: command, args: params_to_args(&letter.params) });
+            instructions.push(Instruction {
+                                  command: command,
+                                  args: params_to_args(&letter.params),
+                              });
         }
     }
     instructions
 }
 
-pub fn step(prev: &Word, productions: &Vec<Production>, dt: f32) -> Word {
+pub fn step(prev: &WordSlice, productions: &[Production], dt: f32) -> Word {
     let mut expansion = Word::with_capacity(prev.len());
 
     for letter in prev {
-        let prod = productions.iter().find(|&prod| {
-            if prod.predecessor != letter.character {
-                return false;
-            }
+        let prod = productions
+            .iter()
+            .find(|&prod| {
+                if prod.predecessor != letter.character {
+                    return false;
+                }
 
-            if !(prod.condition)(&letter.params) {
-                return false;
-            }
+                if !(prod.condition)(&letter.params) {
+                    return false;
+                }
 
-            true
-        });
+                true
+            });
 
         if let Some(prod) = prod {
             for prod_letter in &prod.successor {
@@ -337,6 +354,12 @@ pub struct LSystem {
 
 impl LSystem {
     pub fn new() -> LSystem {
+        Default::default()
+    }
+}
+
+impl Default for LSystem {
+    fn default() -> LSystem {
         LSystem {
             productions: Vec::new(),
             axiom: Word::new(),
@@ -347,7 +370,7 @@ impl LSystem {
 impl Rewriter for LSystem {
     fn instructions(&self, iterations: u32, command_map: &CommandMap) -> Vec<Instruction> {
         let word = expand_lsystem(&self.axiom, &self.productions, iterations);
-        map_word_to_instructions(&word, &command_map)
+        map_word_to_instructions(&word, command_map)
     }
 }
 
@@ -397,21 +420,21 @@ mod tests {
                             Param::F(_) => return false,
                             Param::I(y) => {
                                 if x != y {
-                                    return false
+                                    return false;
                                 }
-                            },
+                            }
                         }
-                    },
+                    }
                     Param::F(x) => {
                         match bp {
                             Param::I(_) => return false,
                             Param::F(y) => {
                                 if x != y {
-                                    return false
+                                    return false;
                                 }
-                            },
+                            }
                         }
-                    },
+                    }
                 }
             }
         }
@@ -421,35 +444,24 @@ mod tests {
 
     #[test]
     fn expand_lsystem_test() {
-        let axiom = vec![
-            Letter::new('A'),
-        ];
-        let productions = vec![
-            Production::new('A', ProductionWord::from_str("ABC")),
-        ];
+        let axiom = vec![Letter::new('A')];
+        let productions = vec![Production::new('A', ProductionWord::from_str("ABC"))];
 
-        assert!(words_eq(&Word::from_str("ABC"), &super::expand_lsystem(&axiom, &productions, 1)));
+        assert!(words_eq(&Word::from_str("ABC"),
+                         &super::expand_lsystem(&axiom, &productions, 1)));
     }
 
     #[test]
     fn expand_lsystem_param_test() {
-        let axiom = vec![
-            Letter::with_params('A', vec![Param::I(0), Param::F(1.0)]),
-        ];
-        let productions = vec![
-            Production::new(
-                'A',
-                vec![
+        let axiom = vec![Letter::with_params('A', vec![Param::I(0), Param::F(1.0)])];
+        let productions = vec![Production::new('A',
+                                               vec![
                     ProductionLetter::with_params('A', vec![Param::I(1), Param::F(0.0)]),
                     ProductionLetter::new('B'),
-                ]
-            ),
-        ];
+                ])];
 
-        let expected = vec![
-            Letter::with_params('A', vec![Param::I(1), Param::F(0.0)]),
-            Letter::new('B'),
-        ];
+        let expected = vec![Letter::with_params('A', vec![Param::I(1), Param::F(0.0)]),
+                            Letter::new('B')];
 
         println!("{:?}", super::expand_lsystem(&axiom, &productions, 1));
         assert!(words_eq(&expected, &super::expand_lsystem(&axiom, &productions, 1)));
@@ -457,74 +469,49 @@ mod tests {
 
     #[test]
     fn expand_lsystem_condition_test() {
-        let axiom = vec![
-            Letter::with_params('A', vec![Param::I(0)]),
-        ];
-        let productions = vec![
-            Production::with_condition(
-                'A',
-                |params| params[0].i() == 0,
-                vec![
+        let axiom = vec![Letter::with_params('A', vec![Param::I(0)])];
+        let productions = vec![Production::with_condition('A',
+                                                          |params| params[0].i() == 0,
+                                                          vec![
                     ProductionLetter::with_params('A', vec![Param::I(0)]),
                     ProductionLetter::with_params('B', vec![Param::I(0)]),
-                ]
-            ),
-            Production::with_condition(
-                'B',
-                |params| params[0].i() == 1,
-                vec![
-                    ProductionLetter::new('C'),
-                ]
-            ),
-        ];
+                ]),
+                               Production::with_condition('B',
+                                                          |params| params[0].i() == 1,
+                                                          vec![ProductionLetter::new('C')])];
 
-        let expected = vec![
-            Letter::with_params('A', vec![Param::I(0)]),
-            Letter::with_params('B', vec![Param::I(0)]),
-            Letter::with_params('B', vec![Param::I(0)]),
-        ];
+        let expected = vec![Letter::with_params('A', vec![Param::I(0)]),
+                            Letter::with_params('B', vec![Param::I(0)]),
+                            Letter::with_params('B', vec![Param::I(0)])];
 
         assert!(words_eq(&expected, &super::expand_lsystem(&axiom, &productions, 2)));
     }
 
     #[test]
     fn expand_lsystem_transform_test() {
-        let axiom = vec![
-            Letter::with_params('A', vec![Param::I(0)]),
-        ];
-        let productions = vec![
-            Production::new(
-                'A',
-                vec![
-                    ProductionLetter::with_transform('A', |p,_| vec![Param::I(p[0].i() + 1)]),
-                ]
-            ),
-        ];
+        let axiom = vec![Letter::with_params('A', vec![Param::I(0)])];
+        let productions = vec![Production::new('A',
+                                               vec![ProductionLetter::with_transform('A',
+                                                     |p, _| {
+                                                         vec![Param::I(p[0].i() + 1)]
+                                                     })])];
 
-        let expected = vec![
-            Letter::with_params('A', vec![Param::I(4)]),
-        ];
+        let expected = vec![Letter::with_params('A', vec![Param::I(4)])];
 
         assert!(words_eq(&expected, &super::expand_lsystem(&axiom, &productions, 4)));
     }
 
     #[test]
     fn word_from_str_test_no_param() {
-        let expected = vec![
-            Letter::new('A'),
-            Letter::new('B'),
-            Letter::new('C'),
-        ];
+        let expected = vec![Letter::new('A'), Letter::new('B'), Letter::new('C')];
         assert!(words_eq(&expected, &Word::from_str("ABC")));
     }
 
     #[test]
     fn word_from_str_test_single_param() {
-        let expected = vec![
-            Letter::with_params('A', params_i![1]),
-            Letter::new('B'),
-            Letter::with_params('C', params_f![2.0]),
-        ];
+        let expected = vec![Letter::with_params('A', params_i![1]),
+                            Letter::new('B'),
+                            Letter::with_params('C', params_f![2.0])];
         let actual = Word::from_str("A(1)BC(2.0)");
 
         println!("Expected: {:?}", expected);
@@ -535,11 +522,10 @@ mod tests {
 
     #[test]
     fn word_from_str_test_multi_param() {
-        let expected = vec![
-            Letter::with_params('A', params_i![1, 2]),
-            Letter::new('B'),
-            Letter::with_params('C', vec![Param::F(3.0), Param::I(4), Param::I(5)]),
-        ];
+        let expected = vec![Letter::with_params('A', params_i![1, 2]),
+                            Letter::new('B'),
+                            Letter::with_params('C',
+                                                vec![Param::F(3.0), Param::I(4), Param::I(5)])];
         let actual = Word::from_str("A(1,2)BC(3.0,4,5)");
 
         println!("Expected: {:?}", expected);

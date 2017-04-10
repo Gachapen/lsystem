@@ -36,11 +36,7 @@ pub fn gaussian(x: f32, a: f32, b: f32, c: f32) -> f32 {
 /// assert_eq!(min_max(b, a), (a.min(b), a.max(b)));
 /// ```
 pub fn min_max<T: PartialOrd>(a: T, b: T) -> (T, T) {
-    if a < b {
-        (a, b)
-    } else {
-        (b, a)
-    }
+    if a < b { (a, b) } else { (b, a) }
 }
 
 /// Projects vector `a` onto direction vector `b`.
@@ -115,6 +111,7 @@ mod test {
         assert_eq!(interpolate_cos(0.0, 1.0, 0.5), 0.5);
         assert_eq!(interpolate_cos(0.0, 1.0, 1.0), 1.0);
 
-        assert_eq!(interpolate_cos(0.0, 1.0, 0.25), 0.146446609406726237799577818947575480357582031155762981705);
+        assert_eq!(interpolate_cos(0.0, 1.0, 0.25),
+                   0.146446609406726237799577818947575480357582031155762981705);
     }
 }

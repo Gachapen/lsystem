@@ -82,19 +82,25 @@ pub struct Settings {
 
 impl Settings {
     pub fn new() -> Settings {
+        Default::default()
+    }
+
+    pub fn map_command(&mut self, letter: char, command: Command) {
+        self.command_map[letter as u8 as usize] = command;
+    }
+}
+
+impl Default for Settings {
+    fn default() -> Settings {
         Settings {
             iterations: 0,
             angle: 0.0,
             step: 0.2,
             width: 0.2,
             shrink_rate: 1.0,
-            colors: vec![(50.0/255.0, 169.0/255.0, 18.0/255.0)],
+            colors: vec![(50.0 / 255.0, 169.0 / 255.0, 18.0 / 255.0)],
             command_map: create_command_map(),
         }
-    }
-
-    pub fn map_command(&mut self, letter: char, command: Command) {
-        self.command_map[letter as u8 as usize] = command;
     }
 }
 

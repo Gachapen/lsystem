@@ -1164,7 +1164,7 @@ impl<'a, G: Gene> WeightedGenotypeStats<'a, G> {
 }
 
 impl<'a, G: Gene> SelectionStrategy for WeightedGenotypeStats<'a, G> {
-    fn select_alternative(&mut self, num: usize, rulechain: &Vec<&str>, choice: u32) -> usize {
+    fn select_alternative(&mut self, num: usize, rulechain: &[&str], choice: u32) -> usize {
         let selection = self.weighted_genotype.select_alternative(num, rulechain, choice);
 
         let depth = WeightedGenotype::<'a, G>::find_depth(rulechain);
@@ -1176,7 +1176,7 @@ impl<'a, G: Gene> SelectionStrategy for WeightedGenotypeStats<'a, G> {
         selection
     }
 
-    fn select_repetition(&mut self, min: u32, max: u32, rulechain: &Vec<&str>, choice: u32) -> u32 {
+    fn select_repetition(&mut self, min: u32, max: u32, rulechain: &[&str], choice: u32) -> u32 {
         let selection = self.weighted_genotype.select_repetition(min, max, rulechain, choice);
 
         let depth = WeightedGenotype::<'a, G>::find_depth(rulechain);
@@ -1412,14 +1412,14 @@ impl<G: Gene> Genotype<G> {
 }
 
 impl<G: Gene> SelectionStrategy for Genotype<G> {
-    fn select_alternative(&mut self, num: usize, _: &Vec<&str>, _: u32) -> usize {
+    fn select_alternative(&mut self, num: usize, _: &[&str], _: u32) -> usize {
         let limit = Self::max_selection_value(num);
         let gene = self.use_next_gene();
 
         num::cast::<_, usize>(gene % limit).unwrap()
     }
 
-    fn select_repetition(&mut self, min: u32, max: u32, _: &Vec<&str>, _: u32) -> u32 {
+    fn select_repetition(&mut self, min: u32, max: u32, _: &[&str], _: u32) -> u32 {
         let limit = Self::max_selection_value(max - min + 1);
         let gene = self.use_next_gene();
 
@@ -1572,7 +1572,7 @@ impl<'a, G: Gene> WeightedGenotype<'a, G> {
 }
 
 impl<'a, G: Gene> SelectionStrategy for WeightedGenotype<'a, G> {
-    fn select_alternative(&mut self, num: usize, rulechain: &Vec<&str>, choice: u32) -> usize {
+    fn select_alternative(&mut self, num: usize, rulechain: &[&str], choice: u32) -> usize {
         let gene = self.genotype.use_next_gene();
 
         let depth = Self::find_depth(rulechain);
@@ -1589,7 +1589,7 @@ impl<'a, G: Gene> SelectionStrategy for WeightedGenotype<'a, G> {
         }
     }
 
-    fn select_repetition(&mut self, min: u32, max: u32, rulechain: &Vec<&str>, choice: u32) -> u32 {
+    fn select_repetition(&mut self, min: u32, max: u32, rulechain: &[&str], choice: u32) -> u32 {
         let gene = self.genotype.use_next_gene();
 
         let num = max - min + 1;
@@ -1625,7 +1625,7 @@ fn expand_productions<T>(grammar: &abnf::Ruleset, strategy: &mut T) -> ol::RuleM
             let repeat = item.repeat.unwrap_or_default();
             let min = repeat.min.unwrap_or(0);
             let max = repeat.max.unwrap_or(u32::max_value());
-            let num = strategy.select_repetition(min, max, &vec!["productions"], 0);
+            let num = strategy.select_repetition(min, max, &["productions"], 0);
 
             for _ in 0..num {
                 let (pred, succ) = expand_production(grammar, strategy);

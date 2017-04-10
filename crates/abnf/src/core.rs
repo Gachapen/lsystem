@@ -9,8 +9,6 @@ pub fn rules() -> Ruleset {
 }
 
 pub fn alpha() -> List {
-    List::Alternatives(vec![
-        Item::new(Content::Range('A', 'Z')),
-        Item::new(Content::Range('a', 'z')),
-    ])
+    List::Alternatives(vec![Item::new(Content::Range('A', 'Z')),
+                            Item::new(Content::Range('a', 'z'))])
 }
