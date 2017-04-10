@@ -19,6 +19,7 @@ extern crate clap;
 extern crate lsys;
 extern crate lsys_kiss3d as lsys3d;
 extern crate abnf;
+extern crate yobun;
 
 use na::{Point3};
 use kiss3d::window::Window;

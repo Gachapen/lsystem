@@ -1,4 +1,4 @@
-use std::f32::consts::{PI, FRAC_PI_2, E};
+use std::f32::consts::{PI, FRAC_PI_2};
 use std::f32;
 use std::{cmp, fs, fmt, io};
 use std::collections::HashMap;
@@ -31,6 +31,7 @@ use abnf::expand::{SelectionStrategy, expand_grammar};
 use lsys::{self, ol, Command};
 use lsys3d;
 use lsystems;
+use yobun::*;
 use super::setup_window;
 
 pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
@@ -331,20 +332,6 @@ pub fn build_skeleton(instructions: ol::InstructionsIter, settings: &lsys::Setti
     Some(skeleton)
 }
 
-#[allow(dead_code)]
-fn gaussian(x: f32, mean: f32, sd: f32) -> f32 {
-    E.powf(-(x - mean).abs().sqrt() / (2.0 * sd.sqrt())) / ((2.0 * PI).sqrt() * sd)
-}
-
-#[allow(dead_code)]
-fn min_max<T: PartialOrd>(a: T, b: T) -> (T, T) {
-    if a < b {
-        (a, b)
-    } else {
-        (b, a)
-    }
-}
-
 struct Properties {
     reach: f32,
     drop: f32,
@@ -354,26 +341,8 @@ struct Properties {
     num_points: usize,
 }
 
-fn vec2_length(x: f32, y: f32) -> f32 {
-    (x.powi(2) + y.powi(2)).sqrt()
-}
-
 const SKELETON_LIMIT: usize = 20000;
 const INSTRUCTION_LIMIT: usize = 10000000;
-
-fn project_onto(a: &Vector2<f32>, b: &Unit<Vector2<f32>>) -> f32 {
-    na::dot(a, &**b)
-}
-
-#[allow(dead_code)]
-fn interpolate_linear(a: f32, b: f32, t: f32) -> f32 {
-    a * (1.0 - t) + b * t
-}
-
-#[allow(dead_code)]
-fn interpolate_cos(a: f32, b: f32, t: f32) -> f32 {
-    interpolate_linear(a, b, (1.0 - (t * PI).cos()) / 2.0)
-}
 
 fn is_crap(lsystem: &ol::LSystem, settings: &lsys::Settings) -> bool {
     if is_nothing(lsystem){
@@ -407,12 +376,12 @@ fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32, Option<Pro
         let drop = skeleton.points.iter().min_by(|a, b| a.y.partial_cmp(&b.y).unwrap()).unwrap().y;
 
         let floor_points: Vec<_> = skeleton.points.iter().map(|p| Point2::new(p.x, p.z)).collect();
-        let floor_distances_iter = floor_points.iter().map(|p| vec2_length(p.x, p.y));
+        let floor_distances_iter = floor_points.iter().map(|p| na::norm(&Vector2::new(p.x, p.y)));
         let spread = floor_distances_iter.max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
 
         let center = ncu::center(&skeleton.points);
         let floor_center = Point2::new(center.x, center.z);
-        let center_distance = vec2_length(floor_center.x, floor_center.y);
+        let center_distance = na::norm(&Vector2::new(floor_center.x, floor_center.y));
 
         let closeness = skeleton.points.iter().enumerate().map(|(i, p)| {
             if i >= skeleton.edges.len() {
@@ -563,7 +532,7 @@ fn add_properties_rendering(node: &mut SceneNode, properties: &Properties) {
 
     let mut balance = SceneNode::new_empty();
     let center_vector = Vector2::new(properties.center.x, -properties.center.z);
-    let center_distance = vec2_length(center_vector.x, center_vector.y);
+    let center_distance = na::norm(&Vector2::new(center_vector.x, center_vector.y));
     let center_direction = na::normalize(&center_vector);
     let center_angle = center_direction.y.atan2(center_direction.x);
     balance.append_rotation(&UnitQuaternion::from_euler_angles(0.0, center_angle, 0.0));
@@ -2057,21 +2026,5 @@ mod test {
                 "testdata/read_dir_all/a/b/x",
             ]
         )
-    }
-
-    #[test]
-    fn test_interpolate_linear() {
-        assert_eq!(interpolate_linear(0.0, 1.0, 0.0), 0.0);
-        assert_eq!(interpolate_linear(0.0, 1.0, 0.5), 0.5);
-        assert_eq!(interpolate_linear(0.0, 1.0, 1.0), 1.0);
-    }
-
-    #[test]
-    fn test_interpolate_cos() {
-        assert_eq!(interpolate_cos(0.0, 1.0, 0.0), 0.0);
-        assert_eq!(interpolate_cos(0.0, 1.0, 0.5), 0.5);
-        assert_eq!(interpolate_cos(0.0, 1.0, 1.0), 1.0);
-
-        assert_eq!(interpolate_cos(0.0, 1.0, 0.25), 0.146446609406726237799577818947575480357582031155762981705);
     }
 }

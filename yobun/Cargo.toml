@@ -1,0 +1,9 @@
+[package]
+name = "yobun"
+version = "0.1.0"
+authors = ["Magnus Bjerke Vik <mbvett@gmail.com>"]
+description = "Extra ('yobun') utilities not provided by the std library"
+
+[dependencies]
+alga = "0.5"
+nalgebra = "0.11"
