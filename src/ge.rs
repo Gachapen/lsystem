@@ -185,7 +185,11 @@ impl Skeleton {
     }
 }
 
-pub fn build_skeleton(instructions: ol::InstructionsIter, settings: &lsys::Settings, size_limit: usize, instruction_limit: usize) -> Option<Skeleton> {
+pub fn build_skeleton(instructions: ol::InstructionsIter,
+                      settings: &lsys::Settings,
+                      size_limit: usize,
+                      instruction_limit: usize)
+                      -> Option<Skeleton> {
     let segment_length = settings.step;
 
     let mut skeleton = Skeleton::new();
@@ -208,7 +212,7 @@ pub fn build_skeleton(instructions: ol::InstructionsIter, settings: &lsys::Setti
             Command::Forward => {
                 let segment_length = {
                     if !instruction.args.is_empty() {
-                       instruction.args[0]
+                        instruction.args[0]
                     } else {
                         segment_length
                     }
@@ -225,45 +229,45 @@ pub fn build_skeleton(instructions: ol::InstructionsIter, settings: &lsys::Setti
                     skeleton.edges[parent].push(index);
                     parent = index;
                 }
-            },
+            }
             Command::YawRight => {
                 let angle = {
                     if !instruction.args.is_empty() {
-                       instruction.args[0]
+                        instruction.args[0]
                     } else {
                         settings.angle
                     }
                 };
                 rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * -angle);
-            },
+            }
             Command::YawLeft => {
                 let angle = {
                     if !instruction.args.is_empty() {
-                       instruction.args[0]
+                        instruction.args[0]
                     } else {
                         settings.angle
                     }
                 };
                 rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * angle);
-            },
+            }
             Command::UTurn => {
                 let angle = PI;
                 rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * -angle);
-            },
+            }
             Command::PitchUp => {
                 let angle = {
                     if !instruction.args.is_empty() {
-                       instruction.args[0]
+                        instruction.args[0]
                     } else {
                         settings.angle
                     }
                 };
                 rotation = rotation * Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * angle);
-            },
+            }
             Command::PitchDown => {
                 let angle = {
                     if !instruction.args.is_empty() {
-                       instruction.args[0]
+                        instruction.args[0]
                     } else {
                         settings.angle
                     }
@@ -273,32 +277,29 @@ pub fn build_skeleton(instructions: ol::InstructionsIter, settings: &lsys::Setti
             Command::RollRight => {
                 let angle = {
                     if !instruction.args.is_empty() {
-                       instruction.args[0]
+                        instruction.args[0]
                     } else {
                         settings.angle
                     }
                 };
                 rotation = rotation * Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * -angle);
-            },
+            }
             Command::RollLeft => {
                 let angle = {
                     if !instruction.args.is_empty() {
-                       instruction.args[0]
+                        instruction.args[0]
                     } else {
                         settings.angle
                     }
                 };
                 rotation = rotation * Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * angle);
-            },
-            Command::Shrink => {
-            },
-            Command::Grow => {
-            },
-            Command::Width => {
-            },
+            }
+            Command::Shrink => {}
+            Command::Grow => {}
+            Command::Width => {}
             Command::Push => {
                 states.push((position, rotation, parent));
-            },
+            }
             Command::Pop => {
                 if let Some((stored_position, stored_rotation, stored_parent)) = states.pop() {
                     position = stored_position;
@@ -307,11 +308,11 @@ pub fn build_skeleton(instructions: ol::InstructionsIter, settings: &lsys::Setti
                 } else {
                     panic!("Tried to pop empty state stack");
                 }
-            },
+            }
             Command::BeginSurface => {
                 filling = true;
                 states.push((position, rotation, parent));
-            },
+            }
             Command::EndSurface => {
                 if let Some((stored_position, stored_rotation, stored_parent)) = states.pop() {
                     position = stored_position;
@@ -322,10 +323,9 @@ pub fn build_skeleton(instructions: ol::InstructionsIter, settings: &lsys::Setti
                 }
 
                 filling = false;
-            },
-            Command::NextColor => {
-            },
-            Command::Noop => {},
+            }
+            Command::NextColor => {}
+            Command::Noop => {}
         };
     }
 
@@ -345,12 +345,15 @@ const SKELETON_LIMIT: usize = 20000;
 const INSTRUCTION_LIMIT: usize = 10000000;
 
 fn is_crap(lsystem: &ol::LSystem, settings: &lsys::Settings) -> bool {
-    if is_nothing(lsystem){
+    if is_nothing(lsystem) {
         return true;
     }
 
     let instruction_iter = lsystem.instructions_iter(settings.iterations, &settings.command_map);
-    if let Some(skeleton) = build_skeleton(instruction_iter, settings, SKELETON_LIMIT, INSTRUCTION_LIMIT) {
+    if let Some(skeleton) = build_skeleton(instruction_iter,
+                                           settings,
+                                           SKELETON_LIMIT,
+                                           INSTRUCTION_LIMIT) {
         if skeleton.points.len() <= 1 {
             return true;
         }
@@ -363,88 +366,116 @@ fn is_crap(lsystem: &ol::LSystem, settings: &lsys::Settings) -> bool {
 
 fn fitness(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32, Option<Properties>) {
     if is_nothing(lsystem) {
-        return (f32::MIN, None)
+        return (f32::MIN, None);
     }
 
     let instruction_iter = lsystem.instructions_iter(settings.iterations, &settings.command_map);
-    if let Some(skeleton) = build_skeleton(instruction_iter, settings, SKELETON_LIMIT, INSTRUCTION_LIMIT) {
+    if let Some(skeleton) = build_skeleton(instruction_iter,
+                                           settings,
+                                           SKELETON_LIMIT,
+                                           INSTRUCTION_LIMIT) {
         if skeleton.points.len() <= 1 {
-            return (f32::MIN, None)
+            return (f32::MIN, None);
         }
 
-        let reach = skeleton.points.iter().max_by(|a, b| a.y.partial_cmp(&b.y).unwrap()).unwrap().y;
-        let drop = skeleton.points.iter().min_by(|a, b| a.y.partial_cmp(&b.y).unwrap()).unwrap().y;
+        let reach = skeleton
+            .points
+            .iter()
+            .max_by(|a, b| a.y.partial_cmp(&b.y).unwrap())
+            .unwrap()
+            .y;
+        let drop = skeleton
+            .points
+            .iter()
+            .min_by(|a, b| a.y.partial_cmp(&b.y).unwrap())
+            .unwrap()
+            .y;
 
-        let floor_points: Vec<_> = skeleton.points.iter().map(|p| Point2::new(p.x, p.z)).collect();
-        let floor_distances_iter = floor_points.iter().map(|p| na::norm(&Vector2::new(p.x, p.y)));
-        let spread = floor_distances_iter.max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
+        let floor_points: Vec<_> = skeleton
+            .points
+            .iter()
+            .map(|p| Point2::new(p.x, p.z))
+            .collect();
+        let floor_distances_iter = floor_points
+            .iter()
+            .map(|p| na::norm(&Vector2::new(p.x, p.y)));
+        let spread = floor_distances_iter
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap();
 
         let center = ncu::center(&skeleton.points);
         let floor_center = Point2::new(center.x, center.z);
         let center_distance = na::norm(&Vector2::new(floor_center.x, floor_center.y));
 
-        let closeness = skeleton.points.iter().enumerate().map(|(i, p)| {
-            if i >= skeleton.edges.len() {
-                return 0.0;
-            }
-
-            let edges = skeleton.edges[i].iter().map(|e| skeleton.points[*e]);
-
-            let segments: Vec<_> = edges.map(|e| (e - p).normalize()).collect();
-            let closeness = segments.iter().enumerate().map(|(a_i, a_s)| {
-                let mut closest = -1.0;
-                for (b_i, b_s) in segments.iter().enumerate() {
-                    if b_i != a_i {
-                        let dot = na::dot(a_s, b_s);
-                        closest = *na::partial_max(&dot, &closest).unwrap();
-                    }
+        let closeness = skeleton
+            .points
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                if i >= skeleton.edges.len() {
+                    return 0.0;
                 }
 
-                const TRESHOLD: f32 = 0.9;
-                if closest < TRESHOLD {
-                    0.0
+                let edges = skeleton.edges[i].iter().map(|e| skeleton.points[*e]);
+
+                let segments: Vec<_> = edges.map(|e| (e - p).normalize()).collect();
+                let closeness = segments
+                    .iter()
+                    .enumerate()
+                    .map(|(a_i, a_s)| {
+                        let mut closest = -1.0;
+                        for (b_i, b_s) in segments.iter().enumerate() {
+                            if b_i != a_i {
+                                let dot = na::dot(a_s, b_s);
+                                closest = *na::partial_max(&dot, &closest).unwrap();
+                            }
+                        }
+
+                        const TRESHOLD: f32 = 0.9;
+                        if closest < TRESHOLD {
+                            0.0
+                        } else {
+                            (closest - TRESHOLD) * (1.0 / (1.0 - TRESHOLD))
+                        }
+                    })
+                    .max_by(|a, b| a.partial_cmp(b).unwrap());
+
+                if let Some(closeness) = closeness {
+                    closeness
                 } else {
-                    (closest - TRESHOLD) * (1.0 / (1.0 - TRESHOLD))
+                    0.0
                 }
-            }).max_by(|a, b| a.partial_cmp(b).unwrap());
-
-            if let Some(closeness) = closeness {
-                closeness
-            } else {
-                0.0
-            }
-        }).max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
-
-        // const TARGET_PROPORTION: f32 = 3.0;
-        // const PROPORTION_AREA: f32 = TARGET_PROPORTION * 2.0 - 2.0;
-        // let proportion = {
-        //     let (min, max) = min_max(reach, spread);
-        //     max / min
-        // };
-        // let proportion_fitness = ((proportion - 1.0).min(PROPORTION_AREA) / PROPORTION_AREA * PI).sin();
+            })
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap();
 
         let center_direction = Unit::new_normalize(Vector2::new(center.x, center.z));
-        let center_spread = floor_points.iter().map(|p| {
-            Vector2::new(p.x, p.y)
-        }).map(|p| {
-            project_onto(&p, &center_direction)
-        }).max_by(|a, b| {
-            a.partial_cmp(b).unwrap()
-        }).unwrap();
+        let center_spread = floor_points
+            .iter()
+            .map(|p| Vector2::new(p.x, p.y))
+            .map(|p| project_onto(&p, &center_direction))
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap();
 
 
         // First point is root, which we don't want to measure, so skip 1.
-        let branching_counts = skeleton.points.iter().skip(1).enumerate().filter_map(|(i, _)| {
-            if i >= skeleton.edges.len() {
-                return None;
-            }
+        let branching_counts = skeleton
+            .points
+            .iter()
+            .skip(1)
+            .enumerate()
+            .filter_map(|(i, _)| {
+                if i >= skeleton.edges.len() {
+                    return None;
+                }
 
-            if skeleton.edges[i].is_empty() {
-                return None;
-            }
+                if skeleton.edges[i].is_empty() {
+                    return None;
+                }
 
-            Some(skeleton.edges[i].len())
-        }).collect::<Vec<_>>();
+                Some(skeleton.edges[i].len())
+            })
+            .collect::<Vec<_>>();
 
         let total_branching_count = branching_counts.iter().fold(0, |total, b| total + b);
         let branching_complexity = {
@@ -512,7 +543,9 @@ fn add_properties_rendering(node: &mut SceneNode, properties: &Properties) {
     center.add_cube(LINE_WIDTH, LINE_LEN, LINE_WIDTH);
     center.add_cube(LINE_LEN, LINE_WIDTH, LINE_WIDTH);
     center.add_cube(LINE_WIDTH, LINE_WIDTH, LINE_LEN);
-    center.set_local_translation(Translation3::new(properties.center.x, properties.center.y, properties.center.z));
+    center.set_local_translation(Translation3::new(properties.center.x,
+                                                   properties.center.y,
+                                                   properties.center.z));
     node.add_child(center);
 
     let mut reach = SceneNode::new_empty();
@@ -526,7 +559,9 @@ fn add_properties_rendering(node: &mut SceneNode, properties: &Properties) {
     node.add_child(drop);
 
     let mut spread = SceneNode::new_empty();
-    spread.add_cube(properties.spread * 2.0, LINE_WIDTH, LINE_WIDTH).set_color(0.8, 0.1, 0.1);
+    spread
+        .add_cube(properties.spread * 2.0, LINE_WIDTH, LINE_WIDTH)
+        .set_color(0.8, 0.1, 0.1);
     spread.add_cube(LINE_WIDTH, LINE_WIDTH, properties.spread * 2.0);
     node.add_child(spread);
 
@@ -541,23 +576,27 @@ fn add_properties_rendering(node: &mut SceneNode, properties: &Properties) {
     center_dist.set_color(0.1, 0.1, 0.8);
     center_dist.set_local_translation(Translation3::new(center_distance / 2.0, 0.0, 0.0));
 
-    let mut center_imbalance = balance.add_cube(properties.center_spread / 2.0, LINE_WIDTH * 1.1, LINE_WIDTH * 1.1);
+    let mut center_imbalance = balance.add_cube(properties.center_spread / 2.0,
+                                                LINE_WIDTH * 1.1,
+                                                LINE_WIDTH * 1.1);
     center_imbalance.set_color(0.1, 0.8, 0.1);
-    center_imbalance.set_local_translation(Translation3::new(properties.center_spread / 4.0, 0.0, 0.0));
+    center_imbalance.set_local_translation(Translation3::new(properties.center_spread / 4.0,
+                                                             0.0,
+                                                             0.0));
 
     let mut center_spread = balance.add_cube(properties.center_spread, LINE_WIDTH, LINE_WIDTH);
-    center_spread.set_local_translation(Translation3::new(properties.center_spread / 2.0, 0.0, 0.0));
+    center_spread.set_local_translation(Translation3::new(properties.center_spread / 2.0,
+                                                          0.0,
+                                                          0.0));
 
     node.add_child(balance);
 }
 
 fn random_seed() -> [u32; 4] {
-    [
-        rand::thread_rng().gen::<u32>(),
-        rand::thread_rng().gen::<u32>(),
-        rand::thread_rng().gen::<u32>(),
-        rand::thread_rng().gen::<u32>(),
-    ]
+    [rand::thread_rng().gen::<u32>(),
+     rand::thread_rng().gen::<u32>(),
+     rand::thread_rng().gen::<u32>(),
+     rand::thread_rng().gen::<u32>()]
 }
 
 const GENOME_LENGTH: usize = 100;
@@ -565,17 +604,19 @@ const GENOME_LENGTH: usize = 100;
 fn run_with_distribution(matches: &ArgMatches) {
     let (mut window, _) = setup_window();
 
-    let grammar = Arc::new(abnf::parse_file("grammar/lsys2.abnf").expect("Could not parse ABNF file"));
+    let grammar =
+        Arc::new(abnf::parse_file("grammar/lsys2.abnf").expect("Could not parse ABNF file"));
 
     let distribution = match matches.value_of("distribution") {
         Some(filename) => {
             println!("Using distribution from {}", filename);
             let file = File::open(filename).unwrap();
-            let d: Distribution = bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite).unwrap();
+            let d: Distribution =
+                bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite).unwrap();
             Arc::new(d)
-        },
+        }
         None => {
-            Arc::new({
+            let distribution = {
                 let mut distribution = Distribution::new();
 
                 // lsys2.abnf distribution
@@ -585,17 +626,20 @@ fn run_with_distribution(matches: &ArgMatches) {
                 distribution.set_default_weights("string", 1, &[1.0, 0.0]);
 
                 // lsys.abnf distribution
-                // distribution.set_default_weights("productions", 0, &[1.0, 1.0]);
-                // distribution.set_default_weights("string", 0, &[1.0, 2.0, 2.0, 2.0, 1.0, 1.0]);
-                // distribution.set_default_weights("string", 1, &[1.0, 0.0]);
+                //  distribution.set_default_weights("productions", 0, &[1.0, 1.0]);
+                //  distribution.set_default_weights("string",
+                //                                   0,
+                //                                   &[1.0, 2.0, 2.0, 2.0, 1.0, 1.0]);
+                //  distribution.set_default_weights("string", 1, &[1.0, 0.0]);
                 //
-                // distribution.set_weights(0, "string", 0, &[1.0, 1.0, 2.0, 2.0, 2.0, 2.0]);
-                // distribution.set_weights(0, "string", 1, &[1.0, 1.0]);
+                //  distribution.set_weights(0, "string", 0, &[1.0, 1.0, 2.0, 2.0, 2.0, 2.0]);
+                //  distribution.set_weights(0, "string", 1, &[1.0, 1.0]);
                 //
-                // distribution.set_weights(1, "string", 1, &[10.0, 1.0]);
+                //  distribution.set_weights(1, "string", 1, &[10.0, 1.0]);
 
                 distribution
-            })
+            };
+            Arc::new(distribution)
         }
     };
 
@@ -605,11 +649,11 @@ fn run_with_distribution(matches: &ArgMatches) {
     let num_samples = usize::from_str_radix(matches.value_of("num-samples").unwrap(), 10).unwrap();
 
     let settings = Arc::new(lsys::Settings {
-        width: 0.05,
-        angle: PI / 8.0,
-        iterations: 5,
-        ..lsys::Settings::new()
-    });
+                                width: 0.05,
+                                angle: PI / 8.0,
+                                iterations: 5,
+                                ..lsys::Settings::new()
+                            });
 
     let mut system = ol::LSystem::new();
     let mut model = SceneNode::new_empty();
@@ -639,17 +683,23 @@ fn run_with_distribution(matches: &ArgMatches) {
                     serde_yaml::to_writer(&mut BufWriter::new(file), &system).unwrap();
 
                     println!("Saved to {}", path.to_str().unwrap());
-                },
+                }
                 WindowEvent::Key(Key::Space, _, Action::Release, _) => {
                     struct Sample {
                         seed: [u32; 4],
                         score: f32,
                     }
 
-                    fn generate_sample(grammar: &abnf::Ruleset, distribution: &Distribution, settings: &lsys::Settings) -> Sample {
+                    fn generate_sample(grammar: &abnf::Ruleset,
+                                       distribution: &Distribution,
+                                       settings: &lsys::Settings)
+                                       -> Sample {
                         let seed = random_seed();
-                        let genes = generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
-                        let system = generate_system(grammar, &mut WeightedGenotype::new(genes, distribution));
+                        let genes = generate_genome(&mut XorShiftRng::from_seed(seed),
+                                                    GENOME_LENGTH);
+                        let system = generate_system(grammar,
+                                                     &mut WeightedGenotype::new(genes,
+                                                                                distribution));
                         let (score, _) = fitness(&system, settings);
                         Sample {
                             seed: seed,
@@ -664,9 +714,9 @@ fn run_with_distribution(matches: &ArgMatches) {
                         let workers = num_cpus::get() + 1;
 
                         if workers == 1 || num_samples <= 1 {
-                            (0..num_samples).map(|_| {
-                                generate_sample(&grammar, &distribution, &settings)
-                            }).collect::<Vec<_>>()
+                            (0..num_samples)
+                                .map(|_| generate_sample(&grammar, &distribution, &settings))
+                                .collect::<Vec<_>>()
                         } else {
                             let pool = CpuPool::new(workers);
                             let mut tasks = Vec::with_capacity(num_samples);
@@ -677,9 +727,12 @@ fn run_with_distribution(matches: &ArgMatches) {
                                 let settings = settings.clone();
 
                                 tasks.push(pool.spawn_fn(move || {
-                                    let sample = generate_sample(&grammar, &distribution, &settings);
-                                    future::ok::<Sample, ()>(sample)
-                                }));
+                                                             let sample =
+                                                                 generate_sample(&grammar,
+                                                                                 &distribution,
+                                                                                 &settings);
+                                                             future::ok::<Sample, ()>(sample)
+                                                         }));
                             }
 
                             future::join_all(tasks).wait().unwrap()
@@ -688,7 +741,9 @@ fn run_with_distribution(matches: &ArgMatches) {
 
                     let end_time = time::now();
                     let duration = end_time - start_time;
-                    println!("Duration: {}.{}", duration.num_seconds(), duration.num_milliseconds());
+                    println!("Duration: {}.{}",
+                             duration.num_seconds(),
+                             duration.num_milliseconds());
 
                     samples.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
 
@@ -699,13 +754,16 @@ fn run_with_distribution(matches: &ArgMatches) {
 
                     window.remove(&mut model);
 
-                    let genes = generate_genome(&mut XorShiftRng::from_seed(sample.seed), GENOME_LENGTH);
-                    system = generate_system(&grammar, &mut WeightedGenotype::new(genes, &distribution));
+                    let genes = generate_genome(&mut XorShiftRng::from_seed(sample.seed),
+                                                GENOME_LENGTH);
+                    system = generate_system(&grammar,
+                                             &mut WeightedGenotype::new(genes, &distribution));
                     let (_, properties) = fitness(&system, &settings);
 
                     if let Some(properties) = properties {
                         println!("{} points.", properties.num_points);
-                        let instructions = system.instructions_iter(settings.iterations, &settings.command_map);
+                        let instructions =
+                            system.instructions_iter(settings.iterations, &settings.command_map);
                         model = lsys3d::build_model(instructions, &settings);
                         add_properties_rendering(&mut model, &properties);
                         window.scene_mut().add_child(model.clone());
@@ -718,9 +776,12 @@ fn run_with_distribution(matches: &ArgMatches) {
                     } else {
                         println!("Plant was nothing or reached the limits.");
                     }
-                },
+                }
                 WindowEvent::Key(Key::L, _, Action::Release, _) => {
-                    let mut models = fs::read_dir(model_dir).unwrap().map(|e| e.unwrap().path()).collect::<Vec<_>>();
+                    let mut models = fs::read_dir(model_dir)
+                        .unwrap()
+                        .map(|e| e.unwrap().path())
+                        .collect::<Vec<_>>();
                     models.sort();
                     let models = models;
 
@@ -738,7 +799,8 @@ fn run_with_distribution(matches: &ArgMatches) {
                         println!("LSystem:");
                         println!("{}", system);
 
-                        let instructions = system.instructions_iter(settings.iterations, &settings.command_map);
+                        let instructions =
+                            system.instructions_iter(settings.iterations, &settings.command_map);
                         let (score, properties) = fitness(&system, &settings);
                         println!("Score: {}", score);
 
@@ -751,13 +813,14 @@ fn run_with_distribution(matches: &ArgMatches) {
                     }
 
                     model_index += 1;
-                },
+                }
                 WindowEvent::Key(Key::X, _, Action::Release, _) => {
                     let (system, settings) = lsystems::make_bush();
                     println!("LSystem:");
                     println!("{}", system);
 
-                    let instructions = system.instructions_iter(settings.iterations, &settings.command_map);
+                    let instructions =
+                        system.instructions_iter(settings.iterations, &settings.command_map);
                     let (score, properties) = fitness(&system, &settings);
                     println!("Score: {}", score);
 
@@ -786,7 +849,7 @@ fn get_sample_setup() -> (abnf::Ruleset, Distribution) {
     let grammar = abnf::parse_file("grammar/lsys2.abnf").expect("Could not parse ABNF file");
     let distribution = {
         let mut distribution = Distribution::new();
-        for d in 0..DEPTHS-1 {
+        for d in 0..DEPTHS - 1 {
             distribution.set_weights(d, "string", 1, &[1.0, 1.0]);
         }
         distribution.set_default_weights("string", 1, &[1.0, 0.0]);
@@ -803,13 +866,16 @@ fn run_random_sampling(matches: &ArgMatches) {
         crap: bool,
     }
 
-    fn generate_sample(grammar: &abnf::Ruleset, distribution: &Distribution, settings: &lsys::Settings) -> Sample {
+    fn generate_sample(grammar: &abnf::Ruleset,
+                       distribution: &Distribution,
+                       settings: &lsys::Settings)
+                       -> Sample {
         let seed = random_seed();
         let genes = generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
         let system = generate_system(grammar, &mut WeightedGenotype::new(genes, distribution));
         Sample {
             seed: seed,
-            crap: is_crap(&system, settings)
+            crap: is_crap(&system, settings),
         }
     }
 
@@ -820,9 +886,10 @@ fn run_random_sampling(matches: &ArgMatches) {
         Some(filename) => {
             println!("Using distribution from {}", filename);
             let file = File::open(filename).unwrap();
-            let d: Distribution = bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite).unwrap();
+            let d: Distribution =
+                bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite).unwrap();
             Arc::new(d)
-        },
+        }
         None => Arc::new(distribution),
     };
 
@@ -830,11 +897,11 @@ fn run_random_sampling(matches: &ArgMatches) {
     println!("{}", distribution);
 
     let settings = Arc::new(lsys::Settings {
-        width: 0.05,
-        angle: PI / 8.0,
-        iterations: 5,
-        ..lsys::Settings::new()
-    });
+                                width: 0.05,
+                                angle: PI / 8.0,
+                                iterations: 5,
+                                ..lsys::Settings::new()
+                            });
 
     // const BATCH_SIZE: usize = 1024 / 8;
     const BATCH_SIZE: usize = 16 / 8;
@@ -864,19 +931,26 @@ fn run_random_sampling(matches: &ArgMatches) {
             let num_good_samples = num_good_samples.clone();
 
             scope.spawn(move || {
-                let dump_samples = |accepted_samples: &[Sample], sample_count: usize, batch: usize| {
+                let dump_samples = |accepted_samples: &[Sample],
+                                    sample_count: usize,
+                                    batch: usize| {
                     let filename = format!("{}.{}.sample", worker_id, batch);
                     let path = sample_dir.join(filename);
                     let file = File::create(&path).unwrap();
 
                     let samples = SampleBatch {
                         sample_count: sample_count,
-                        accepted: accepted_samples.iter().map(|s| s.seed).collect::<Vec<_>>(),
+                        accepted: accepted_samples
+                            .iter()
+                            .map(|s| s.seed)
+                            .collect::<Vec<_>>(),
                     };
-                    bincode::serialize_into(&mut BufWriter::new(file), &samples, bincode::Infinite).unwrap();
+                    bincode::serialize_into(&mut BufWriter::new(file), &samples, bincode::Infinite)
+                        .unwrap();
                 };
 
-                let mut accepted_samples = Vec::with_capacity(BATCH_SIZE / 200); // Room for 0.5% of samples.
+                // Room for 0.5% of samples.
+                let mut accepted_samples = Vec::with_capacity(BATCH_SIZE / 200);
                 let mut batch = 0;
                 let mut batch_num_samples = 0;
 
@@ -903,7 +977,8 @@ fn run_random_sampling(matches: &ArgMatches) {
 
                 dump_samples(&accepted_samples, batch_num_samples, batch);
                 num_samples.fetch_add(batch_num_samples, Ordering::Relaxed);
-                num_good_samples.fetch_add(batch * BATCH_SIZE + accepted_samples.len() , Ordering::Relaxed);
+                num_good_samples.fetch_add(batch * BATCH_SIZE + accepted_samples.len(),
+                                           Ordering::Relaxed);
             });
         }
 
@@ -924,17 +999,19 @@ fn run_random_sampling(matches: &ArgMatches) {
 
     let end_time = time::now();
     let duration = end_time - start_time;
-    println!(
-        "Duration: {}:{}:{}.{}",
-        duration.num_hours(),
-        duration.num_minutes() % 60,
-        duration.num_seconds() % 60,
-        duration.num_milliseconds() % 1000
-    );
+    println!("Duration: {}:{}:{}.{}",
+             duration.num_hours(),
+             duration.num_minutes() % 60,
+             duration.num_seconds() % 60,
+             duration.num_milliseconds() % 1000);
 
     let num_samples = Arc::try_unwrap(num_samples).unwrap().into_inner();
     let num_good_samples = Arc::try_unwrap(num_good_samples).unwrap().into_inner();
-    println!("Good samples: {}/{} ({:.*}%)", num_good_samples, num_samples, 1, num_good_samples as f32 / num_samples as f32 * 100.0);
+    println!("Good samples: {}/{} ({:.*}%)",
+             num_good_samples,
+             num_samples,
+             1,
+             num_good_samples as f32 / num_samples as f32 * 100.0);
 }
 
 fn run_sampling_distribution(matches: &ArgMatches) {
@@ -944,29 +1021,32 @@ fn run_sampling_distribution(matches: &ArgMatches) {
 
     println!("Reading samples from {}.", samples_path.to_str().unwrap());
 
-    let sample_paths = read_dir_all(samples_path).unwrap().filter_map(|e| {
-        let path = e.unwrap().path();
-        if path.is_dir() {
-            return None;
-        }
-
-        if let Some(extension) = path.extension() {
-            if extension != "sample" {
+    let sample_paths = read_dir_all(samples_path)
+        .unwrap()
+        .filter_map(|e| {
+            let path = e.unwrap().path();
+            if path.is_dir() {
                 return None;
             }
-        } else {
-            return None;
-        }
 
-        Some(path)
-    });
+            if let Some(extension) = path.extension() {
+                if extension != "sample" {
+                    return None;
+                }
+            } else {
+                return None;
+            }
+
+            Some(path)
+        });
 
     let mut sample_count = 0;
     let mut accepted_samples = Vec::new();
 
     for batch_path in sample_paths {
         let file = File::open(&batch_path).unwrap();
-        let batch: SampleBatch = bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite).unwrap();
+        let batch: SampleBatch =
+            bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite).unwrap();
 
         accepted_samples.reserve(batch.accepted.len());
         for sample in batch.accepted {
@@ -975,7 +1055,9 @@ fn run_sampling_distribution(matches: &ArgMatches) {
         sample_count += batch.sample_count;
     }
 
-    println!("Read {} accepted samples from a total of {} samples.", accepted_samples.len(), sample_count);
+    println!("Read {} accepted samples from a total of {} samples.",
+             accepted_samples.len(),
+             sample_count);
 
     let (grammar, distribution) = get_sample_setup();
     let grammar = Arc::new(grammar);
@@ -1000,15 +1082,22 @@ fn run_sampling_distribution(matches: &ArgMatches) {
     }
 
     let stats_collection = future::join_all(tasks).wait().unwrap();
-    let stats = stats_collection.iter().fold(SelectionStats::new(), |sum, stats| sum + stats);
+    let stats = stats_collection
+        .iter()
+        .fold(SelectionStats::new(), |sum, stats| sum + stats);
 
     let mut csv_file = File::create(csv_path).unwrap();
-    csv_file.write_all(stats.to_csv_normalized().as_bytes()).unwrap();
+    csv_file
+        .write_all(stats.to_csv_normalized().as_bytes())
+        .unwrap();
 
     let mut distribution = stats.to_distribution();
     distribution.set_default_weights("string", 1, &[1.0, 0.0]);
     let dist_file = File::create(bin_path).unwrap();
-    bincode::serialize_into(&mut BufWriter::new(dist_file), &distribution, bincode::Infinite).unwrap();
+    bincode::serialize_into(&mut BufWriter::new(dist_file),
+                            &distribution,
+                            bincode::Infinite)
+            .unwrap();
 }
 
 struct SelectionStats {
@@ -1017,9 +1106,7 @@ struct SelectionStats {
 
 impl SelectionStats {
     fn new() -> SelectionStats {
-        SelectionStats {
-            data: vec![],
-        }
+        SelectionStats { data: vec![] }
     }
 
     fn make_room(&mut self, depth: usize, rule: &str, choice: u32, num: usize) {
@@ -1027,7 +1114,9 @@ impl SelectionStats {
             self.data.push(HashMap::new());
         }
 
-        let choices = self.data[depth].entry(rule.to_string()).or_insert_with(Vec::new);
+        let choices = self.data[depth]
+            .entry(rule.to_string())
+            .or_insert_with(Vec::new);
         let choice = choice as usize;
         while choices.len() <= choice {
             choices.push(Vec::new());
@@ -1040,16 +1129,22 @@ impl SelectionStats {
     }
 
     fn add_selection(&mut self, selection: usize, depth: usize, rule: &str, choice: u32) {
-        assert!(depth < self.data.len(), format!("Depth {} is not available. Use make_room to make it.", depth));
+        assert!(depth < self.data.len(),
+                format!("Depth {} is not available. Use make_room to make it.",
+                        depth));
         let rules = &mut self.data[depth];
 
         let choices = &mut rules.entry(rule.to_string()).or_insert_with(Vec::new);
 
         let choice = choice as usize;
-        assert!(choice < choices.len(), format!("Choice {} is not available. Use make_room to make it.", choice));
+        assert!(choice < choices.len(),
+                format!("Choice {} is not available. Use make_room to make it.",
+                        choice));
         let alternatives = &mut choices[choice];
 
-        assert!(selection < alternatives.len(), format!("Alternative {} is not available. Use make_room to make it.", selection));
+        assert!(selection < alternatives.len(),
+                format!("Alternative {} is not available. Use make_room to make it.",
+                        selection));
         alternatives[selection] += 1;
     }
 
@@ -1065,7 +1160,8 @@ impl SelectionStats {
 
                     for (alternative, count) in alternatives.iter().enumerate() {
                         let weight = *count as f32 / total as f32;
-                        csv += &format!("{},{},{},{},{}\n", depth, rule, choice, alternative, weight);
+                        csv +=
+                            &format!("{},{},{},{},{}\n", depth, rule, choice, alternative, weight);
                     }
                 }
             }
@@ -1119,7 +1215,9 @@ impl<'a> Add<&'a SelectionStats> for SelectionStats {
 
         for (depth, other_rules) in other.data.iter().enumerate() {
             for (rule, other_choices) in other_rules {
-                let choices = self.data[depth].entry(rule.to_string()).or_insert_with(Vec::new);
+                let choices = self.data[depth]
+                    .entry(rule.to_string())
+                    .or_insert_with(Vec::new);
                 while choices.len() < other_choices.len() {
                     choices.push(Vec::new());
                 }
@@ -1165,7 +1263,8 @@ impl<'a, G: Gene> WeightedGenotypeStats<'a, G> {
 
 impl<'a, G: Gene> SelectionStrategy for WeightedGenotypeStats<'a, G> {
     fn select_alternative(&mut self, num: usize, rulechain: &[&str], choice: u32) -> usize {
-        let selection = self.weighted_genotype.select_alternative(num, rulechain, choice);
+        let selection = self.weighted_genotype
+            .select_alternative(num, rulechain, choice);
 
         let depth = WeightedGenotype::<'a, G>::find_depth(rulechain);
         let rule = rulechain.last().unwrap();
@@ -1177,14 +1276,16 @@ impl<'a, G: Gene> SelectionStrategy for WeightedGenotypeStats<'a, G> {
     }
 
     fn select_repetition(&mut self, min: u32, max: u32, rulechain: &[&str], choice: u32) -> u32 {
-        let selection = self.weighted_genotype.select_repetition(min, max, rulechain, choice);
+        let selection = self.weighted_genotype
+            .select_repetition(min, max, rulechain, choice);
 
         let depth = WeightedGenotype::<'a, G>::find_depth(rulechain);
         let rule = rulechain.last().unwrap();
         let num = (max - min + 1) as usize;
 
         self.stats.make_room(depth, rule, choice, num);
-        self.stats.add_selection((selection - min) as usize, depth, rule, choice);
+        self.stats
+            .add_selection((selection - min) as usize, depth, rule, choice);
 
         selection
     }
@@ -1240,9 +1341,7 @@ impl Iterator for ReadDirAll {
 fn read_dir_all<P: AsRef<Path>>(path: P) -> io::Result<ReadDirAll> {
     let top_dir = fs::read_dir(path)?;
 
-    Ok(ReadDirAll {
-        visit_stack: vec![top_dir],
-    })
+    Ok(ReadDirAll { visit_stack: vec![top_dir] })
 }
 
 fn run_print_abnf() {
@@ -1394,7 +1493,8 @@ impl<G: Gene> Genotype<G> {
     }
 
     fn use_next_gene(&mut self) -> G {
-        assert!(self.index < self.genes.len(), "Genotype index overflows gene list");
+        assert!(self.index < self.genes.len(),
+                "Genotype index overflows gene list");
 
         let gene = self.genes[self.index];
         self.index = (self.index + 1) % self.genes.len();
@@ -1489,7 +1589,9 @@ impl Distribution {
             self.depths.push(HashMap::new());
         }
 
-        let choices = self.depths[depth].entry(rule.to_string()).or_insert_with(Vec::new);
+        let choices = self.depths[depth]
+            .entry(rule.to_string())
+            .or_insert_with(Vec::new);
         let choice = choice as usize;
         while choices.len() < choice + 1 {
             choices.push(Vec::new());
@@ -1499,7 +1601,9 @@ impl Distribution {
     }
 
     fn set_default_weights(&mut self, rule: &str, choice: u32, weights: &[f32]) {
-        let choices = self.defaults.entry(rule.to_string()).or_insert_with(Vec::new);
+        let choices = self.defaults
+            .entry(rule.to_string())
+            .or_insert_with(Vec::new);
         let choice = choice as usize;
         while choices.len() < choice + 1 {
             choices.push(Vec::new());
@@ -1567,7 +1671,9 @@ impl<'a, G: Gene> WeightedGenotype<'a, G> {
     }
 
     fn find_depth(rulechain: &[&str]) -> usize {
-        rulechain.iter().fold(0, |acc, r| if *r == "stack" { acc + 1 } else { acc })
+        rulechain
+            .iter()
+            .fold(0, |acc, r| if *r == "stack" { acc + 1 } else { acc })
     }
 }
 
@@ -1577,11 +1683,14 @@ impl<'a, G: Gene> SelectionStrategy for WeightedGenotype<'a, G> {
 
         let depth = Self::find_depth(rulechain);
         let rule = rulechain.last().unwrap();
-        let gene_frac = num::cast::<_, f32>(gene).unwrap() / num::cast::<_, f32>(G::max_value()).unwrap();
+        let gene_frac = num::cast::<_, f32>(gene).unwrap() /
+                        num::cast::<_, f32>(G::max_value()).unwrap();
         let weights = self.distribution.get_weights(depth, rule, choice);
 
         if let Some(weights) = weights {
-            assert_eq!(weights.len(), num, "Number of weights does not match number of alternatives");
+            assert_eq!(weights.len(),
+                       num,
+                       "Number of weights does not match number of alternatives");
             weighted_selection(weights, gene_frac)
         } else {
             let weights = (0..num).map(|_| 1.0).collect::<Vec<_>>();
@@ -1596,11 +1705,14 @@ impl<'a, G: Gene> SelectionStrategy for WeightedGenotype<'a, G> {
 
         let depth = Self::find_depth(rulechain);
         let rule = rulechain.last().unwrap();
-        let gene_frac = num::cast::<_, f32>(gene).unwrap() / num::cast::<_, f32>(G::max_value()).unwrap();
+        let gene_frac = num::cast::<_, f32>(gene).unwrap() /
+                        num::cast::<_, f32>(G::max_value()).unwrap();
         let weights = self.distribution.get_weights(depth, rule, choice);
 
         if let Some(weights) = weights {
-            assert_eq!(weights.len(), num as usize, "Number of weights does not match number of repetition alternatives");
+            assert_eq!(weights.len(),
+                       num as usize,
+                       "Number of weights does not match number of repetition alternatives");
             min + weighted_selection(weights, gene_frac) as u32
         } else {
             let weights = (0..num).map(|_| 1.0).collect::<Vec<_>>();
@@ -1679,7 +1791,10 @@ fn expand_successor<T>(grammar: &abnf::Ruleset, strategy: &mut T) -> String
     expand_grammar(grammar, "successor", strategy)
 }
 
-fn infer_selections(expanded: &str, grammar: &abnf::Ruleset, root: &str) -> Result<Vec<usize>, String> {
+fn infer_selections(expanded: &str,
+                    grammar: &abnf::Ruleset,
+                    root: &str)
+                    -> Result<Vec<usize>, String> {
     let selection = infer_list_selections(&grammar[root], 0, expanded, grammar);
 
     match selection {
@@ -1687,18 +1802,22 @@ fn infer_selections(expanded: &str, grammar: &abnf::Ruleset, root: &str) -> Resu
             if index == expanded.len() {
                 Ok(list)
             } else {
-                Err(format!("Expanded string does not fully match grammar. The first {} characters matched", index))
+                Err(format!("Expanded string does not fully match grammar. \
+                             The first {} characters matched",
+                            index))
             }
-        },
-        Err(_) => {
-            Err("Expanded string does not match grammar".to_string())
-        },
+        }
+        Err(_) => Err("Expanded string does not match grammar".to_string()),
     }
 }
 
 // TODO: Need to be able to try new non-tested alternatives/repetitions if a previously matched
 // alternative/repetition results in a mismatch later.
-fn infer_list_selections(list: &abnf::List, mut index: usize, expanded: &str, grammar: &abnf::Ruleset) -> Result<(Vec<usize>, usize), ()> {
+fn infer_list_selections(list: &abnf::List,
+                         mut index: usize,
+                         expanded: &str,
+                         grammar: &abnf::Ruleset)
+                         -> Result<(Vec<usize>, usize), ()> {
     use abnf::List;
 
     match *list {
@@ -1706,18 +1825,20 @@ fn infer_list_selections(list: &abnf::List, mut index: usize, expanded: &str, gr
             let mut selections = vec![];
 
             for item in sequence {
-                let (item_selections, updated_index) = infer_item_selections(item, index, expanded, grammar)?;
+                let (item_selections, updated_index) =
+                    infer_item_selections(item, index, expanded, grammar)?;
                 index = updated_index;
                 selections.extend(item_selections);
             }
 
             Ok((selections, index))
-        },
+        }
         List::Alternatives(ref alternatives) => {
             let mut selections = Vec::with_capacity(1);
 
             for (alternative, item) in alternatives.iter().enumerate() {
-                if let Ok((item_selections, updated_index)) = infer_item_selections(item, index, expanded, grammar) {
+                if let Ok((item_selections, updated_index)) =
+                    infer_item_selections(item, index, expanded, grammar) {
                     selections.push(alternative);
                     selections.extend(item_selections);
                     index = updated_index;
@@ -1731,13 +1852,17 @@ fn infer_list_selections(list: &abnf::List, mut index: usize, expanded: &str, gr
             } else {
                 Ok((selections, index))
             }
-        },
+        }
     }
 }
 
 // TODO: Need to be able to try new non-tested alternatives/repetitions if a previously matched
 // alternative/repetition results in a mismatch later.
-fn infer_item_selections(item: &abnf::Item, mut index: usize, expanded: &str, grammar: &abnf::Ruleset) -> Result<(Vec<usize>, usize), ()> {
+fn infer_item_selections(item: &abnf::Item,
+                         mut index: usize,
+                         expanded: &str,
+                         grammar: &abnf::Ruleset)
+                         -> Result<(Vec<usize>, usize), ()> {
     use abnf::Content;
 
     let repeat = match item.repeat {
@@ -1746,7 +1871,7 @@ fn infer_item_selections(item: &abnf::Item, mut index: usize, expanded: &str, gr
             let max = repeat.max.unwrap_or(u32::max_value());
 
             Some((min, max))
-        },
+        }
         None => None,
     };
 
@@ -1769,15 +1894,16 @@ fn infer_item_selections(item: &abnf::Item, mut index: usize, expanded: &str, gr
                     index += value.len();
                     matched = true;
                 }
-            },
+            }
             Content::Symbol(ref symbol) => {
-                let child_result = infer_list_selections(&grammar[symbol], index, expanded, grammar);
+                let child_result =
+                    infer_list_selections(&grammar[symbol], index, expanded, grammar);
                 if let Ok((child_selections, child_index)) = child_result {
                     selections.extend(child_selections);
                     index = child_index;
                     matched = true;
                 }
-            },
+            }
             Content::Group(ref group) => {
                 let child_result = infer_list_selections(group, index, expanded, grammar);
                 if let Ok((child_selections, child_index)) = child_result {
@@ -1785,7 +1911,7 @@ fn infer_item_selections(item: &abnf::Item, mut index: usize, expanded: &str, gr
                     index = child_index;
                     matched = true;
                 }
-            },
+            }
             Content::Range(_, _) => {
                 panic!("Content::Range not implemented for infer_item_selections");
                 //let index = strategy.select_alternative(max as usize - min as usize);
@@ -1825,58 +1951,35 @@ mod test {
         let item = Item::new(Content::Value("value".to_string()));
 
         let mut grammar = Ruleset::new();
-        grammar.insert(
-            "symbol".to_string(),
-            List::Sequence(vec![
-                item.clone(),
-            ])
-        );
+        grammar.insert("symbol".to_string(), List::Sequence(vec![item.clone()]));
 
-        assert_eq!(
-            infer_item_selections(&item, 0, "value", &grammar),
-            Ok((vec![], 5))
-        );
+        assert_eq!(infer_item_selections(&item, 0, "value", &grammar),
+                   Ok((vec![], 5)));
     }
 
     #[test]
     fn test_infer_selections_repeat_limits() {
-        let item = Item::repeated(
-            Content::Value("value".to_string()),
-            Repeat::with_limits(2, 4)
-        );
+        let item = Item::repeated(Content::Value("value".to_string()),
+                                  Repeat::with_limits(2, 4));
 
         let mut grammar = Ruleset::new();
-        grammar.insert(
-            "symbol".to_string(),
-            List::Sequence(vec![
-                item.clone(),
-            ])
-        );
+        grammar.insert("symbol".to_string(), List::Sequence(vec![item.clone()]));
 
-        assert_eq!(
-            infer_item_selections(&item, 0, "valuevaluevalue", &grammar),
-            Ok((vec![1], 15))
-        );
+        assert_eq!(infer_item_selections(&item, 0, "valuevaluevalue", &grammar),
+                   Ok((vec![1], 15)));
     }
 
     #[test]
     fn test_infer_selections_alternatives() {
-        let list = List::Alternatives(vec![
-            Item::new(Content::Value("1".to_string())),
-            Item::new(Content::Value("2".to_string())),
-            Item::new(Content::Value("3".to_string())),
-        ]);
+        let list = List::Alternatives(vec![Item::new(Content::Value("1".to_string())),
+                                           Item::new(Content::Value("2".to_string())),
+                                           Item::new(Content::Value("3".to_string()))]);
 
         let mut grammar = Ruleset::new();
-        grammar.insert(
-            "symbol".to_string(),
-            list.clone()
-        );
+        grammar.insert("symbol".to_string(), list.clone());
 
-        assert_eq!(
-            infer_list_selections(&list, 0, "2", &grammar),
-            Ok((vec![1], 1))
-        );
+        assert_eq!(infer_list_selections(&list, 0, "2", &grammar),
+                   Ok((vec![1], 1)));
     }
 
     #[test]
@@ -1884,37 +1987,21 @@ mod test {
         let item = Item::new(Content::Value("value".to_string()));
 
         let mut grammar = Ruleset::new();
-        grammar.insert(
-            "symbol".to_string(),
-            List::Sequence(vec![
-                item.clone(),
-            ])
-        );
+        grammar.insert("symbol".to_string(), List::Sequence(vec![item.clone()]));
 
-        assert_eq!(
-            infer_selections("value", &grammar, "symbol"),
-            Ok(vec![])
-        );
+        assert_eq!(infer_selections("value", &grammar, "symbol"), Ok(vec![]));
     }
 
     #[test]
     fn test_infer_selections_match_alternatives() {
-        let list = List::Alternatives(vec![
-            Item::new(Content::Value("1".to_string())),
-            Item::new(Content::Value("2".to_string())),
-            Item::new(Content::Value("3".to_string())),
-        ]);
+        let list = List::Alternatives(vec![Item::new(Content::Value("1".to_string())),
+                                           Item::new(Content::Value("2".to_string())),
+                                           Item::new(Content::Value("3".to_string()))]);
 
         let mut grammar = Ruleset::new();
-        grammar.insert(
-            "symbol".to_string(),
-            list.clone()
-        );
+        grammar.insert("symbol".to_string(), list.clone());
 
-        assert_eq!(
-            infer_selections("2", &grammar, "symbol"),
-            Ok(vec![1])
-        );
+        assert_eq!(infer_selections("2", &grammar, "symbol"), Ok(vec![1]));
     }
 
     #[test]
@@ -1922,17 +2009,10 @@ mod test {
         let item = Item::new(Content::Value("value".to_string()));
 
         let mut grammar = Ruleset::new();
-        grammar.insert(
-            "symbol".to_string(),
-            List::Sequence(vec![
-                item.clone(),
-            ])
-        );
+        grammar.insert("symbol".to_string(), List::Sequence(vec![item.clone()]));
 
-        assert_eq!(
-            infer_selections("notvalue", &grammar, "symbol"),
-            Err("Expanded string does not match grammar".to_string())
-        );
+        assert_eq!(infer_selections("notvalue", &grammar, "symbol"),
+                   Err("Expanded string does not match grammar".to_string()));
     }
 
     #[test]
@@ -1940,17 +2020,12 @@ mod test {
         let item = Item::new(Content::Value("value".to_string()));
 
         let mut grammar = Ruleset::new();
-        grammar.insert(
-            "symbol".to_string(),
-            List::Sequence(vec![
-                item.clone(),
-            ])
-        );
+        grammar.insert("symbol".to_string(), List::Sequence(vec![item.clone()]));
 
-        assert_eq!(
-            infer_selections("valueextra", &grammar, "symbol"),
-            Err("Expanded string does not fully match grammar. The first 5 characters matched".to_string())
-        );
+        assert_eq!(infer_selections("valueextra", &grammar, "symbol"),
+                   Err("Expanded string does not fully match grammar. \
+                 The first 5 characters matched"
+                               .to_string()));
     }
 
     #[test]
@@ -1975,10 +2050,7 @@ mod test {
         ];
         let mut genotype = Genotype::new(genes);
 
-        assert_eq!(
-            expand_grammar(&grammar, "axiom", &mut genotype),
-            "F[FX]X"
-        );
+        assert_eq!(expand_grammar(&grammar, "axiom", &mut genotype), "F[FX]X");
     }
 
     #[test]
@@ -2002,29 +2074,25 @@ mod test {
            1, // "X"
         ];
 
-        assert_eq!(
-            infer_selections("F[FX]X", &grammar, "axiom"),
-            Ok(genes)
-        );
+        assert_eq!(infer_selections("F[FX]X", &grammar, "axiom"), Ok(genes));
     }
 
     #[test]
     fn test_read_dir_all() {
         let entries_it = read_dir_all("testdata/read_dir_all").unwrap();
         let paths = entries_it.map(|e| e.unwrap().path()).collect::<Vec<_>>();
-        let path_str = paths.iter().map(|p| p.to_str().unwrap()).collect::<Vec<_>>();
-        assert_eq!(
-            path_str,
-            vec![
-                "testdata/read_dir_all/a",
-                "testdata/read_dir_all/a/c",
-                "testdata/read_dir_all/a/c/d",
-                "testdata/read_dir_all/a/c/e",
-                "testdata/read_dir_all/a/b",
-                "testdata/read_dir_all/a/b/y",
-                "testdata/read_dir_all/a/b/z",
-                "testdata/read_dir_all/a/b/x",
-            ]
-        )
+        let path_str = paths
+            .iter()
+            .map(|p| p.to_str().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(path_str,
+                   vec!["testdata/read_dir_all/a",
+                        "testdata/read_dir_all/a/c",
+                        "testdata/read_dir_all/a/c/d",
+                        "testdata/read_dir_all/a/c/e",
+                        "testdata/read_dir_all/a/b",
+                        "testdata/read_dir_all/a/b/y",
+                        "testdata/read_dir_all/a/b/z",
+                        "testdata/read_dir_all/a/b/x"])
     }
 }

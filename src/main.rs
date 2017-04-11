@@ -12,7 +12,8 @@ extern crate futures;
 extern crate futures_cpupool;
 extern crate bincode;
 extern crate serde;
-#[macro_use] extern crate serde_derive;
+#[macro_use]
+extern crate serde_derive;
 extern crate clap;
 
 #[macro_use]
@@ -21,7 +22,7 @@ extern crate lsys_kiss3d as lsys3d;
 extern crate abnf;
 extern crate yobun;
 
-use na::{Point3};
+use na::Point3;
 use kiss3d::window::Window;
 use kiss3d::light::Light;
 use kiss3d::camera::ArcBall;
@@ -67,7 +68,7 @@ fn main() {
 fn setup_window() -> (Window, ArcBall) {
     let mut window = Window::new("lsystem");
     window.set_light(Light::Absolute(Point3::new(15.0, 40.0, 15.0)));
-    window.set_background_color(135.0/255.0, 206.0/255.0, 250.0/255.0);
+    window.set_background_color(135.0 / 255.0, 206.0 / 255.0, 250.0 / 255.0);
     window.set_framerate_limit(Some(60));
 
     let camera = {

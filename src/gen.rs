@@ -30,16 +30,16 @@ const NUM_RULES_END: u32 = 10;
 
 #[derive(Debug)]
 enum Item {
-    LSystem{ axiom: Box<Item>, rules: Box<Item> },
-    LRule{ pred: Box<Item>, succ: Box<Item> },
+    LSystem { axiom: Box<Item>, rules: Box<Item> },
+    LRule { pred: Box<Item>, succ: Box<Item> },
     LRules(Vec<Item>),
     Stack(Vec<Item>),
-    Letter{ letter: u8, params: Vec<Item> },
-    Parameter(Option<f32>)
+    Letter { letter: u8, params: Vec<Item> },
+    Parameter(Option<f32>),
 }
 
 fn rand_lsystem<R: Rng>(rng: &mut R) -> Item {
-    Item::LSystem{
+    Item::LSystem {
         axiom: Box::new(rand_axiom(rng)),
         rules: Box::new(rand_rules(rng)),
     }
@@ -102,7 +102,7 @@ fn rand_stack<R: Rng>(rng: &mut R) -> Item {
 }
 
 fn rand_letter<R: Rng>(rng: &mut R) -> Item {
-    Item::Letter{
+    Item::Letter {
         letter: Range::new(LETTER_BEGIN, LETTER_END).ind_sample(rng),
         params: vec![rand_param(rng)],
     }
@@ -113,7 +113,7 @@ fn rand_param<R: Rng>(rng: &mut R) -> Item {
 }
 
 fn rand_letter_no_param<R: Rng>(rng: &mut R) -> Item {
-    Item::Letter{
+    Item::Letter {
         letter: Range::new(LETTER_BEGIN, LETTER_END).ind_sample(rng),
         params: vec![Item::Parameter(None)],
     }
@@ -132,17 +132,13 @@ impl Error for ConvertGlpError {
 
 impl<'a> From<&'a str> for ConvertGlpError {
     fn from(msg: &'a str) -> ConvertGlpError {
-        ConvertGlpError{
-            message: msg.to_string(),
-        }
+        ConvertGlpError { message: msg.to_string() }
     }
 }
 
 impl From<String> for ConvertGlpError {
     fn from(msg: String) -> ConvertGlpError {
-        ConvertGlpError{
-            message: msg,
-        }
+        ConvertGlpError { message: msg }
     }
 }
 
@@ -154,12 +150,15 @@ impl fmt::Display for ConvertGlpError {
 
 fn parse_glp(root: &Item) -> Result<param::LSystem, ConvertGlpError> {
     match *root {
-        Item::LSystem{ ref axiom, ref rules } => {
-            Ok(param::LSystem{
-                axiom: parse_glp_stack(axiom)?,
-                productions: parse_glp_rules(rules)?,
-            })
-        },
+        Item::LSystem {
+            ref axiom,
+            ref rules,
+        } => {
+            Ok(param::LSystem {
+                   axiom: parse_glp_stack(axiom)?,
+                   productions: parse_glp_rules(rules)?,
+               })
+        }
         _ => Err(ConvertGlpError::from(format!("Expected LSystem, got {:?}", root))),
     }
 }
@@ -170,20 +169,23 @@ fn parse_glp_stack(stack: &Item) -> Result<param::Word, ConvertGlpError> {
             let mut word = param::Word::new();
             for item in items {
                 match *item {
-                    Item::Letter{ .. } => {
+                    Item::Letter { .. } => {
                         word.push(parse_glp_letter(item)?);
-                    },
+                    }
                     Item::Stack(_) => {
                         word.push(param::Letter::new('['));
                         word.extend(parse_glp_stack(item)?);
                         word.push(param::Letter::new(']'));
-                    },
-                    _ => return Err(ConvertGlpError::from(format!("Expected Letter or Stack, got {:?}", item))),
+                    }
+                    _ => {
+                        let msg = format!("Expected Letter or Stack, got {:?}", item);
+                        return Err(ConvertGlpError::from(msg));
+                    }
                 }
             }
 
             Ok(word)
-        },
+        }
         _ => Err(ConvertGlpError::from(format!("Expected Stack, got {:?}", stack))),
     }
 }
@@ -197,32 +199,39 @@ fn parse_glp_rules(rules: &Item) -> Result<Vec<param::Production>, ConvertGlpErr
             }
 
             Ok(productions)
-        },
+        }
         _ => Err(ConvertGlpError::from(format!("Expected LRules, got {:?}", rules))),
     }
 }
 
 fn parse_glp_rule(rule: &Item) -> Result<param::Production, ConvertGlpError> {
     match *rule {
-        Item::LRule{ ref pred, ref succ } => {
-            Ok(param::Production::new(
-                parse_glp_letter(&*pred)?.character as char,
-                parse_glp_stack(&*succ)?.iter().map(param::ProductionLetter::from).collect(),
-
-            ))
-        },
+        Item::LRule { ref pred, ref succ } => {
+            Ok(param::Production::new(parse_glp_letter(&*pred)?.character as char,
+                                      parse_glp_stack(&*succ)?
+                                          .iter()
+                                          .map(param::ProductionLetter::from)
+                                          .collect()))
+        }
         _ => Err(ConvertGlpError::from(format!("Expected LRule, got {:?}", rule))),
     }
 }
 
 fn parse_glp_letter(letter: &Item) -> Result<param::Letter, ConvertGlpError> {
     match *letter {
-        Item::Letter{ ref letter, ref params } => {
-            Ok(param::Letter{
-                character: *letter,
-                params: parse_glp_params(params)?.iter().filter_map(|p| *p).map(Param::F).collect(),
-            })
-        },
+        Item::Letter {
+            ref letter,
+            ref params,
+        } => {
+            Ok(param::Letter {
+                   character: *letter,
+                   params: parse_glp_params(params)?
+                       .iter()
+                       .filter_map(|p| *p)
+                       .map(Param::F)
+                       .collect(),
+               })
+        }
         _ => Err(ConvertGlpError::from(format!("Expected Letter, got {:?}", letter))),
     }
 }
@@ -242,8 +251,7 @@ fn parse_glp_param(param: &Item) -> Result<Option<f32>, ConvertGlpError> {
     }
 }
 
-pub fn run_generated(window: &mut Window, camera: &mut Camera)
-{
+pub fn run_generated(window: &mut Window, camera: &mut Camera) {
     let mut rng = rand::thread_rng();
     let root = rand_lsystem(&mut rng);
 
