@@ -30,7 +30,6 @@ use clap::{App, SubCommand};
 
 mod lsystems;
 mod gen;
-mod ge;
 
 fn main() {
     let matches = App::new("lsystem")
@@ -46,7 +45,7 @@ fn main() {
         .subcommand(SubCommand::with_name("generated")
             .about("Run random generation of plant")
         )
-        .subcommand(ge::get_subcommand())
+        .subcommand(gen::ge::get_subcommand())
         .get_matches();
 
     if matches.subcommand_matches("static").is_some() {
@@ -57,9 +56,9 @@ fn main() {
         lsys3d::run_animated(&mut window, &mut camera, lsystems::make_anim_tree());
     } else if matches.subcommand_matches("generated").is_some() {
         let (mut window, mut camera) = setup_window();
-        gen::run_generated(&mut window, &mut camera);
+        gen::glp::run_generated(&mut window, &mut camera);
     } else if let Some(matches) = matches.subcommand_matches("ge") {
-        ge::run_ge(matches);
+        gen::ge::run_ge(matches);
     } else {
         println!("A subcommand must be specified. See help by passing -h.");
     }
