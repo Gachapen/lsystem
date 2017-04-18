@@ -30,9 +30,9 @@ use abnf::expand::{SelectionStrategy, expand_grammar};
 use lsys::{self, ol};
 use lsys3d;
 use lsystems;
-use ::setup_window;
-use gen::fitness;
 use yobun::read_dir_all;
+use setup_window;
+use gen::fitness::{self, Fitness};
 
 pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
     SubCommand::with_name("ge")
@@ -70,6 +70,21 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .takes_value(true)
                 .help("Distribution file to use. Otherwise default distribution is used.")
             )
+            .arg(Arg::with_name("threshold-type")
+                .short("t")
+                .long("threshold-type")
+                .takes_value(true)
+                .possible_values(&["crap", "zero"])
+                .default_value("crap")
+                .help("How to threshold which samples get accepted")
+            )
+            .arg(Arg::with_name("batch-size")
+                .short("b")
+                .long("batch_size")
+                .takes_value(true)
+                .default_value("128")
+                .help("Number of accepted samples to accumulate before writing to file")
+            )
         )
         .subcommand(SubCommand::with_name("sampling-dist")
             .about("Take samples from directory and output a distribution CSV file")
@@ -93,6 +108,28 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .help("Name of the output bincode file")
             )
         )
+        .subcommand(SubCommand::with_name("stats")
+            .about("Generate samples and dump stats to be analyzed")
+            .arg(Arg::with_name("DISTRIBUTIONS")
+                .required(true)
+                .index(1)
+                .multiple(true)
+                .help("Distribution files to use")
+            )
+            .arg(Arg::with_name("csv")
+                .long("csv")
+                .takes_value(true)
+                .default_value("stats.csv")
+                .help("Name of the output CSV file")
+            )
+            .arg(Arg::with_name("num-samples")
+                .short("n")
+                .long("num-samples")
+                .takes_value(true)
+                .default_value("64")
+                .help("Number of samples to generate before visualizing the best")
+            )
+        )
 }
 
 pub fn run_ge(matches: &ArgMatches) {
@@ -108,6 +145,8 @@ pub fn run_ge(matches: &ArgMatches) {
         run_random_sampling(matches);
     } else if let Some(matches) = matches.subcommand_matches("sampling-dist") {
         run_sampling_distribution(matches);
+    } else if let Some(matches) = matches.subcommand_matches("stats") {
+        run_stats(matches);
     } else {
         println!("A subcommand must be specified. See help by passing -h.");
     }
@@ -247,10 +286,10 @@ fn run_with_distribution(matches: &ArgMatches) {
                         let system = generate_system(grammar,
                                                      &mut WeightedGenotype::new(genes,
                                                                                 distribution));
-                        let (score, _) = fitness::calculate_score(&system, settings);
+                        let (fit, _) = fitness::evaluate(&system, settings);
                         Sample {
                             seed: seed,
-                            score: score,
+                            score: fit.score(),
                         }
                     }
 
@@ -305,7 +344,7 @@ fn run_with_distribution(matches: &ArgMatches) {
                                                 GENOME_LENGTH);
                     system = generate_system(&grammar,
                                              &mut WeightedGenotype::new(genes, &distribution));
-                    let (_, properties) = fitness::calculate_score(&system, &settings);
+                    let (_, properties) = fitness::evaluate(&system, &settings);
 
                     if let Some(properties) = properties {
                         println!("{} points.", properties.num_points);
@@ -348,8 +387,8 @@ fn run_with_distribution(matches: &ArgMatches) {
 
                         let instructions =
                             system.instructions_iter(settings.iterations, &settings.command_map);
-                        let (score, properties) = fitness::calculate_score(&system, &settings);
-                        println!("Score: {}", score);
+                        let (fit, properties) = fitness::evaluate(&system, &settings);
+                        println!("Fitness: {}", fit);
 
                         if let Some(properties) = properties {
                             window.remove(&mut model);
@@ -368,7 +407,7 @@ fn run_with_distribution(matches: &ArgMatches) {
 
                     let instructions =
                         system.instructions_iter(settings.iterations, &settings.command_map);
-                    let (score, properties) = fitness::calculate_score(&system, &settings);
+                    let (score, properties) = fitness::evaluate(&system, &settings);
                     println!("Score: {}", score);
 
                     window.remove(&mut model);
@@ -408,23 +447,35 @@ fn get_sample_setup() -> (abnf::Ruleset, Distribution) {
 }
 
 fn run_random_sampling(matches: &ArgMatches) {
-    struct Sample {
-        seed: [u32; 4],
-        crap: bool,
-    }
-
     fn generate_sample(grammar: &abnf::Ruleset,
-                       distribution: &Distribution,
-                       settings: &lsys::Settings)
-                       -> Sample {
+                       distribution: &Distribution)
+                       -> ([u32; 4], ol::LSystem) {
         let seed = random_seed();
         let genes = generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
         let system = generate_system(grammar, &mut WeightedGenotype::new(genes, distribution));
-        Sample {
-            seed: seed,
-            crap: fitness::is_crap(&system, settings),
-        }
+        (seed, system)
     }
+
+    fn accept_not_crap(lsystem: &ol::LSystem, settings: &lsys::Settings) -> bool {
+        !fitness::is_crap(lsystem, settings)
+    }
+
+    fn accept_above_zero(lsystem: &ol::LSystem, settings: &lsys::Settings) -> bool {
+        fitness::evaluate(lsystem, settings).0.score() >= 0.0
+    }
+
+    let accept_sample = {
+        let threshold_type = matches.value_of("threshold-type").unwrap();
+        if threshold_type == "crap" {
+            println!("Using not crap threshold.");
+            accept_not_crap
+        } else if threshold_type == "zero" {
+            println!("Using above zero threshold.");
+            accept_above_zero
+        } else {
+            panic!(format!("Unrecognized threshold-type: {}", threshold_type));
+        }
+    };
 
     let (grammar, distribution) = get_sample_setup();
 
@@ -440,9 +491,6 @@ fn run_random_sampling(matches: &ArgMatches) {
         None => Arc::new(distribution),
     };
 
-    println!("Distribution:");
-    println!("{}", distribution);
-
     let settings = Arc::new(lsys::Settings {
                                 width: 0.05,
                                 angle: PI / 8.0,
@@ -450,8 +498,9 @@ fn run_random_sampling(matches: &ArgMatches) {
                                 ..lsys::Settings::new()
                             });
 
-    // const BATCH_SIZE: usize = 1024 / 8;
-    const BATCH_SIZE: usize = 16 / 8;
+    let batch_size = usize::from_str_radix(matches.value_of("batch-size").unwrap(), 10).unwrap();
+    println!("Using batch size {}.", batch_size);
+
     const SEQUENCE_SIZE: usize = 16;
 
     let sample_dir = Path::new("sample").join(format!("{}", time::now().rfc3339()));
@@ -478,7 +527,7 @@ fn run_random_sampling(matches: &ArgMatches) {
             let num_good_samples = num_good_samples.clone();
 
             scope.spawn(move || {
-                let dump_samples = |accepted_samples: &[Sample],
+                let dump_samples = |accepted_samples: &[[u32; 4]],
                                     sample_count: usize,
                                     batch: usize| {
                     let filename = format!("{}.{}.sample", worker_id, batch);
@@ -487,31 +536,28 @@ fn run_random_sampling(matches: &ArgMatches) {
 
                     let samples = SampleBatch {
                         sample_count: sample_count,
-                        accepted: accepted_samples
-                            .iter()
-                            .map(|s| s.seed)
-                            .collect::<Vec<_>>(),
+                        accepted: accepted_samples.to_vec(),
                     };
                     bincode::serialize_into(&mut BufWriter::new(file), &samples, bincode::Infinite)
                         .unwrap();
                 };
 
                 // Room for 0.5% of samples.
-                let mut accepted_samples = Vec::with_capacity(BATCH_SIZE / 200);
+                let mut accepted_samples = Vec::with_capacity(batch_size / 200);
                 let mut batch = 0;
                 let mut batch_num_samples = 0;
 
                 while work.load(Ordering::Relaxed) {
                     for _ in 0..SEQUENCE_SIZE {
-                        let sample = generate_sample(&grammar, &distribution, &settings);
-                        if !sample.crap {
-                            accepted_samples.push(sample);
+                        let (seed, lsystem) = generate_sample(&grammar, &distribution);
+                        if accept_sample(&lsystem, &settings) {
+                            accepted_samples.push(seed);
                         }
                     }
 
                     batch_num_samples += SEQUENCE_SIZE;
 
-                    if accepted_samples.len() >= BATCH_SIZE {
+                    if accepted_samples.len() >= batch_size {
                         dump_samples(&accepted_samples, batch_num_samples, batch);
 
                         num_samples.fetch_add(batch_num_samples, Ordering::Relaxed);
@@ -524,7 +570,7 @@ fn run_random_sampling(matches: &ArgMatches) {
 
                 dump_samples(&accepted_samples, batch_num_samples, batch);
                 num_samples.fetch_add(batch_num_samples, Ordering::Relaxed);
-                num_good_samples.fetch_add(batch * BATCH_SIZE + accepted_samples.len(),
+                num_good_samples.fetch_add(batch * batch_size + accepted_samples.len(),
                                            Ordering::Relaxed);
             });
         }
@@ -1433,6 +1479,102 @@ fn infer_item_selections(item: &abnf::Item,
     } else {
         Err(())
     }
+}
+
+fn run_stats(matches: &ArgMatches) {
+    let grammar =
+        Arc::new(abnf::parse_file("grammar/lsys2.abnf").expect("Could not parse ABNF file"));
+
+    let distributions: Vec<Arc<Distribution>> = {
+        let paths = matches
+            .values_of("DISTRIBUTIONS")
+            .expect("No distributions specified");
+
+        println!("Distributions: {:?}", paths.clone().collect::<Vec<_>>());
+
+        paths
+            .map(|p| {
+                     let file = File::open(p).unwrap();
+                     let distribution = bincode::deserialize_from(&mut BufReader::new(file),
+                                                                  bincode::Infinite)
+                             .unwrap();
+                     Arc::new(distribution)
+                 })
+            .collect()
+    };
+
+    let num_samples = usize::from_str_radix(matches.value_of("num-samples").unwrap(), 10).unwrap();
+    let csv_path = Path::new(matches.value_of("csv").unwrap());
+
+    let settings = Arc::new(lsys::Settings {
+                                width: 0.05,
+                                angle: PI / 8.0,
+                                iterations: 5,
+                                ..lsys::Settings::new()
+                            });
+
+    fn generate_sample(grammar: &abnf::Ruleset,
+                       distribution: &Distribution,
+                       settings: &lsys::Settings)
+                       -> Fitness {
+        let seed = random_seed();
+        let genes = generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
+        let system = generate_system(grammar, &mut WeightedGenotype::new(genes, distribution));
+        let (fit, _) = fitness::evaluate(&system, settings);
+        fit
+    }
+
+    println!("Generating {} samples...",
+             num_samples * distributions.len());
+    let start_time = time::now();
+
+    let samples = {
+        let workers = num_cpus::get() + 1;
+
+        let pool = CpuPool::new(workers);
+        let mut tasks = Vec::with_capacity(num_samples);
+
+        for (d, distribution) in distributions.iter().enumerate() {
+            for _ in 0..num_samples {
+                let distribution = distribution.clone();
+                let grammar = grammar.clone();
+                let settings = settings.clone();
+
+                tasks.push(pool.spawn_fn(move || {
+                                             let sample = generate_sample(&grammar,
+                                                                          &distribution,
+                                                                          &settings);
+                                             future::ok::<(usize, Fitness), ()>((d, sample))
+                                         }));
+            }
+        }
+
+        future::join_all(tasks).wait().unwrap()
+    };
+
+    let end_time = time::now();
+    let duration = end_time - start_time;
+    println!("Duration: {}.{}",
+             duration.num_seconds(),
+             duration.num_milliseconds());
+
+    let csv = samples
+        .iter()
+        .fold(String::new(), |csv, &(d, ref f)| if f.is_nothing {
+            csv + &format!("{},,,,,\n", d)
+        } else {
+            csv +
+            &format!("{},{},{},{},{},{}\n",
+                     d,
+                     f.score(),
+                     f.balance,
+                     f.branching,
+                     f.closeness,
+                     f.drop)
+        });
+
+    let mut csv_file = File::create(csv_path).unwrap();
+    csv_file.write_all(csv.as_bytes()).unwrap();
 }
 
 #[cfg(test)]

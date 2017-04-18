@@ -1,5 +1,6 @@
 use std::f32;
 use std::f32::consts::{PI, FRAC_PI_2};
+use std::fmt;
 
 use na::{self, Unit, UnitQuaternion, Point2, Point3, Vector2, Vector3, Translation3, Rotation3};
 use ncu;
@@ -202,12 +203,12 @@ pub fn build_skeleton(instructions: ol::InstructionsIter,
 }
 
 pub struct Properties {
-   pub reach: f32,
-   pub drop: f32,
-   pub spread: f32,
-   pub center: Point3<f32>,
-   pub center_spread: f32,
-   pub num_points: usize,
+    pub reach: f32,
+    pub drop: f32,
+    pub spread: f32,
+    pub center: Point3<f32>,
+    pub center_spread: f32,
+    pub num_points: usize,
 }
 
 const SKELETON_LIMIT: usize = 20000;
@@ -234,9 +235,64 @@ pub fn is_crap(lsystem: &ol::LSystem, settings: &lsys::Settings) -> bool {
     }
 }
 
-pub fn calculate_score(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32, Option<Properties>) {
+pub struct Fitness {
+    pub balance: f32,
+    pub branching: f32,
+    pub closeness: f32,
+    pub drop: f32,
+    pub is_nothing: bool,
+}
+
+impl Fitness {
+    pub fn nothing() -> Fitness {
+        Fitness {
+            balance: 0.0,
+            branching: 0.0,
+            closeness: 0.0,
+            drop: 0.0,
+            is_nothing: true,
+        }
+    }
+
+    pub fn reward(&self) -> f32 {
+        let branching_reward = *na::partial_max(&self.branching, &0.0).unwrap();
+        (self.balance + branching_reward) / 2.0
+    }
+
+    pub fn nothing_punishment(&self) -> f32 {
+        if self.is_nothing { 5.0 } else { 0.0 }
+    }
+
+    pub fn punishment(&self) -> f32 {
+        let branching_punishment = *na::partial_max(&-self.branching, &0.0).unwrap();
+        self.closeness + self.drop + branching_punishment + self.nothing_punishment()
+    }
+
+    pub fn score(&self) -> f32 {
+        self.reward() - self.punishment()
+    }
+}
+
+impl fmt::Display for Fitness {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.score())?;
+
+        if self.is_nothing {
+            write!(f, " (nothing)")
+        } else {
+            write!(f,
+                   " (bl: {}, br: {}, cl: {}, dr: {})",
+                   self.balance,
+                   self.branching,
+                   self.closeness,
+                   self.drop)
+        }
+    }
+}
+
+pub fn evaluate(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (Fitness, Option<Properties>) {
     if is_nothing(lsystem) {
-        return (f32::MIN, None);
+        return (Fitness::nothing(), None);
     }
 
     let instruction_iter = lsystem.instructions_iter(settings.iterations, &settings.command_map);
@@ -246,7 +302,7 @@ pub fn calculate_score(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32
                                   INSTRUCTION_LIMIT);
     if let Some(skeleton) = skeleton {
         if skeleton.points.len() <= 1 {
-            return (f32::MIN, None);
+            return (Fitness::nothing(), None);
         }
 
         let reach = skeleton
@@ -267,10 +323,10 @@ pub fn calculate_score(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32
             .iter()
             .map(|p| Point2::new(p.x, p.z))
             .collect();
-        let floor_distances_iter = floor_points
+
+        let spread = floor_points
             .iter()
-            .map(|p| na::norm(&Vector2::new(p.x, p.y)));
-        let spread = floor_distances_iter
+            .map(|p| na::norm(&Vector2::new(p.x, p.y)))
             .max_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap();
 
@@ -302,11 +358,11 @@ pub fn calculate_score(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32
                             }
                         }
 
-                        const TRESHOLD: f32 = 0.9;
-                        if closest < TRESHOLD {
+                        const THRESHOLD: f32 = 0.9;
+                        if closest < THRESHOLD {
                             0.0
                         } else {
-                            (closest - TRESHOLD) * (1.0 / (1.0 - TRESHOLD))
+                            (closest - THRESHOLD) * (1.0 / (1.0 - THRESHOLD))
                         }
                     })
                     .max_by(|a, b| a.partial_cmp(b).unwrap());
@@ -356,7 +412,6 @@ pub fn calculate_score(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32
                 0.0
             }
         };
-        println!("Complexity: {}", branching_complexity);
 
         let branching_fitness = {
             if branching_complexity >= 1.0 && branching_complexity < 2.0 {
@@ -372,22 +427,16 @@ pub fn calculate_score(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32
             }
         };
 
-        let branching_reward = *na::partial_max(&branching_fitness, &0.0).unwrap();
-        let branching_punishment = *na::partial_max(&-branching_fitness, &0.0).unwrap();
-
         let balance_fitness = (0.5 - (center_distance / center_spread)) * 2.0;
-
         let drop_fitness = -drop;
 
-        println!("Branching fitness: {}", branching_fitness);
-        println!("Balance: {}", balance_fitness);
-        println!("Closeness: {}", closeness);
-        println!("Drop: {}", drop_fitness);
-
-        // let reward = (proportion_fitness + balance_fitness) / 2.0;
-        let reward = (balance_fitness + branching_reward) / 2.0;
-        let punishment = closeness + drop_fitness + branching_punishment;
-        let fit = reward - punishment;
+        let fit = Fitness {
+            balance: balance_fitness,
+            branching: branching_fitness,
+            drop: drop_fitness,
+            closeness: closeness,
+            is_nothing: false,
+        };
 
         let prop = Properties {
             reach: reach,
@@ -400,7 +449,7 @@ pub fn calculate_score(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (f32
 
         (fit, Some(prop))
     } else {
-        (f32::MIN, None)
+        (Fitness::nothing(), None)
     }
 
     // TODO: balanced number of branches.
