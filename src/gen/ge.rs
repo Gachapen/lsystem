@@ -32,6 +32,7 @@ use lsys3d;
 use lsystems;
 use ::setup_window;
 use gen::fitness;
+use yobun::read_dir_all;
 
 pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
     SubCommand::with_name("ge")
@@ -837,59 +838,6 @@ impl<'a, G: Gene> SelectionStrategy for WeightedGenotypeStats<'a, G> {
     }
 }
 
-struct ReadDirAll {
-    visit_stack: Vec<fs::ReadDir>,
-}
-
-impl Iterator for ReadDirAll {
-    type Item = io::Result<fs::DirEntry>;
-
-    fn next(&mut self) -> Option<io::Result<fs::DirEntry>> {
-        let mut iter = match self.visit_stack.pop() {
-            Some(iter) => iter,
-            None => return None,
-        };
-
-        let mut entry = iter.next();
-        while entry.is_none() {
-            iter = match self.visit_stack.pop() {
-                Some(iter) => iter,
-                None => return None,
-            };
-
-            entry = iter.next();
-        }
-
-        let entry = match entry {
-            Some(entry) => entry,
-            None => return None,
-        };
-
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(err) => return Some(Err(err)),
-        };
-
-        self.visit_stack.push(iter);
-
-        let path = entry.path();
-        if path.is_dir() {
-            match fs::read_dir(path) {
-                Ok(entries) => self.visit_stack.push(entries),
-                Err(err) => return Some(Err(err)),
-            }
-        }
-
-        Some(Ok(entry))
-    }
-}
-
-fn read_dir_all<P: AsRef<Path>>(path: P) -> io::Result<ReadDirAll> {
-    let top_dir = fs::read_dir(path)?;
-
-    Ok(ReadDirAll { visit_stack: vec![top_dir] })
-}
-
 fn run_print_abnf() {
     let lsys_abnf = abnf::parse_file("grammar/lsys.abnf").expect("Could not parse ABNF file");
     println!("{:#?}", lsys_abnf);
@@ -1621,24 +1569,5 @@ mod test {
         ];
 
         assert_eq!(infer_selections("F[FX]X", &grammar, "axiom"), Ok(genes));
-    }
-
-    #[test]
-    fn test_read_dir_all() {
-        let entries_it = read_dir_all("testdata/read_dir_all").unwrap();
-        let paths = entries_it.map(|e| e.unwrap().path()).collect::<Vec<_>>();
-        let path_str = paths
-            .iter()
-            .map(|p| p.to_str().unwrap())
-            .collect::<Vec<_>>();
-        assert_eq!(path_str,
-                   vec!["testdata/read_dir_all/a",
-                        "testdata/read_dir_all/a/c",
-                        "testdata/read_dir_all/a/c/d",
-                        "testdata/read_dir_all/a/c/e",
-                        "testdata/read_dir_all/a/b",
-                        "testdata/read_dir_all/a/b/y",
-                        "testdata/read_dir_all/a/b/z",
-                        "testdata/read_dir_all/a/b/x"])
     }
 }

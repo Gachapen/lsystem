@@ -2,6 +2,8 @@ extern crate alga;
 extern crate nalgebra as na;
 
 use std::f32::consts::{PI, E};
+use std::path::Path;
+use std::{fs, io};
 use na::Unit;
 use alga::general::Real;
 use alga::linear::FiniteDimVectorSpace;
@@ -75,6 +77,59 @@ pub fn interpolate_cos(a: f32, b: f32, t: f32) -> f32 {
     interpolate_linear(a, b, (1.0 - (t * PI).cos()) * 0.5)
 }
 
+pub struct ReadDirAll {
+    visit_stack: Vec<fs::ReadDir>,
+}
+
+impl Iterator for ReadDirAll {
+    type Item = io::Result<fs::DirEntry>;
+
+    fn next(&mut self) -> Option<io::Result<fs::DirEntry>> {
+        let mut iter = match self.visit_stack.pop() {
+            Some(iter) => iter,
+            None => return None,
+        };
+
+        let mut entry = iter.next();
+        while entry.is_none() {
+            iter = match self.visit_stack.pop() {
+                Some(iter) => iter,
+                None => return None,
+            };
+
+            entry = iter.next();
+        }
+
+        let entry = match entry {
+            Some(entry) => entry,
+            None => return None,
+        };
+
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(err) => return Some(Err(err)),
+        };
+
+        self.visit_stack.push(iter);
+
+        let path = entry.path();
+        if path.is_dir() {
+            match fs::read_dir(path) {
+                Ok(entries) => self.visit_stack.push(entries),
+                Err(err) => return Some(Err(err)),
+            }
+        }
+
+        Some(Ok(entry))
+    }
+}
+
+pub fn read_dir_all<P: AsRef<Path>>(path: P) -> io::Result<ReadDirAll> {
+    let top_dir = fs::read_dir(path)?;
+
+    Ok(ReadDirAll { visit_stack: vec![top_dir] })
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -113,5 +168,24 @@ mod test {
 
         assert_eq!(interpolate_cos(0.0, 1.0, 0.25),
                    0.146446609406726237799577818947575480357582031155762981705);
+    }
+
+    #[test]
+    fn test_read_dir_all() {
+        let entries_it = read_dir_all("testdata/read_dir_all").unwrap();
+        let paths = entries_it.map(|e| e.unwrap().path()).collect::<Vec<_>>();
+        let path_str = paths
+            .iter()
+            .map(|p| p.to_str().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(path_str,
+                   vec!["testdata/read_dir_all/a",
+                        "testdata/read_dir_all/a/c",
+                        "testdata/read_dir_all/a/c/d",
+                        "testdata/read_dir_all/a/c/e",
+                        "testdata/read_dir_all/a/b",
+                        "testdata/read_dir_all/a/b/y",
+                        "testdata/read_dir_all/a/b/z",
+                        "testdata/read_dir_all/a/b/x"])
     }
 }
