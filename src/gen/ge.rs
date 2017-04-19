@@ -127,7 +127,7 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .long("num-samples")
                 .takes_value(true)
                 .default_value("64")
-                .help("Number of samples to generate before visualizing the best")
+                .help("Number of samples generated to create the stats")
             )
         )
 }
