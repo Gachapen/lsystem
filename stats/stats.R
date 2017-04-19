@@ -1,4 +1,4 @@
-stats <- read.csv(file="stats.csv")
+stats <- read.csv(file="stats.csv", header=TRUE)
 
 stats <- split(stats, stats$distribution) # Create list with each distribution
 stats <- lapply(stats, subset, select = -distribution) # Remove distribution variable
