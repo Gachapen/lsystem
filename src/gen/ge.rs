@@ -3,7 +3,7 @@ use std::f32;
 use std::{cmp, fs, fmt, io};
 use std::collections::HashMap;
 use std::io::{BufWriter, BufReader, Write};
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -1558,9 +1558,19 @@ fn run_stats(matches: &ArgMatches) {
              duration.num_seconds(),
              duration.num_milliseconds());
 
+    let mut csv = String::new();
+
+    let mut csv_file = match OpenOptions::new().append(true).open(csv_path) {
+        Ok(file) => file,
+        Err(_) => {
+            csv += "distribution,score,balance,branching,closeness,drop\n";
+            File::create(csv_path).unwrap()
+        }
+    };
+
     let csv = samples
         .iter()
-        .fold(String::new(), |csv, &(d, ref f)| if f.is_nothing {
+        .fold(csv, |csv, &(d, ref f)| if f.is_nothing {
             csv + &format!("{},,,,,\n", d)
         } else {
             csv +
@@ -1573,7 +1583,6 @@ fn run_stats(matches: &ArgMatches) {
                      f.drop)
         });
 
-    let mut csv_file = File::create(csv_path).unwrap();
     csv_file.write_all(csv.as_bytes()).unwrap();
 }
 
