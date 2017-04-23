@@ -34,6 +34,8 @@ use yobun::read_dir_all;
 use setup_window;
 use gen::fitness::{self, Fitness};
 
+const DEPTHS: usize = 4;
+
 pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
     SubCommand::with_name("ge")
         .about("Run random plant generation using GE")
@@ -434,8 +436,6 @@ struct SampleBatch {
 }
 
 fn get_sample_setup() -> (abnf::Ruleset, Distribution) {
-    const DEPTHS: usize = 4;
-
     let grammar = abnf::parse_file("grammar/lsys2.abnf").expect("Could not parse ABNF file");
     let distribution = {
         let mut distribution = Distribution::new();
@@ -699,6 +699,10 @@ fn run_sampling_distribution(matches: &ArgMatches) {
 
     let mut distribution = stats.to_distribution();
     distribution.set_default_weights("string", 1, &[1.0, 0.0]);
+
+    // Remove the default weights from the depth weights.
+    distribution.depths[DEPTHS - 1].get_mut("string").unwrap().pop();
+
     let dist_file = File::create(bin_path).unwrap();
     bincode::serialize_into(&mut BufWriter::new(dist_file),
                             &distribution,
