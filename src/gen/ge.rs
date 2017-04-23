@@ -88,12 +88,16 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
         )
         .subcommand(SubCommand::with_name("sampling-dist")
             .about("Take samples from directory and output a distribution CSV file")
-            .arg(Arg::with_name("samples")
-                .short("s")
-                .long("samples")
-                .takes_value(true)
-                .default_value("sample")
+            .arg(Arg::with_name("SAMPLES")
+                .required(true)
+                .index(1)
                 .help("Directory of samples to use")
+            )
+            .arg(Arg::with_name("distribution")
+                .short("d")
+                .long("distribution")
+                .takes_value(true)
+                .help("Distribution file to use. Otherwise default distribution is used.")
             )
             .arg(Arg::with_name("csv")
                 .long("csv")
@@ -608,7 +612,7 @@ fn run_random_sampling(matches: &ArgMatches) {
 }
 
 fn run_sampling_distribution(matches: &ArgMatches) {
-    let samples_path = Path::new(matches.value_of("samples").unwrap());
+    let samples_path = Path::new(matches.value_of("SAMPLES").unwrap());
     let csv_path = Path::new(matches.value_of("csv").unwrap());
     let bin_path = Path::new(matches.value_of("bin").unwrap());
 
@@ -654,7 +658,16 @@ fn run_sampling_distribution(matches: &ArgMatches) {
 
     let (grammar, distribution) = get_sample_setup();
     let grammar = Arc::new(grammar);
-    let distribution = Arc::new(distribution);
+    let distribution = match matches.value_of("distribution") {
+        Some(filename) => {
+            println!("Using distribution from {}", filename);
+            let file = File::open(filename).unwrap();
+            let d: Distribution =
+                bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite).unwrap();
+            Arc::new(d)
+        }
+        None => Arc::new(distribution),
+    };
 
     let workers = num_cpus::get() + 1;
     let pool = CpuPool::new(workers);
