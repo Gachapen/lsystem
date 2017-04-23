@@ -1,9 +1,9 @@
 use std::f32::consts::PI;
 use std::f32;
-use std::{cmp, fs, fmt, io};
-use std::collections::HashMap;
-use std::io::{BufWriter, BufReader, Write};
-use std::fs::{File, OpenOptions};
+use std::{cmp, fmt};
+use std::collections::{HashMap, VecDeque};
+use std::io::{self, BufWriter, BufReader, Write};
+use std::fs::{self, File, OpenOptions};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -24,6 +24,7 @@ use futures_cpupool::CpuPool;
 use bincode;
 use crossbeam;
 use clap::{App, SubCommand, Arg, ArgMatches};
+use parking_lot::{Mutex, RwLock};
 
 use abnf;
 use abnf::expand::{SelectionStrategy, expand_grammar};
@@ -136,6 +137,22 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .help("Number of samples generated to create the stats")
             )
         )
+        .subcommand(SubCommand::with_name("learning")
+            .about("Run learning program until you type 'quit'")
+            .arg(Arg::with_name("distribution")
+                .short("d")
+                .long("distribution")
+                .takes_value(true)
+                .help("Distribution file to use. Otherwise default distribution is used.")
+            )
+            .arg(Arg::with_name("learning-rate")
+                .short("l")
+                .long("learning-rate")
+                .takes_value(true)
+                .default_value("1.3")
+                .help("Learning rate of algorithm. Should be above 1.")
+            )
+        )
 }
 
 pub fn run_ge(matches: &ArgMatches) {
@@ -153,6 +170,8 @@ pub fn run_ge(matches: &ArgMatches) {
         run_sampling_distribution(matches);
     } else if let Some(matches) = matches.subcommand_matches("stats") {
         run_stats(matches);
+    } else if let Some(matches) = matches.subcommand_matches("learning") {
+        run_learning(matches);
     } else {
         println!("A subcommand must be specified. See help by passing -h.");
     }
@@ -710,8 +729,31 @@ fn run_sampling_distribution(matches: &ArgMatches) {
             .unwrap();
 }
 
+fn adjust_distribution(distribution: &mut Distribution, stats: &SelectionStats, factor: f32) {
+    for (depth, rules) in stats.data.iter().enumerate() {
+        for (rule, choices) in rules.iter() {
+            for (choice, options) in choices.iter().enumerate() {
+                let weights = distribution.get_weights_mut(depth, rule, choice as u32);
+                if let Some(weights) = weights {
+                    assert_eq!(weights.len(),
+                               options.len(),
+                               "Stats has different number of weights than distribution");
+                    for (option, count) in options.iter().enumerate() {
+                        let factor = factor * *count as f32;
+                        weights[option] *= factor;
+                    }
+                }
+            }
+        }
+    }
+}
+
+type SelectionChoice = Vec<usize>;
+type SelectionRule = Vec<SelectionChoice>;
+type SelectionDepth = HashMap<String, SelectionRule>;
+
 struct SelectionStats {
-    data: Vec<HashMap<String, Vec<Vec<usize>>>>,
+    data: Vec<SelectionDepth>,
 }
 
 impl SelectionStats {
@@ -879,8 +921,10 @@ impl<'a, G: Gene> SelectionStrategy for WeightedGenotypeStats<'a, G> {
         let depth = WeightedGenotype::<'a, G>::find_depth(rulechain);
         let rule = rulechain.last().unwrap();
 
-        self.stats.make_room(depth, rule, choice, num);
-        self.stats.add_selection(selection, depth, rule, choice);
+        if self.weighted_genotype.distribution.has_weights(depth, rule, choice) {
+            self.stats.make_room(depth, rule, choice, num);
+            self.stats.add_selection(selection, depth, rule, choice);
+        }
 
         selection
     }
@@ -893,9 +937,10 @@ impl<'a, G: Gene> SelectionStrategy for WeightedGenotypeStats<'a, G> {
         let rule = rulechain.last().unwrap();
         let num = (max - min + 1) as usize;
 
-        self.stats.make_room(depth, rule, choice, num);
-        self.stats
-            .add_selection((selection - min) as usize, depth, rule, choice);
+        if self.weighted_genotype.distribution.has_weights(depth, rule, choice) {
+            self.stats.make_room(depth, rule, choice, num);
+            self.stats.add_selection((selection - min) as usize, depth, rule, choice);
+        }
 
         selection
     }
@@ -1114,6 +1159,38 @@ impl Distribution {
             depths: vec![],
             defaults: HashMap::new(),
         }
+    }
+
+    fn has_weights(&self, depth: usize, rule: &str, choice_num: u32) -> bool {
+        if depth < self.depths.len() {
+            let rules = &self.depths[depth];
+            if let Some(choices) = rules.get(rule) {
+                if (choice_num as usize) < choices.len() {
+                    let weights = &choices[choice_num as usize];
+                    if !weights.is_empty() {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    fn get_weights_mut(&mut self, depth: usize, rule: &str, choice_num: u32) -> Option<&mut [f32]> {
+        if depth < self.depths.len() {
+            let rules = &mut self.depths[depth];
+            if let Some(choices) = rules.get_mut(rule) {
+                if (choice_num as usize) < choices.len() {
+                    let weights = &mut choices[choice_num as usize];
+                    if !weights.is_empty() {
+                        return Some(weights);
+                    }
+                }
+            }
+        }
+
+        None
     }
 
     fn get_weights(&self, depth: usize, rule: &str, choice_num: u32) -> Option<&[f32]> {
@@ -1601,6 +1678,129 @@ fn run_stats(matches: &ArgMatches) {
         });
 
     csv_file.write_all(csv.as_bytes()).unwrap();
+}
+
+fn run_learning(matches: &ArgMatches) {
+    fn generate_sample(grammar: &abnf::Ruleset,
+                       distribution: &Distribution)
+                       -> (ol::LSystem,SelectionStats) {
+        let seed = random_seed();
+        let genes = generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
+        let mut genotype = WeightedGenotypeStats::with_genes(genes, distribution);
+        let system = generate_system(grammar, &mut genotype);
+        (system, genotype.take_stats())
+    }
+
+    let learning_rate: f32 = matches.value_of("learning-rate").unwrap().parse().unwrap();
+
+    let (grammar, distribution) = get_sample_setup();
+
+    let grammar = Arc::new(grammar);
+    let distribution = match matches.value_of("distribution") {
+        Some(filename) => {
+            println!("Using distribution from {}", filename);
+            let file = File::open(filename).unwrap();
+            bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite).unwrap()
+        }
+        None => distribution,
+    };
+
+    let distribution = Arc::new(RwLock::new(distribution));
+
+    let settings = Arc::new(lsys::Settings {
+                                width: 0.05,
+                                angle: PI / 8.0,
+                                iterations: 5,
+                                ..lsys::Settings::new()
+                            });
+
+    const SEQUENCE_SIZE: usize = 4;
+
+    let num_workers = num_cpus::get();
+    let work = Arc::new(AtomicBool::new(true));
+    let num_samples = Arc::new(AtomicUsize::new(0));
+    let latest_scores = Arc::new(Mutex::new(VecDeque::new()));
+
+    let start_time = time::now();
+
+    crossbeam::scope(|scope| {
+        for _ in 0..num_workers {
+            let distribution = distribution.clone();
+            let grammar = grammar.clone();
+            let settings = settings.clone();
+            let work = work.clone();
+            let num_samples = num_samples.clone();
+            let latest_scores = latest_scores.clone();
+
+            scope.spawn(move || {
+                while work.load(Ordering::Relaxed) {
+                    for _ in 0..SEQUENCE_SIZE {
+                        let (lsystem, stats) = {
+                            let distribution = distribution.read().clone();
+                            generate_sample(&grammar, &distribution)
+                        };
+                        let (fit, _) = fitness::evaluate(&lsystem, &settings);
+                        let score = fit.score();
+
+                        let factor = if score < 0.0 {
+                            learning_rate.powf(-score)
+                        } else {
+                            1.0 / learning_rate.powf(score)
+                        };
+
+                        {
+                            let mut distribution = distribution.write();
+                            adjust_distribution(&mut distribution, &stats, factor);
+                        }
+
+                        let mut latest_scores = latest_scores.lock();
+                        latest_scores.push_back(score);
+
+                        while latest_scores.len() > 16 {
+                            latest_scores.pop_front();
+                        }
+
+                        let num_scores = latest_scores.len();
+                        let total_score: f32 = latest_scores.iter().sum();
+                        let mean = total_score / num_scores as f32;
+                        let variance = latest_scores
+                            .iter()
+                            .map(|s| (s - mean).powi(2))
+                            .sum::<f32>() / (num_scores - 1) as f32;
+                        let best = latest_scores.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
+                        println!("({} samples) Current: {}, Mean: {}; Variance: {}; Best: {}", num_scores, score, mean, variance, best);
+                    }
+
+                    num_samples.fetch_add(SEQUENCE_SIZE, Ordering::Relaxed);
+                }
+            });
+        }
+
+        println!("Spawned {} threads.", num_workers);
+
+        let mut input = String::new();
+        while input != "quit" {
+            input = String::new();
+            print!("> ");
+            io::stdout().flush().unwrap();
+            io::stdin().read_line(&mut input).unwrap();
+            input.pop().unwrap(); // remove '\n'.
+        }
+
+        println!("Quitting...");
+        work.store(false, Ordering::Relaxed);
+    });
+
+    let end_time = time::now();
+    let duration = end_time - start_time;
+    println!("Duration: {}:{}:{}.{}",
+             duration.num_hours(),
+             duration.num_minutes() % 60,
+             duration.num_seconds() % 60,
+             duration.num_milliseconds() % 1000);
+
+    let num_samples = Arc::try_unwrap(num_samples).unwrap().into_inner();
+    println!("Num samples: {}", num_samples);
 }
 
 #[cfg(test)]

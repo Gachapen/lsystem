@@ -17,6 +17,7 @@ bincode = "0.7"
 serde = "0.9"
 serde_derive = "0.9"
 clap = "2"
+parking_lot = { version = "0.4", features = ["nightly"] }
 
 # Dependencies of kiss3d also used by the project.
 # Dependencies must match the same versions kiss3d uses.
