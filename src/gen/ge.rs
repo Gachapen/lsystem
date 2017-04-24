@@ -1755,6 +1755,7 @@ fn run_learning(matches: &ArgMatches) {
     }
 
     let learning_rate: f32 = matches.value_of("learning-rate").unwrap().parse().unwrap();
+    println!("Using a learning rate of {}", learning_rate);
 
     let (grammar, distribution) = get_sample_setup();
 
@@ -1785,7 +1786,7 @@ fn run_learning(matches: &ArgMatches) {
 
     const SEQUENCE_SIZE: usize = 4;
 
-    let num_workers = num_cpus::get();
+    let num_workers = num_cpus::get() + 1;
     let work = Arc::new(AtomicBool::new(true));
     let num_samples = Arc::new(AtomicUsize::new(0));
     let latest_scores = Arc::new(Mutex::new(VecDeque::new()));
@@ -1821,7 +1822,7 @@ fn run_learning(matches: &ArgMatches) {
                         let mut latest_scores = latest_scores.lock();
                         latest_scores.push_back(score);
 
-                        while latest_scores.len() > 16 {
+                        while latest_scores.len() > 64 {
                             latest_scores.pop_front();
                         }
 
@@ -1833,7 +1834,7 @@ fn run_learning(matches: &ArgMatches) {
                             .map(|s| (s - mean).powi(2))
                             .sum::<f32>() / (num_scores - 1) as f32;
                         let best = latest_scores.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
-                        println!("({} samples) Current: {}, Mean: {}; Variance: {}; Best: {}", num_scores, score, mean, variance, best);
+                        println!("({} samples) Current: {}; Mean: {}; Variance: {}; Best: {}; Factor: {}", num_scores, score, mean, variance, best, factor);
                     }
 
                     num_samples.fetch_add(SEQUENCE_SIZE, Ordering::Relaxed);
