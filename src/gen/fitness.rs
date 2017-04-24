@@ -41,6 +41,7 @@ pub fn is_nothing(lsystem: &ol::LSystem) -> bool {
     true
 }
 
+#[derive(Debug)]
 pub struct Skeleton {
     pub points: Vec<Point3<f32>>,
     pub edges: Vec<Vec<usize>>,
@@ -235,6 +236,7 @@ pub fn is_crap(lsystem: &ol::LSystem, settings: &lsys::Settings) -> bool {
     }
 }
 
+#[derive(Debug)]
 pub struct Fitness {
     pub balance: f32,
     pub branching: f32,
