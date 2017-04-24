@@ -751,8 +751,19 @@ fn adjust_distribution(distribution: &mut Distribution, stats: &SelectionStats, 
                                options.len(),
                                "Stats has different number of weights than distribution");
                     for (option, count) in options.iter().enumerate() {
-                        let factor = factor * *count as f32;
-                        weights[option] *= factor;
+                        if *count > 0 {
+                            let count_factor = (*count as f32).log(20000.0) + 1.0;
+                            let factor = if factor < 1.0 {
+                                if count_factor > 0.0 {
+                                    factor / count_factor
+                                } else {
+                                    0.0
+                                }
+                            } else {
+                                factor * count_factor as f32
+                            };
+                            weights[option] *= factor;
+                        }
                     }
                 }
             }
@@ -1799,16 +1810,12 @@ fn run_learning(matches: &ArgMatches) {
                         };
                         let (fit, _) = fitness::evaluate(&lsystem, &settings);
                         let score = fit.score();
-
-                        let factor = if score < 0.0 {
-                            learning_rate.powf(-score)
-                        } else {
-                            1.0 / learning_rate.powf(score)
-                        };
+                        let factor = learning_rate.powf(score);
 
                         {
                             let mut distribution = distribution.write();
                             adjust_distribution(&mut distribution, &stats, factor);
+                            distribution.normalize();
                         }
 
                         let mut latest_scores = latest_scores.lock();
