@@ -262,7 +262,7 @@ impl Fitness {
     }
 
     pub fn nothing_punishment(&self) -> f32 {
-        if self.is_nothing { 5.0 } else { 0.0 }
+        if self.is_nothing { 3.0 } else { 0.0 }
     }
 
     pub fn punishment(&self) -> f32 {
