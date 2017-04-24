@@ -313,128 +313,15 @@ pub fn evaluate(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (Fitness, O
             .max_by(|a, b| a.y.partial_cmp(&b.y).unwrap())
             .unwrap()
             .y;
-        let drop = skeleton
-            .points
-            .iter()
-            .min_by(|a, b| a.y.partial_cmp(&b.y).unwrap())
-            .unwrap()
-            .y;
 
-        let floor_points: Vec<_> = skeleton
-            .points
-            .iter()
-            .map(|p| Point2::new(p.x, p.z))
-            .collect();
-
-        let spread = floor_points
-            .iter()
-            .map(|p| na::norm(&Vector2::new(p.x, p.y)))
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
-            .unwrap();
-
-        let center = ncu::center(&skeleton.points);
-        let floor_center = Point2::new(center.x, center.z);
-        let center_distance = na::norm(&Vector2::new(floor_center.x, floor_center.y));
-
-        let closeness = skeleton
-            .points
-            .iter()
-            .enumerate()
-            .map(|(i, p)| {
-                if i >= skeleton.edges.len() {
-                    return 0.0;
-                }
-
-                let edges = skeleton.edges[i].iter().map(|e| skeleton.points[*e]);
-
-                let segments: Vec<_> = edges.map(|e| (e - p).normalize()).collect();
-                let closeness = segments
-                    .iter()
-                    .enumerate()
-                    .map(|(a_i, a_s)| {
-                        let mut closest = -1.0;
-                        for (b_i, b_s) in segments.iter().enumerate() {
-                            if b_i != a_i {
-                                let dot = na::dot(a_s, b_s);
-                                closest = *na::partial_max(&dot, &closest).unwrap();
-                            }
-                        }
-
-                        const THRESHOLD: f32 = 0.9;
-                        if closest < THRESHOLD {
-                            0.0
-                        } else {
-                            (closest - THRESHOLD) * (1.0 / (1.0 - THRESHOLD))
-                        }
-                    })
-                    .max_by(|a, b| a.partial_cmp(b).unwrap());
-
-                if let Some(closeness) = closeness {
-                    closeness
-                } else {
-                    0.0
-                }
-            })
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
-            .unwrap();
-
-        let center_direction = Unit::new_normalize(Vector2::new(center.x, center.z));
-        let center_spread = floor_points
-            .iter()
-            .map(|p| Vector2::new(p.x, p.y))
-            .map(|p| project_onto(&p, &center_direction))
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
-            .unwrap();
-
-
-        // First point is root, which we don't want to measure, so skip 1.
-        let branching_counts = skeleton
-            .points
-            .iter()
-            .skip(1)
-            .enumerate()
-            .filter_map(|(i, _)| {
-                if i >= skeleton.edges.len() {
-                    return None;
-                }
-
-                if skeleton.edges[i].is_empty() {
-                    return None;
-                }
-
-                Some(skeleton.edges[i].len())
-            })
-            .collect::<Vec<_>>();
-
-        let total_branching_count = branching_counts.iter().fold(0, |total, b| total + b);
-        let branching_complexity = {
-            if !branching_counts.is_empty() {
-                total_branching_count as f32 / branching_counts.len() as f32
-            } else {
-                0.0
-            }
-        };
-
-        let branching_fitness = {
-            if branching_complexity >= 1.0 && branching_complexity < 2.0 {
-                interpolate_cos(0.0, 1.0, branching_complexity - 1.0)
-            } else if branching_complexity < 3.0 {
-                1.0
-            } else if branching_complexity < 7.0 {
-                let t = (branching_complexity - 3.0) / (7.0 - 3.0);
-                interpolate_cos(1.0, -1.0, t)
-            } else {
-                // No branches, or 7 or more branches.
-                -1.0
-            }
-        };
-
-        let balance_fitness = (0.5 - (center_distance / center_spread)) * 2.0;
-        let drop_fitness = -drop;
+        let (drop_fitness, drop) = evauluate_drop(&skeleton);
+        let balance = evauluate_balance(&skeleton);
+        let closeness = evaluate_closeness(&skeleton);
+        let branching = evaluate_branching(&skeleton);
 
         let fit = Fitness {
-            balance: balance_fitness,
-            branching: branching_fitness,
+            balance: balance.fitness,
+            branching: branching,
             drop: drop_fitness,
             closeness: closeness,
             is_nothing: false,
@@ -443,9 +330,9 @@ pub fn evaluate(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (Fitness, O
         let prop = Properties {
             reach: reach,
             drop: drop,
-            spread: spread,
-            center: center,
-            center_spread: center_spread,
+            spread: balance.spread,
+            center: balance.center,
+            center_spread: balance.center_spread,
             num_points: skeleton.points.len(),
         };
 
@@ -453,8 +340,152 @@ pub fn evaluate(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (Fitness, O
     } else {
         (Fitness::nothing(), None)
     }
+}
 
-    // TODO: balanced number of branches.
+fn evauluate_drop(skeleton: &Skeleton) -> (f32, f32) {
+    let drop = skeleton
+        .points
+        .iter()
+        .min_by(|a, b| a.y.partial_cmp(&b.y).unwrap())
+        .unwrap()
+        .y;
+
+    (-drop, drop)
+}
+
+struct Balance {
+    center: Point3<f32>,
+    fitness: f32,
+    spread: f32,
+    center_spread: f32
+}
+
+fn evauluate_balance(skeleton: &Skeleton) -> Balance {
+    let floor_points: Vec<_> = skeleton
+        .points
+        .iter()
+        .map(|p| Point2::new(p.x, p.z))
+        .collect();
+
+    let spread = floor_points
+        .iter()
+        .map(|p| na::norm(&Vector2::new(p.x, p.y)))
+        .max_by(|a, b| a.partial_cmp(b).unwrap())
+        .unwrap();
+
+    let center = ncu::center(&skeleton.points);
+    let floor_center = Point2::new(center.x, center.z);
+    let center_distance = na::norm(&Vector2::new(floor_center.x, floor_center.y));
+
+    let center_direction = Unit::new_normalize(Vector2::new(center.x, center.z));
+    let center_spread = floor_points
+        .iter()
+        .map(|p| Vector2::new(p.x, p.y))
+        .map(|p| project_onto(&p, &center_direction))
+        .max_by(|a, b| a.partial_cmp(b).unwrap())
+        .unwrap();
+
+    Balance {
+        fitness: (0.5 - (center_distance / center_spread)) * 2.0,
+        spread: spread,
+        center: center,
+        center_spread: center_spread,
+    }
+}
+
+fn evaluate_closeness(skeleton: &Skeleton) -> f32 {
+    skeleton
+        .points
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            if i >= skeleton.edges.len() {
+                return 0.0;
+            }
+
+            let edges = skeleton.edges[i].iter().map(|e| skeleton.points[*e]);
+
+            let segments: Vec<_> = edges.map(|e| (e - p).normalize()).collect();
+            let closeness = segments
+                .iter()
+                .enumerate()
+                .map(|(a_i, a_s)| {
+                    let mut closest = -1.0;
+                    for (b_i, b_s) in segments.iter().enumerate() {
+                        if b_i != a_i {
+                            let dot = na::dot(a_s, b_s);
+                            closest = *na::partial_max(&dot, &closest).unwrap();
+                        }
+                    }
+
+                    const THRESHOLD: f32 = 0.9;
+                    if closest < THRESHOLD {
+                        0.0
+                    } else {
+                        (closest - THRESHOLD) * (1.0 / (1.0 - THRESHOLD))
+                    }
+                })
+                .max_by(|a, b| a.partial_cmp(b).unwrap());
+
+            if let Some(closeness) = closeness {
+                closeness
+            } else {
+                0.0
+            }
+        })
+        .max_by(|a, b| a.partial_cmp(b).unwrap())
+        .unwrap()
+}
+
+fn branching_complexity(skeleton: &Skeleton) -> f32 {
+    // First point is root, which we don't want to measure, so skip 1.
+    let branching_counts = skeleton
+        .points
+        .iter()
+        .enumerate()
+        .skip(1)
+        .filter_map(|(i, _)| {
+            if i >= skeleton.edges.len() {
+                return None;
+            }
+
+            if skeleton.edges[i].is_empty() {
+                return None;
+            }
+
+            Some(skeleton.edges[i].len())
+        })
+        .collect::<Vec<_>>();
+
+    let total_branching_count = branching_counts.iter().fold(0, |total, b| total + b);
+
+    if !branching_counts.is_empty() {
+        total_branching_count as f32 / branching_counts.len() as f32
+    } else {
+        0.0
+    }
+}
+
+fn branching_fitness(complexity: f32) -> f32 {
+    if complexity < 1.0 {
+        // No branches.
+        -1.0
+    } else if complexity < 2.0 {
+        interpolate_cos(0.0, 1.0, complexity - 1.0)
+    } else if complexity < 3.0 {
+        1.0
+    } else if complexity < 7.0 {
+        let t = (complexity - 3.0) / (7.0 - 3.0);
+        interpolate_cos(1.0, -1.0, t)
+    } else {
+        // 7 or more branches.
+        -1.0
+    }
+}
+
+fn evaluate_branching(skeleton: &Skeleton) -> f32 {
+    let complexity = branching_complexity(skeleton);
+    branching_fitness(complexity)
 }
 
 pub fn add_properties_rendering(node: &mut SceneNode, properties: &Properties) {
@@ -512,4 +543,23 @@ pub fn add_properties_rendering(node: &mut SceneNode, properties: &Properties) {
                                                           0.0));
 
     node.add_child(balance);
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_branching_fitness() {
+        assert_eq!(branching_fitness(0.0), -1.0);
+        assert_eq!(branching_fitness(0.5), -1.0);
+        assert_eq!(branching_fitness(1.0), 0.0);
+        assert_eq!(branching_fitness(1.5), 0.5);
+        assert_eq!(branching_fitness(2.0), 1.0);
+        assert_eq!(branching_fitness(2.5), 1.0);
+        assert_eq!(branching_fitness(3.0), 1.0);
+        assert_eq!(branching_fitness(5.0), 0.0);
+        assert_eq!(branching_fitness(7.0), -1.0);
+        assert_eq!(branching_fitness(10.0), -1.0);
+    }
 }
