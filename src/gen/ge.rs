@@ -152,6 +152,18 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .default_value("1.3")
                 .help("Learning rate of algorithm. Should be above 1.")
             )
+            .arg(Arg::with_name("csv")
+                .long("csv")
+                .takes_value(true)
+                .default_value("distribution.csv")
+                .help("Name of the output CSV file")
+            )
+            .arg(Arg::with_name("bin")
+                .long("bin")
+                .takes_value(true)
+                .default_value("distribution.bin")
+                .help("Name of the output bincode file")
+            )
         )
 }
 
@@ -1245,6 +1257,46 @@ impl Distribution {
 
         choices[choice] = weights.to_vec();
     }
+
+    fn normalize(&mut self) {
+        for rules in &mut self.depths {
+            for choices in rules.values_mut() {
+                for alternatives in choices {
+                    let total: f32 = alternatives.iter().sum();
+                    for weight in alternatives {
+                        *weight /= total as f32;
+                    }
+                }
+            }
+        }
+    }
+
+    fn into_normalized(mut self) -> Distribution {
+        self.normalize();
+        self
+    }
+
+    fn to_csv(&self) -> String {
+        let mut csv = "depth,rule,choice,alternative,weight\n".to_string();
+        for (depth, rules) in self.depths.iter().enumerate() {
+            for (rule, choices) in rules {
+                for (choice, alternatives) in choices.iter().enumerate() {
+                    let mut total = 0.0;
+                    for weight in alternatives {
+                        total += *weight;
+                    }
+
+                    for (alternative, weight) in alternatives.iter().enumerate() {
+                        let weight = *weight / total as f32;
+                        csv +=
+                            &format!("{},{},{},{},{}\n", depth, rule, choice, alternative, weight);
+                    }
+                }
+            }
+        }
+
+        csv
+    }
 }
 
 impl fmt::Display for Distribution {
@@ -1707,6 +1759,12 @@ fn run_learning(matches: &ArgMatches) {
 
     let distribution = Arc::new(RwLock::new(distribution));
 
+    let csv_path = Path::new(matches.value_of("csv").unwrap());
+    let bin_path = Path::new(matches.value_of("bin").unwrap());
+    println!("Saving distribution to \"{}\" and \"{}\".",
+             csv_path.to_str().unwrap(),
+             bin_path.to_str().unwrap());
+
     let settings = Arc::new(lsys::Settings {
                                 width: 0.05,
                                 angle: PI / 8.0,
@@ -1801,6 +1859,22 @@ fn run_learning(matches: &ArgMatches) {
 
     let num_samples = Arc::try_unwrap(num_samples).unwrap().into_inner();
     println!("Num samples: {}", num_samples);
+
+    let distribution = match Arc::try_unwrap(distribution) {
+        Ok(distribution) => distribution.into_inner().into_normalized(),
+        Err(_) => panic!("Failed unwrapping distribution Arc"),
+    };
+
+    let mut csv_file = File::create(csv_path).unwrap();
+    csv_file
+        .write_all(distribution.to_csv().as_bytes())
+        .unwrap();
+
+    let dist_file = File::create(bin_path).unwrap();
+    bincode::serialize_into(&mut BufWriter::new(dist_file),
+                            &distribution,
+                            bincode::Infinite)
+            .unwrap();
 }
 
 #[cfg(test)]
