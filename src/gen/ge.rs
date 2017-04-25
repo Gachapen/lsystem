@@ -765,16 +765,19 @@ fn adjust_distribution(distribution: &mut Distribution, stats: &SelectionStats, 
                     for (option, count) in options.iter().enumerate() {
                         if *count > 0 {
                             let count_factor = (*count as f32).log(20000.0) + 1.0;
+                            assert!(count_factor > 0.0);
+
                             let factor = if factor < 1.0 {
-                                if count_factor > 0.0 {
-                                    factor / count_factor
-                                } else {
-                                    0.0
-                                }
+                                factor / count_factor
                             } else {
                                 factor * count_factor as f32
                             };
+
                             weights[option] *= factor;
+
+                            if weights[option].is_nan() {
+                                panic!("NAN");
+                            }
                         }
                     }
                 }
