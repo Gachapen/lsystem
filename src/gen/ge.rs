@@ -1,7 +1,7 @@
 use std::f32::consts::PI;
 use std::f32;
 use std::{cmp, fmt};
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::io::{self, BufWriter, BufReader, Write};
 use std::fs::{self, File, OpenOptions};
 use std::path::Path;
@@ -157,6 +157,12 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .takes_value(true)
                 .default_value("distribution.csv")
                 .help("Name of the output CSV file")
+            )
+            .arg(Arg::with_name("stats-csv")
+                .long("stats-csv")
+                .takes_value(true)
+                .default_value("learning-stats.csv")
+                .help("Name of the output stats CSV file")
             )
             .arg(Arg::with_name("bin")
                 .long("bin")
@@ -1744,6 +1750,15 @@ fn run_stats(matches: &ArgMatches) {
 }
 
 fn run_learning(matches: &ArgMatches) {
+    struct Stat {
+        mean: f32,
+        variance: f32,
+        best: f32,
+        local_mean: f32,
+        local_variance: f32,
+        local_best: f32,
+    }
+
     fn generate_sample(grammar: &abnf::Ruleset,
                        distribution: &Distribution)
                        -> (ol::LSystem,SelectionStats) {
@@ -1777,6 +1792,9 @@ fn run_learning(matches: &ArgMatches) {
              csv_path.to_str().unwrap(),
              bin_path.to_str().unwrap());
 
+    let stats_csv_path = Path::new(matches.value_of("stats-csv").unwrap());
+    println!("Saving stats to \"{}\".", stats_csv_path.to_str().unwrap());
+
     let settings = Arc::new(lsys::Settings {
                                 width: 0.05,
                                 angle: PI / 8.0,
@@ -1789,7 +1807,8 @@ fn run_learning(matches: &ArgMatches) {
     let num_workers = num_cpus::get() + 1;
     let work = Arc::new(AtomicBool::new(true));
     let num_samples = Arc::new(AtomicUsize::new(0));
-    let latest_scores = Arc::new(Mutex::new(VecDeque::new()));
+    let scores = Arc::new(Mutex::new(Vec::new()));
+    let score_stats = Arc::new(Mutex::new(Vec::new()));
 
     let start_time = time::now();
 
@@ -1800,7 +1819,8 @@ fn run_learning(matches: &ArgMatches) {
             let settings = settings.clone();
             let work = work.clone();
             let num_samples = num_samples.clone();
-            let latest_scores = latest_scores.clone();
+            let scores = scores.clone();
+            let score_stats = score_stats.clone();
 
             scope.spawn(move || {
                 while work.load(Ordering::Relaxed) {
@@ -1819,22 +1839,42 @@ fn run_learning(matches: &ArgMatches) {
                             distribution.normalize();
                         }
 
-                        let mut latest_scores = latest_scores.lock();
-                        latest_scores.push_back(score);
+                        let stat = {
+                            let mut scores = scores.lock();
+                            scores.push(score);
 
-                        while latest_scores.len() > 64 {
-                            latest_scores.pop_front();
-                        }
+                            let total_score: f32 = scores.iter().sum();
+                            let mean = total_score / scores.len() as f32;
+                            let variance = scores
+                                .iter()
+                                .map(|s| (s - mean).powi(2))
+                                .sum::<f32>() / (scores.len() - 1) as f32;
+                            let best = scores.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
 
-                        let num_scores = latest_scores.len();
-                        let total_score: f32 = latest_scores.iter().sum();
-                        let mean = total_score / num_scores as f32;
-                        let variance = latest_scores
-                            .iter()
-                            .map(|s| (s - mean).powi(2))
-                            .sum::<f32>() / (num_scores - 1) as f32;
-                        let best = latest_scores.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
-                        println!("({} samples) Current: {}; Mean: {}; Variance: {}; Best: {}; Factor: {}", num_scores, score, mean, variance, best, factor);
+                            let local_len = 64;
+                            let num_scores = cmp::min(scores.len(), local_len);
+                            let local_iter = scores.iter().skip(scores.len() - num_scores);
+                            let local_score: f32 = local_iter.clone().sum();
+                            let local_mean = local_score / num_scores as f32;
+                            let local_variance = local_iter
+                                .clone()
+                                .map(|s| (s - local_mean).powi(2))
+                                .sum::<f32>() / (num_scores - 1) as f32;
+                            let local_best = local_iter.max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
+                            println!("({} samples) Current: {}; Mean: {}; Variance: {}; Best: {}; Factor: {}", num_scores, score, local_mean, local_variance, local_best, factor);
+
+                            Stat {
+                                mean: mean,
+                                variance: variance,
+                                best: *best,
+                                local_mean: local_mean,
+                                local_variance: local_variance,
+                                local_best: *local_best,
+                            }
+                        };
+
+                        let mut score_stats = score_stats.lock();
+                        score_stats.push(stat);
                     }
 
                     num_samples.fetch_add(SEQUENCE_SIZE, Ordering::Relaxed);
@@ -1883,6 +1923,34 @@ fn run_learning(matches: &ArgMatches) {
                             &distribution,
                             bincode::Infinite)
             .unwrap();
+
+    let scores = match Arc::try_unwrap(scores) {
+        Ok(scores) => scores.into_inner(),
+        Err(_) => panic!("Failed unwrapping scores Arc"),
+    };
+    let score_stats = match Arc::try_unwrap(score_stats) {
+        Ok(score_stats) => score_stats.into_inner(),
+        Err(_) => panic!("Failed unwrapping score_stats Arc"),
+    };
+    let mut stats_csv = String::from("sample,current,mean,variance,best,local mean,local variance,local best\n");
+    for i in 0..scores.len() {
+        let score = scores[i];
+        let stat = &score_stats[i];
+        stats_csv += &format!("{},{},{},{},{},{},{},{}\n",
+                             i,
+                             score,
+                             stat.mean,
+                             stat.variance,
+                             stat.best,
+                             stat.local_mean,
+                             stat.local_variance,
+                             stat.local_best);
+    }
+
+    let mut stats_csv_file = File::create(stats_csv_path).unwrap();
+    stats_csv_file
+        .write_all(stats_csv.as_bytes())
+        .unwrap();
 }
 
 #[cfg(test)]
