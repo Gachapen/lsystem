@@ -170,6 +170,12 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .default_value("distribution.bin")
                 .help("Name of the output bincode file")
             )
+            .arg(Arg::with_name("workers")
+                .short("w")
+                .long("workers")
+                .takes_value(true)
+                .help("How many workers (threads) to run. Default is number of CPU cores + 1.")
+            )
         )
 }
 
@@ -1804,7 +1810,7 @@ fn run_learning(matches: &ArgMatches) {
 
     const SEQUENCE_SIZE: usize = 4;
 
-    let num_workers = num_cpus::get() + 1;
+    let num_workers = matches.value_of("workers").map_or(num_cpus::get() + 1, |w| w.parse().unwrap());
     let work = Arc::new(AtomicBool::new(true));
     let num_samples = Arc::new(AtomicUsize::new(0));
     let scores = Arc::new(Mutex::new(Vec::new()));
