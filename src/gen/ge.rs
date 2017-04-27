@@ -766,9 +766,8 @@ fn adjust_distribution(distribution: &mut Distribution, stats: &SelectionStats, 
                     for (option, count) in options.iter().enumerate() {
                         if *count > 0 {
                             let count_factor = *count as f32 / total_count;
-                            assert!(count_factor > 0.0);
-                            let factor = factor * count_factor as f32;
-                            weights[option] *= factor;
+                            let combined_factor = 1.0 + (factor - 1.0) * count_factor;
+                            weights[option] *= combined_factor;
 
                             if weights[option].is_nan() {
                                 panic!("NAN");
