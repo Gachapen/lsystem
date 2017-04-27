@@ -350,7 +350,7 @@ fn evaluate_drop(skeleton: &Skeleton) -> (f32, f32) {
         .unwrap()
         .y;
 
-    (-drop, drop)
+    (-na::partial_max(&drop, &1.0).unwrap(), drop)
 }
 
 struct Balance {
