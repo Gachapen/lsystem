@@ -5,6 +5,7 @@ use std::fmt;
 use na::{self, Unit, UnitQuaternion, Point2, Point3, Vector2, Vector3, Translation3, Rotation3};
 use ncu;
 use kiss3d::scene::SceneNode;
+use yobun::partial_min;
 
 use lsys::{self, ol, Command};
 use yobun::*;
@@ -203,6 +204,7 @@ pub fn build_skeleton(instructions: ol::InstructionsIter,
     Some(skeleton)
 }
 
+#[derive(Debug)]
 pub struct Properties {
     pub reach: f32,
     pub drop: f32,
@@ -350,7 +352,8 @@ fn evaluate_drop(skeleton: &Skeleton) -> (f32, f32) {
         .unwrap()
         .y;
 
-    (-na::partial_max(&drop, &1.0).unwrap(), drop)
+    let drop = partial_min(drop, 0.0);
+    (-partial_max(drop, -1.0), drop)
 }
 
 struct Balance {
