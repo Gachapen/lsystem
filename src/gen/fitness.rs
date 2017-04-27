@@ -314,8 +314,8 @@ pub fn evaluate(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (Fitness, O
             .unwrap()
             .y;
 
-        let (drop_fitness, drop) = evauluate_drop(&skeleton);
-        let balance = evauluate_balance(&skeleton);
+        let (drop_fitness, drop) = evaluate_drop(&skeleton);
+        let balance = evaluate_balance(&skeleton);
         let closeness = evaluate_closeness(&skeleton);
         let branching = evaluate_branching(&skeleton);
 
@@ -342,7 +342,7 @@ pub fn evaluate(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (Fitness, O
     }
 }
 
-fn evauluate_drop(skeleton: &Skeleton) -> (f32, f32) {
+fn evaluate_drop(skeleton: &Skeleton) -> (f32, f32) {
     let drop = skeleton
         .points
         .iter()
@@ -360,7 +360,7 @@ struct Balance {
     center_spread: f32
 }
 
-fn evauluate_balance(skeleton: &Skeleton) -> Balance {
+fn evaluate_balance(skeleton: &Skeleton) -> Balance {
     let floor_points: Vec<_> = skeleton
         .points
         .iter()
