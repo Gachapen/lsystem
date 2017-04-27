@@ -130,6 +130,28 @@ pub fn read_dir_all<P: AsRef<Path>>(path: P) -> io::Result<ReadDirAll> {
     Ok(ReadDirAll { visit_stack: vec![top_dir] })
 }
 
+#[inline]
+pub fn partial_min<T>(a: T, b: T) -> T
+    where T: PartialOrd
+{
+    if a <= b {
+        a
+    } else {
+        b
+    }
+}
+
+#[inline]
+pub fn partial_max<T>(a: T, b: T) -> T
+    where T: PartialOrd
+{
+    if a >= b {
+        a
+    } else {
+        b
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
