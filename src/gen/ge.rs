@@ -1754,9 +1754,6 @@ fn run_stats(matches: &ArgMatches) {
 
 fn run_learning(matches: &ArgMatches) {
     struct Stat {
-        mean: f32,
-        variance: f32,
-        best: f32,
         local_mean: f32,
         local_variance: f32,
         local_best: f32,
@@ -1815,6 +1812,8 @@ fn run_learning(matches: &ArgMatches) {
 
     let start_time = time::now();
 
+    const LOCAL_LEN: usize = 128;
+
     crossbeam::scope(|scope| {
         for _ in 0..num_workers {
             let distribution = distribution.clone();
@@ -1846,38 +1845,32 @@ fn run_learning(matches: &ArgMatches) {
                             let mut scores = scores.lock();
                             scores.push(score);
 
-                            let total_score: f32 = scores.iter().sum();
-                            let mean = total_score / scores.len() as f32;
-                            let variance = scores
-                                .iter()
-                                .map(|s| (s - mean).powi(2))
-                                .sum::<f32>() / (scores.len() - 1) as f32;
-                            let best = scores.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
+                            if scores.len() >= LOCAL_LEN {
+                                let num_scores = cmp::min(scores.len(), LOCAL_LEN);
+                                let local_iter = scores.iter().skip(scores.len() - num_scores);
+                                let local_score: f32 = local_iter.clone().sum();
+                                let local_mean = local_score / num_scores as f32;
+                                let local_variance = local_iter
+                                    .clone()
+                                    .map(|s| (s - local_mean).powi(2))
+                                    .sum::<f32>() / (num_scores - 1) as f32;
+                                let local_best = local_iter.max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
+                                println!("({} samples) Current: {}; Mean: {}; Variance: {}; Best: {}; Factor: {}", num_scores, score, local_mean, local_variance, local_best, factor);
 
-                            let local_len = 64;
-                            let num_scores = cmp::min(scores.len(), local_len);
-                            let local_iter = scores.iter().skip(scores.len() - num_scores);
-                            let local_score: f32 = local_iter.clone().sum();
-                            let local_mean = local_score / num_scores as f32;
-                            let local_variance = local_iter
-                                .clone()
-                                .map(|s| (s - local_mean).powi(2))
-                                .sum::<f32>() / (num_scores - 1) as f32;
-                            let local_best = local_iter.max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
-                            println!("({} samples) Current: {}; Mean: {}; Variance: {}; Best: {}; Factor: {}", num_scores, score, local_mean, local_variance, local_best, factor);
-
-                            Stat {
-                                mean: mean,
-                                variance: variance,
-                                best: *best,
-                                local_mean: local_mean,
-                                local_variance: local_variance,
-                                local_best: *local_best,
+                                Some(Stat {
+                                    local_mean: local_mean,
+                                    local_variance: local_variance,
+                                    local_best: *local_best,
+                                })
+                            } else {
+                                None
                             }
                         };
 
-                        let mut score_stats = score_stats.lock();
-                        score_stats.push(stat);
+                        if let Some(stat) = stat {
+                            let mut score_stats = score_stats.lock();
+                            score_stats.push(stat);
+                        }
                     }
 
                     num_samples.fetch_add(SEQUENCE_SIZE, Ordering::Relaxed);
@@ -1935,19 +1928,22 @@ fn run_learning(matches: &ArgMatches) {
         Ok(score_stats) => score_stats.into_inner(),
         Err(_) => panic!("Failed unwrapping score_stats Arc"),
     };
-    let mut stats_csv = String::from("sample,current,mean,variance,best,local mean,local variance,local best\n");
+    let mut stats_csv = String::from("sample,current,local mean,local variance,local best\n");
     for i in 0..scores.len() {
         let score = scores[i];
-        let stat = &score_stats[i];
-        stats_csv += &format!("{},{},{},{},{},{},{},{}\n",
-                             i,
-                             score,
-                             stat.mean,
-                             stat.variance,
-                             stat.best,
-                             stat.local_mean,
-                             stat.local_variance,
-                             stat.local_best);
+        if i > LOCAL_LEN {
+            let stat = &score_stats[i - LOCAL_LEN];
+            stats_csv += &format!("{},{},{},{},{}\n",
+                                 i,
+                                 score,
+                                 stat.local_mean,
+                                 stat.local_variance,
+                                 stat.local_best);
+        } else {
+            stats_csv += &format!("{},{},,,\n",
+                                 i,
+                                 score);
+        }
     }
 
     let mut stats_csv_file = File::create(stats_csv_path).unwrap();
