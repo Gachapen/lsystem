@@ -762,17 +762,12 @@ fn adjust_distribution(distribution: &mut Distribution, stats: &SelectionStats, 
                     assert_eq!(weights.len(),
                                options.len(),
                                "Stats has different number of weights than distribution");
+                    let total_count = options.iter().sum::<usize>() as f32;
                     for (option, count) in options.iter().enumerate() {
                         if *count > 0 {
-                            let count_factor = (*count as f32).log(20000.0) + 1.0;
+                            let count_factor = *count as f32 / total_count;
                             assert!(count_factor > 0.0);
-
-                            let factor = if factor < 1.0 {
-                                factor / count_factor
-                            } else {
-                                factor * count_factor as f32
-                            };
-
+                            let factor = factor * count_factor as f32;
                             weights[option] *= factor;
 
                             if weights[option].is_nan() {
