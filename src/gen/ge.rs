@@ -1832,8 +1832,8 @@ fn run_learning(matches: &ArgMatches) {
                             generate_sample(&grammar, &distribution)
                         };
                         let (fit, _) = fitness::evaluate(&lsystem, &settings);
-                        let score = fit.score() - 2.0;
-                        let factor = learning_rate.powf(score);
+                        let score = fit.score();
+                        let factor = learning_rate.powf(score - 1.5);
 
                         {
                             let mut distribution = distribution.write();
