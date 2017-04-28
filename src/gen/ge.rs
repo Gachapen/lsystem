@@ -1846,16 +1846,15 @@ fn run_learning(matches: &ArgMatches) {
                             scores.push(score);
 
                             if scores.len() >= LOCAL_LEN {
-                                let num_scores = cmp::min(scores.len(), LOCAL_LEN);
-                                let local_iter = scores.iter().skip(scores.len() - num_scores);
+                                let local_iter = scores.iter().skip(scores.len() - LOCAL_LEN);
                                 let local_score: f32 = local_iter.clone().sum();
-                                let local_mean = local_score / num_scores as f32;
+                                let local_mean = local_score / LOCAL_LEN as f32;
                                 let local_variance = local_iter
                                     .clone()
                                     .map(|s| (s - local_mean).powi(2))
-                                    .sum::<f32>() / (num_scores - 1) as f32;
+                                    .sum::<f32>() / (LOCAL_LEN - 1) as f32;
                                 let local_best = local_iter.max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
-                                println!("({} samples) Current: {}; Mean: {}; Variance: {}; Best: {}; Factor: {}", num_scores, score, local_mean, local_variance, local_best, factor);
+                                println!("({} samples) Current: {}; Mean: {}; Variance: {}; Best: {}; Factor: {}", LOCAL_LEN, score, local_mean, local_variance, local_best, factor);
 
                                 Some(Stat {
                                     local_mean: local_mean,
