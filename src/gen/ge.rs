@@ -1802,7 +1802,7 @@ fn run_learning(matches: &ArgMatches) {
                                 ..lsys::Settings::new()
                             });
 
-    const SEQUENCE_SIZE: usize = 4;
+    const SEQUENCE_SIZE: usize = 1;
 
     let num_workers = matches.value_of("workers").map_or(num_cpus::get() + 1, |w| w.parse().unwrap());
     let work = Arc::new(AtomicBool::new(true));
@@ -1875,6 +1875,13 @@ fn run_learning(matches: &ArgMatches) {
                     }
 
                     num_samples.fetch_add(SEQUENCE_SIZE, Ordering::Relaxed);
+
+                    // let distribution = distribution.read();
+                    // let file_path = format!("dist/{}.csv", time::now().rfc3339());
+                    // let mut csv_file = File::create(file_path).unwrap();
+                    // csv_file
+                    //     .write_all(distribution.to_csv().as_bytes())
+                    //     .unwrap();
                 }
             });
         }
