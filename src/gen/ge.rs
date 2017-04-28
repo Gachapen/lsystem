@@ -1832,7 +1832,7 @@ fn run_learning(matches: &ArgMatches) {
                             generate_sample(&grammar, &distribution)
                         };
                         let (fit, _) = fitness::evaluate(&lsystem, &settings);
-                        let score = fit.score();
+                        let score = fit.score() - 2.0;
                         let factor = learning_rate.powf(score);
 
                         {
@@ -1863,6 +1863,7 @@ fn run_learning(matches: &ArgMatches) {
                                     local_best: *local_best,
                                 })
                             } else {
+                                println!("({} samples) Current: {}", scores.len(), score);
                                 None
                             }
                         };
