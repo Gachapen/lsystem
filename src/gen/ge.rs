@@ -1936,8 +1936,7 @@ fn run_learning(matches: &ArgMatches) {
         Err(_) => panic!("Failed unwrapping score_stats Arc"),
     };
     let mut stats_csv = String::from("sample,current,local mean,local variance,local best\n");
-    for i in 0..scores.len() {
-        let score = scores[i];
+    for (i, score) in scores.iter().enumerate() {
         if i > LOCAL_LEN {
             let stat = &score_stats[i - LOCAL_LEN];
             stats_csv += &format!("{},{},{},{},{}\n",
