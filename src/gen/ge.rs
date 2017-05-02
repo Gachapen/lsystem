@@ -1854,7 +1854,7 @@ fn run_learning(matches: &ArgMatches) {
                                     .map(|s| (s - local_mean).powi(2))
                                     .sum::<f32>() / (LOCAL_LEN - 1) as f32;
                                 let local_best = local_iter.max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
-                                println!("({} samples) Current: {}; Mean: {}; Variance: {}; Best: {}; Factor: {}", LOCAL_LEN, score, local_mean, local_variance, local_best, factor);
+                                println!("({}/{} samples) Current: {}; Mean: {}; Variance: {}; Best: {}; Factor: {}", LOCAL_LEN, scores.len(), score, local_mean, local_variance, local_best, factor);
 
                                 Some(Stat {
                                     local_mean: local_mean,
