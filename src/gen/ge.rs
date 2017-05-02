@@ -1833,7 +1833,7 @@ fn run_learning(matches: &ArgMatches) {
                         };
                         let (fit, _) = fitness::evaluate(&lsystem, &settings);
                         let score = fit.score();
-                        let factor = learning_rate.powf(score - 1.5);
+                        let factor = learning_rate.powf(score);
 
                         {
                             let mut distribution = distribution.write();
