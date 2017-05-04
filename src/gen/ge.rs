@@ -19,12 +19,12 @@ use glfw::{Key, WindowEvent, Action};
 use serde_yaml;
 use time;
 use num_cpus;
-use futures::{Future, future};
+use futures::Future;
+use futures::future::{self, FutureResult};
 use futures_cpupool::CpuPool;
 use bincode;
 use crossbeam;
 use clap::{App, SubCommand, Arg, ArgMatches};
-use parking_lot::{Mutex, RwLock};
 
 use abnf;
 use abnf::expand::{SelectionStrategy, expand_grammar};
@@ -1788,12 +1788,6 @@ fn run_stats(matches: &ArgMatches) {
 }
 
 fn run_learning(matches: &ArgMatches) {
-    struct Stat {
-        local_mean: f32,
-        local_variance: f32,
-        local_best: f32,
-    }
-
     fn generate_sample(grammar: &abnf::Ruleset,
                        distribution: &Distribution)
                        -> (ol::LSystem,SelectionStats) {
@@ -1819,13 +1813,10 @@ fn run_learning(matches: &ArgMatches) {
         None => distribution,
     };
 
-    let distribution = Arc::new(RwLock::new(distribution));
+    let distribution = Arc::new(distribution);
 
-    let csv_path = Path::new(matches.value_of("csv").unwrap());
     let bin_path = Path::new(matches.value_of("bin").unwrap());
-    println!("Saving distribution to \"{}\" and \"{}\".",
-             csv_path.to_str().unwrap(),
-             bin_path.to_str().unwrap());
+    println!("Saving distribution to \"{}\".", bin_path.to_str().unwrap());
 
     let stats_csv_path = Path::new(matches.value_of("stats-csv").unwrap());
     println!("Saving stats to \"{}\".", stats_csv_path.to_str().unwrap());
@@ -1837,90 +1828,169 @@ fn run_learning(matches: &ArgMatches) {
                                 ..lsys::Settings::new()
                             });
 
-    const SEQUENCE_SIZE: usize = 1;
-
     let num_workers = matches.value_of("workers").map_or(num_cpus::get() + 1, |w| w.parse().unwrap());
-    let work = Arc::new(AtomicBool::new(true));
-    let num_samples = Arc::new(AtomicUsize::new(0));
-    let scores = Arc::new(Mutex::new(Vec::new()));
-    let score_stats = Arc::new(Mutex::new(Vec::new()));
+
+    let dist_dump_path = Path::new("dist");
+    fs::create_dir_all(dist_dump_path).unwrap();
+
+    let mut dist_files = fs::read_dir(dist_dump_path).unwrap().peekable();
+    if dist_files.peek().is_some() {
+        println!("There are files in \"{}\", remove these?", dist_dump_path.to_str().unwrap());
+        print!("[y/C]: ");
+        io::stdout().flush().unwrap();
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+        input.pop().unwrap(); // remove '\n'.
+
+        if input != "y" && input != "Y" {
+            println!("Cancelled.");
+            return;
+        } else {
+            println!("Removing files in \"{}\"", dist_dump_path.to_str().unwrap());
+            for file in dist_files {
+                fs::remove_file(file.unwrap().path()).unwrap();
+            }
+        }
+    }
 
     let start_time = time::now();
-
-    const LOCAL_LEN: usize = 128;
+    let run = Arc::new(AtomicBool::new(true));
 
     crossbeam::scope(|scope| {
-        for _ in 0..num_workers {
-            let distribution = distribution.clone();
-            let grammar = grammar.clone();
-            let settings = settings.clone();
-            let work = work.clone();
-            let num_samples = num_samples.clone();
-            let scores = scores.clone();
-            let score_stats = score_stats.clone();
+        {
+            let run = run.clone();
+            let mut distribution = distribution.clone();
 
+            // Processing is handled on separate thread so that user input commands can be handled
+            // on the main thread.
             scope.spawn(move || {
-                while work.load(Ordering::Relaxed) {
-                    for _ in 0..SEQUENCE_SIZE {
-                        let (lsystem, stats) = {
-                            let distribution = distribution.read().clone();
-                            generate_sample(&grammar, &distribution)
-                        };
-                        let (fit, _) = fitness::evaluate(&lsystem, &settings);
-                        let score = fit.score();
-                        let factor = learning_rate.powf(score);
+                let pool = CpuPool::new(num_workers);
 
-                        {
-                            let mut distribution = distribution.write();
-                            adjust_distribution(&mut distribution, &stats, factor);
-                            distribution.normalize();
-                        }
+                let mut distribution_save_future = {
+                    let distribution = distribution.clone();
 
-                        let stat = {
-                            let mut scores = scores.lock();
-                            scores.push(score);
+                    pool.spawn_fn(move || -> FutureResult<(), ()> {
+                        let first_dist_filename = format!("{}.csv", 0);
+                        let first_dist_file_path = dist_dump_path.join(first_dist_filename);
+                        let mut csv_file = File::create(first_dist_file_path).unwrap();
+                        csv_file
+                            .write_all(distribution.to_csv().as_bytes())
+                            .unwrap();
 
-                            if scores.len() >= LOCAL_LEN {
-                                let local_iter = scores.iter().skip(scores.len() - LOCAL_LEN);
-                                let local_score: f32 = local_iter.clone().sum();
-                                let local_mean = local_score / LOCAL_LEN as f32;
-                                let local_variance = local_iter
-                                    .clone()
-                                    .map(|s| (s - local_mean).powi(2))
-                                    .sum::<f32>() / (LOCAL_LEN - 1) as f32;
-                                let local_best = local_iter.max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
-                                println!("({}/{} samples) Current: {}; Mean: {}; Variance: {}; Best: {}; Factor: {}", LOCAL_LEN, scores.len(), score, local_mean, local_variance, local_best, factor);
+                        future::ok(())
+                    })
+                };
 
-                                Some(Stat {
-                                    local_mean: local_mean,
-                                    local_variance: local_variance,
-                                    local_best: *local_best,
+                let mut num_samples = 0;
+                let mut scores = Vec::new();
+
+                const ERROR_THRESHOLD: f32 = 0.001;
+                const MIN_SAMPLES: usize = 128;
+
+                // Each iteration is one step in the learning algorithm.
+                while run.load(Ordering::Relaxed) {
+                    let mut error = f32::MAX;
+                    let mut step_mean = 0.0;
+                    let mut step_scores = Vec::new();
+                    let mut step_score_stats = Vec::new();
+
+                    // Generate samples until error is with accepted threshold.
+                    while error > ERROR_THRESHOLD && run.load(Ordering::Relaxed) {
+                        let tasks: Vec<_> = (0..MIN_SAMPLES)
+                            .map(|_| {
+                                let distribution = distribution.clone();
+                                let grammar = grammar.clone();
+                                let settings = settings.clone();
+                                pool.spawn_fn(move || -> FutureResult<(f32, SelectionStats), ()> {
+                                    let (lsystem, stats) = generate_sample(&grammar, &distribution);
+
+                                    let (fit, _) = fitness::evaluate(&lsystem, &settings);
+                                    let score = fit.score();
+                                    future::ok((score, stats))
                                 })
-                            } else {
-                                println!("({} samples) Current: {}", scores.len(), score);
-                                None
-                            }
-                        };
+                            })
+                            .collect();
 
-                        if let Some(stat) = stat {
-                            let mut score_stats = score_stats.lock();
-                            score_stats.push(stat);
-                        }
+                        let result = future::join_all(tasks).wait().unwrap();
+                        let batch_scores: Vec<_> = result.iter().map(|&(score, _)| score).collect();
+                        let batch_score_stats = result;
+
+                        step_scores.extend(batch_scores);
+                        step_score_stats.extend(batch_score_stats);
+
+                        let score_sum: f32 = step_scores.iter().sum();
+                        let size = step_scores.len();
+                        let mean = score_sum / size as f32;
+                        let unbiased_sample_variance = step_scores
+                            .iter()
+                            .map(|s| (s - mean).powi(2))
+                            .sum::<f32>() / (size - 1) as f32;
+                        let sample_standard_deviation = unbiased_sample_variance.sqrt();
+
+                        error = sample_standard_deviation / size as f32;
+                        step_mean = mean;
+                        println!("M: {}, SE: {}", step_mean, error);
+
+                        num_samples +=  MIN_SAMPLES;
                     }
 
-                    num_samples.fetch_add(SEQUENCE_SIZE, Ordering::Relaxed);
+                    if error <= ERROR_THRESHOLD {
+                        let num_step_samples = step_scores.len();
+                        println!("Stepped once after {} samples.", num_step_samples);
 
-                    // let distribution = distribution.read();
-                    // let file_path = format!("dist/{}.csv", time::now().rfc3339());
-                    // let mut csv_file = File::create(file_path).unwrap();
-                    // csv_file
-                    //     .write_all(distribution.to_csv().as_bytes())
-                    //     .unwrap();
+                        scores.push((num_samples, num_step_samples, error, step_mean));
+
+                        let factor = learning_rate.powf(step_mean);
+
+                        let stats = step_score_stats
+                            .iter()
+                            .map(|&(_, ref s)| s)
+                            .sum();
+
+                        let mut distribution = Arc::get_mut(&mut distribution).unwrap();
+                        adjust_distribution(&mut distribution, &stats, factor);
+                        distribution.normalize();
+
+                        distribution_save_future.wait().unwrap();
+
+                        distribution_save_future = {
+                            let distribution = distribution.clone();
+
+                            pool.spawn_fn(move || -> FutureResult<(), ()> {
+                                let filename = format!("{}.csv", num_samples);
+                                let file_path = dist_dump_path.join(filename);
+                                let mut csv_file = File::create(file_path).unwrap();
+                                csv_file
+                                    .write_all(distribution.to_csv().as_bytes())
+                                    .unwrap();
+
+                                future::ok(())
+                            })
+                        };
+                    } else {
+                        println!("Quit before step finished.");
+                    }
                 }
+
+                let mut stats_csv = String::from("step,samples,step samples,error,score\n");
+                for (i, &(samples, step_samples, error, score)) in scores.iter().enumerate() {
+                    stats_csv += &format!("{},{},{},{},{}\n",
+                                         i,
+                                         samples,
+                                         step_samples,
+                                         error,
+                                         score);
+                }
+
+                let mut stats_csv_file = File::create(stats_csv_path).unwrap();
+                stats_csv_file
+                    .write_all(stats_csv.as_bytes())
+                    .unwrap();
+
+                distribution_save_future.wait().unwrap();
             });
         }
-
-        println!("Spawned {} threads.", num_workers);
 
         let mut input = String::new();
         while input != "quit" {
@@ -1932,7 +2002,7 @@ fn run_learning(matches: &ArgMatches) {
         }
 
         println!("Quitting...");
-        work.store(false, Ordering::Relaxed);
+        run.store(false, Ordering::Relaxed);
     });
 
     let end_time = time::now();
@@ -1943,53 +2013,10 @@ fn run_learning(matches: &ArgMatches) {
              duration.num_seconds() % 60,
              duration.num_milliseconds() % 1000);
 
-    let num_samples = Arc::try_unwrap(num_samples).unwrap().into_inner();
-    println!("Num samples: {}", num_samples);
-
-    let distribution = match Arc::try_unwrap(distribution) {
-        Ok(distribution) => distribution.into_inner().into_normalized(),
-        Err(_) => panic!("Failed unwrapping distribution Arc"),
-    };
-
-    let mut csv_file = File::create(csv_path).unwrap();
-    csv_file
-        .write_all(distribution.to_csv().as_bytes())
-        .unwrap();
-
     let dist_file = File::create(bin_path).unwrap();
     bincode::serialize_into(&mut BufWriter::new(dist_file),
                             &distribution,
                             bincode::Infinite)
-            .unwrap();
-
-    let scores = match Arc::try_unwrap(scores) {
-        Ok(scores) => scores.into_inner(),
-        Err(_) => panic!("Failed unwrapping scores Arc"),
-    };
-    let score_stats = match Arc::try_unwrap(score_stats) {
-        Ok(score_stats) => score_stats.into_inner(),
-        Err(_) => panic!("Failed unwrapping score_stats Arc"),
-    };
-    let mut stats_csv = String::from("sample,current,local mean,local variance,local best\n");
-    for (i, score) in scores.iter().enumerate() {
-        if i > LOCAL_LEN {
-            let stat = &score_stats[i - LOCAL_LEN];
-            stats_csv += &format!("{},{},{},{},{}\n",
-                                 i,
-                                 score,
-                                 stat.local_mean,
-                                 stat.local_variance,
-                                 stat.local_best);
-        } else {
-            stats_csv += &format!("{},{},,,\n",
-                                 i,
-                                 score);
-        }
-    }
-
-    let mut stats_csv_file = File::create(stats_csv_path).unwrap();
-    stats_csv_file
-        .write_all(stats_csv.as_bytes())
         .unwrap();
 }
 
