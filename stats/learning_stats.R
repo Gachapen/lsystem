@@ -42,3 +42,12 @@ plot_all <- function(file) {
     nrow = 2,
     ncol = 2)
 }
+
+plot_new <- function(file) {
+  stats <- read.csv(file = file, header = TRUE)
+
+  ggplot() +
+    geom_point(data = stats, aes(samples, score), size = 1, color = "black") +
+    geom_smooth(data = stats, aes(samples, score), color = "blue") +
+    geom_smooth(data = stats, aes(samples, score), method = lm, color = "red")
+}
