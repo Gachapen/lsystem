@@ -72,19 +72,21 @@ plot_all <- function(file) {
 plot_directory <- function(dir) {
   dists <- list.files(dir, full.names = TRUE)
   for (dist in dists) {
-    distribution <- read.csv(file = dist, header = TRUE)
+    if (grepl("\\.csv$", dist)) {
+      distribution <- read.csv(file = dist, header = TRUE)
 
-    g <- arrangeGrob(
-      productions(distribution),
-      strlen(distribution),
-      stack(distribution),
-      symbol(distribution),
-      variable(distribution),
-      operation(distribution),
-      nrow=3,
-      ncol=2)
+      g <- arrangeGrob(
+        productions(distribution),
+        strlen(distribution),
+        stack(distribution),
+        symbol(distribution),
+        variable(distribution),
+        operation(distribution),
+        nrow=3,
+        ncol=2)
 
-    png <- paste(dist, ".png", sep = "")
-    ggsave(file = png, g)
+      png <- paste(dist, ".png", sep = "")
+      ggsave(file = png, g)
+    }
   }
 }
