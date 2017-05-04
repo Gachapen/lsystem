@@ -7,6 +7,7 @@ extern crate time;
 extern crate lsys;
 
 use std::f32::consts::{PI, FRAC_PI_2};
+use std::borrow::Borrow;
 
 use na::{Vector3, Point3, Rotation3, Translation3, Isometry3, UnitQuaternion};
 use kiss3d::scene::SceneNode;
@@ -17,7 +18,8 @@ use lsys::Command;
 use lsys::param;
 
 pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
-    where I: Iterator<Item = lsys::Instruction>
+    where I: IntoIterator,
+          I::Item: Borrow<lsys::Instruction>
 {
     let mut model = SceneNode::new_empty();
 
@@ -34,6 +36,7 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
     let mut rotation = UnitQuaternion::from_euler_angles(FRAC_PI_2, 0.0, 0.0);
 
     for instruction in instructions {
+        let instruction = instruction.borrow();
         let command = instruction.command;
         match command {
             Command::Forward => {
