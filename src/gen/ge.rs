@@ -1833,6 +1833,9 @@ fn run_learning(matches: &ArgMatches) {
     let bin_path = Path::new(matches.value_of("bin").unwrap());
     println!("Saving distribution to \"{}\".", bin_path.to_str().unwrap());
 
+    let stats_csv_path = Arc::new(matches.value_of("stats-csv").unwrap().to_string());
+    println!("Saving distribution to \"{}\".", stats_csv_path);
+
     let settings = Arc::new(lsys::Settings {
                                 width: 0.05,
                                 angle: PI / 8.0,
@@ -1917,21 +1920,6 @@ fn run_learning(matches: &ArgMatches) {
         (step_mean, step_scores.len())
     };
 
-    let mut distribution_save_future = {
-        let distribution = distribution.clone();
-
-        pool.spawn_fn(move || -> FutureResult<(), ()> {
-            let first_dist_filename = format!("{}.csv", 0);
-            let first_dist_file_path = dist_dump_path.join(first_dist_filename);
-            let mut csv_file = File::create(first_dist_file_path).unwrap();
-            csv_file
-                .write_all(distribution.to_csv().as_bytes())
-                .unwrap();
-
-            future::ok(())
-        })
-    };
-
     let mut scores = Vec::new();
 
     println!("Measuring initial distribution");
@@ -1941,6 +1929,29 @@ fn run_learning(matches: &ArgMatches) {
 
     println!("Generated {} samples.", num_samples);
     println!("Initial distribution has score {}.", current_score);
+
+    let mut distribution_save_future = {
+        let distribution = distribution.clone();
+        let stats_csv_path = stats_csv_path.clone();
+
+        pool.spawn_fn(move || -> FutureResult<(), ()> {
+            let first_dist_filename = format!("{}.csv", 0);
+            let first_dist_file_path = dist_dump_path.join(first_dist_filename);
+            let mut csv_file = File::create(first_dist_file_path).unwrap();
+            csv_file
+                .write_all(distribution.to_csv().as_bytes())
+                .unwrap();
+
+            let stats_csv = "iteration,samples,measure samples,score,accepted\n".to_string() +
+                &format!("{},{},{},{},\n", 0, num_samples, num_samples, current_score);
+            let mut stats_csv_file = File::create(&*stats_csv_path).unwrap();
+            stats_csv_file
+                .write_all(stats_csv.as_bytes())
+                .unwrap();
+
+            future::ok(())
+        })
+    };
 
     let max_iterations = 128_usize;
     let mutation_factor = 0.2;
@@ -1971,31 +1982,46 @@ fn run_learning(matches: &ArgMatches) {
 
         let random = Range::new(0.0, 1.0).ind_sample(&mut rng);
 
-        if probability >= random {
+        let accepted = if probability >= random {
             println!("Neighbour was selected.");
 
-            distribution = new_distribution;
+            distribution = new_distribution.clone();
             current_score = new_score;
-
-            distribution_save_future.wait().unwrap();
-            distribution_save_future = {
-                let distribution = distribution.clone();
-
-                pool.spawn_fn(move || -> FutureResult<(), ()> {
-                    let filename = format!("{}.csv", num_samples);
-                    let file_path = dist_dump_path.join(filename);
-                    let mut csv_file = File::create(file_path).unwrap();
-                    csv_file
-                        .write_all(distribution.to_csv().as_bytes())
-                        .unwrap();
-
-                    future::ok(())
-                })
-            };
+            true
         } else {
             println!("Neighbour was discarded.");
-        }
+            false
+        };
 
+        distribution_save_future.wait().unwrap();
+        distribution_save_future = {
+            let distribution = new_distribution.clone();
+            let stats_csv_path = stats_csv_path.clone();
+
+            pool.spawn_fn(move || -> FutureResult<(), ()> {
+                let filename = format!("{}.csv", i);
+                let file_path = dist_dump_path.join(filename);
+                let mut csv_file = File::create(file_path).unwrap();
+                csv_file
+                    .write_all(distribution.to_csv().as_bytes())
+                    .unwrap();
+
+                let stats_csv = &format!("{},{},{},{},{}\n",
+                                         i + 1,
+                                         num_samples,
+                                         new_num_samples,
+                                         new_score,
+                                         accepted);
+                let mut stats_csv_file =
+                    OpenOptions::new()
+                    .append(true)
+                    .open(&*stats_csv_path)
+                    .unwrap();
+                stats_csv_file.write_all(stats_csv.as_bytes()).unwrap();
+
+                future::ok(())
+            })
+        };
     }
 
     println!("Finished search.");
