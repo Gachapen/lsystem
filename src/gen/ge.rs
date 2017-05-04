@@ -1,4 +1,4 @@
-use std::f32::consts::PI;
+use std::f32::consts::{PI, E};
 use std::f32;
 use std::{cmp, fmt, iter};
 use std::collections::HashMap;
@@ -11,7 +11,7 @@ use std::ops::Add;
 
 use rand::{self, Rng, XorShiftRng, SeedableRng};
 use rand::distributions::{IndependentSample, Range};
-use na::{UnitQuaternion, Point3};
+use na::{self, UnitQuaternion, Point3};
 use kiss3d::camera::ArcBall;
 use kiss3d::scene::SceneNode;
 use num::{self, Unsigned, NumCast};
@@ -774,6 +774,22 @@ fn adjust_distribution(distribution: &mut Distribution, stats: &SelectionStats, 
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+fn mutate_distribution<R>(distribution: &mut Distribution, factor: f32, rng: &mut R)
+    where R: Rng
+{
+    for rules in &mut distribution.depths {
+        for choices in rules.values_mut() {
+            for options in choices {
+                let num_weights = options.len() as f32;
+                for weight in options {
+                    let change = Range::new(-factor, factor).ind_sample(rng) / num_weights;
+                    *weight = na::clamp(*weight + change, 0.0, 1.0);
                 }
             }
         }
@@ -1790,12 +1806,11 @@ fn run_stats(matches: &ArgMatches) {
 fn run_learning(matches: &ArgMatches) {
     fn generate_sample(grammar: &abnf::Ruleset,
                        distribution: &Distribution)
-                       -> (ol::LSystem,SelectionStats) {
+                       -> ol::LSystem {
         let seed = random_seed();
         let genes = generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
-        let mut genotype = WeightedGenotypeStats::with_genes(genes, distribution);
-        let system = generate_system(grammar, &mut genotype);
-        (system, genotype.take_stats())
+        let mut genotype = WeightedGenotype::new(genes, distribution);
+        generate_system(grammar, &mut genotype)
     }
 
     let learning_rate: f32 = matches.value_of("learning-rate").unwrap().parse().unwrap();
@@ -1813,13 +1828,10 @@ fn run_learning(matches: &ArgMatches) {
         None => distribution,
     };
 
-    let distribution = Arc::new(distribution);
+    let mut distribution = Arc::new(distribution);
 
     let bin_path = Path::new(matches.value_of("bin").unwrap());
     println!("Saving distribution to \"{}\".", bin_path.to_str().unwrap());
-
-    let stats_csv_path = Path::new(matches.value_of("stats-csv").unwrap());
-    println!("Saving stats to \"{}\".", stats_csv_path.to_str().unwrap());
 
     let settings = Arc::new(lsys::Settings {
                                 width: 0.05,
@@ -1855,155 +1867,140 @@ fn run_learning(matches: &ArgMatches) {
     }
 
     let start_time = time::now();
-    let run = Arc::new(AtomicBool::new(true));
+    let pool = CpuPool::new(num_workers);
+    let mut rng = rand::thread_rng();
 
-    crossbeam::scope(|scope| {
-        {
-            let run = run.clone();
-            let mut distribution = distribution.clone();
+    let measure_distribution = |distribution: Arc<Distribution>| -> (f32, usize) {
+        const ERROR_THRESHOLD: f32 = 0.002;
+        const MIN_SAMPLES: usize = 64;
 
-            // Processing is handled on separate thread so that user input commands can be handled
-            // on the main thread.
-            scope.spawn(move || {
-                let pool = CpuPool::new(num_workers);
+        let mut error = f32::MAX;
+        let mut step_mean = 0.0;
+        let mut step_scores = Vec::new();
 
-                let mut distribution_save_future = {
+        // Generate samples until error is with accepted threshold.
+        while error > ERROR_THRESHOLD {
+            let tasks: Vec<_> = (0..MIN_SAMPLES)
+                .map(|_| {
+                    let grammar = grammar.clone();
+                    let settings = settings.clone();
                     let distribution = distribution.clone();
+                    pool.spawn_fn(move || -> FutureResult<f32, ()> {
+                        let lsystem = generate_sample(&grammar, &distribution);
 
-                    pool.spawn_fn(move || -> FutureResult<(), ()> {
-                        let first_dist_filename = format!("{}.csv", 0);
-                        let first_dist_file_path = dist_dump_path.join(first_dist_filename);
-                        let mut csv_file = File::create(first_dist_file_path).unwrap();
-                        csv_file
-                            .write_all(distribution.to_csv().as_bytes())
-                            .unwrap();
-
-                        future::ok(())
+                        let (fit, _) = fitness::evaluate(&lsystem, &settings);
+                        let score = fit.score();
+                        future::ok(score)
                     })
-                };
+                })
+                .collect();
 
-                let mut num_samples = 0;
-                let mut scores = Vec::new();
+            let result = future::join_all(tasks).wait().unwrap();
+            let batch_scores: Vec<_> = result;
 
-                const ERROR_THRESHOLD: f32 = 0.001;
-                const MIN_SAMPLES: usize = 128;
+            step_scores.extend(batch_scores);
 
-                // Each iteration is one step in the learning algorithm.
-                while run.load(Ordering::Relaxed) {
-                    let mut error = f32::MAX;
-                    let mut step_mean = 0.0;
-                    let mut step_scores = Vec::new();
-                    let mut step_score_stats = Vec::new();
+            let score_sum: f32 = step_scores.iter().sum();
+            let size = step_scores.len();
+            let mean = score_sum / size as f32;
+            let unbiased_sample_variance = step_scores
+                .iter()
+                .map(|s| (s - mean).powi(2))
+                .sum::<f32>() / (size - 1) as f32;
+            let sample_standard_deviation = unbiased_sample_variance.sqrt();
 
-                    // Generate samples until error is with accepted threshold.
-                    while error > ERROR_THRESHOLD && run.load(Ordering::Relaxed) {
-                        let tasks: Vec<_> = (0..MIN_SAMPLES)
-                            .map(|_| {
-                                let distribution = distribution.clone();
-                                let grammar = grammar.clone();
-                                let settings = settings.clone();
-                                pool.spawn_fn(move || -> FutureResult<(f32, SelectionStats), ()> {
-                                    let (lsystem, stats) = generate_sample(&grammar, &distribution);
-
-                                    let (fit, _) = fitness::evaluate(&lsystem, &settings);
-                                    let score = fit.score();
-                                    future::ok((score, stats))
-                                })
-                            })
-                            .collect();
-
-                        let result = future::join_all(tasks).wait().unwrap();
-                        let batch_scores: Vec<_> = result.iter().map(|&(score, _)| score).collect();
-                        let batch_score_stats = result;
-
-                        step_scores.extend(batch_scores);
-                        step_score_stats.extend(batch_score_stats);
-
-                        let score_sum: f32 = step_scores.iter().sum();
-                        let size = step_scores.len();
-                        let mean = score_sum / size as f32;
-                        let unbiased_sample_variance = step_scores
-                            .iter()
-                            .map(|s| (s - mean).powi(2))
-                            .sum::<f32>() / (size - 1) as f32;
-                        let sample_standard_deviation = unbiased_sample_variance.sqrt();
-
-                        error = sample_standard_deviation / size as f32;
-                        step_mean = mean;
-                        println!("M: {}, SE: {}", step_mean, error);
-
-                        num_samples +=  MIN_SAMPLES;
-                    }
-
-                    if error <= ERROR_THRESHOLD {
-                        let num_step_samples = step_scores.len();
-                        println!("Stepped once after {} samples.", num_step_samples);
-
-                        scores.push((num_samples, num_step_samples, error, step_mean));
-
-                        let factor = learning_rate.powf(step_mean);
-
-                        let stats = step_score_stats
-                            .iter()
-                            .map(|&(_, ref s)| s)
-                            .sum();
-
-                        let mut distribution = Arc::get_mut(&mut distribution).unwrap();
-                        adjust_distribution(&mut distribution, &stats, factor);
-                        distribution.normalize();
-
-                        distribution_save_future.wait().unwrap();
-
-                        distribution_save_future = {
-                            let distribution = distribution.clone();
-
-                            pool.spawn_fn(move || -> FutureResult<(), ()> {
-                                let filename = format!("{}.csv", num_samples);
-                                let file_path = dist_dump_path.join(filename);
-                                let mut csv_file = File::create(file_path).unwrap();
-                                csv_file
-                                    .write_all(distribution.to_csv().as_bytes())
-                                    .unwrap();
-
-                                future::ok(())
-                            })
-                        };
-                    } else {
-                        println!("Quit before step finished.");
-                    }
-                }
-
-                let mut stats_csv = String::from("step,samples,step samples,error,score\n");
-                for (i, &(samples, step_samples, error, score)) in scores.iter().enumerate() {
-                    stats_csv += &format!("{},{},{},{},{}\n",
-                                         i,
-                                         samples,
-                                         step_samples,
-                                         error,
-                                         score);
-                }
-
-                let mut stats_csv_file = File::create(stats_csv_path).unwrap();
-                stats_csv_file
-                    .write_all(stats_csv.as_bytes())
-                    .unwrap();
-
-                distribution_save_future.wait().unwrap();
-            });
+            error = sample_standard_deviation / size as f32;
+            step_mean = mean;
+            println!("M: {}, SE: {}", step_mean, error);
         }
 
-        let mut input = String::new();
-        while input != "quit" {
-            input = String::new();
-            print!("> ");
-            io::stdout().flush().unwrap();
-            io::stdin().read_line(&mut input).unwrap();
-            input.pop().unwrap(); // remove '\n'.
+        (step_mean, step_scores.len())
+    };
+
+    let mut distribution_save_future = {
+        let distribution = distribution.clone();
+
+        pool.spawn_fn(move || -> FutureResult<(), ()> {
+            let first_dist_filename = format!("{}.csv", 0);
+            let first_dist_file_path = dist_dump_path.join(first_dist_filename);
+            let mut csv_file = File::create(first_dist_file_path).unwrap();
+            csv_file
+                .write_all(distribution.to_csv().as_bytes())
+                .unwrap();
+
+            future::ok(())
+        })
+    };
+
+    let mut scores = Vec::new();
+
+    println!("Measuring initial distribution");
+
+    let (mut current_score, mut num_samples) = measure_distribution(distribution.clone());
+    scores.push((num_samples, num_samples, current_score));
+
+    println!("Generated {} samples.", num_samples);
+    println!("Initial distribution has score {}.", current_score);
+
+    let max_iterations = 128_usize;
+    let mutation_factor = 0.2;
+
+    for i in 0..max_iterations {
+        println!("Iteration {} of {}.", i, max_iterations);
+
+        let mut new_distribution = (*distribution).clone();
+        mutate_distribution(&mut new_distribution, mutation_factor, &mut rng);
+        new_distribution.normalize();
+
+        let new_distribution = Arc::new(new_distribution);
+        let (new_score, new_num_samples) = measure_distribution(new_distribution.clone());
+        num_samples += new_num_samples;
+
+        println!("Generated {} of total {} samples.", new_num_samples, num_samples);
+        println!("Neighbour score was {} with a difference of {}.", new_score, new_score - current_score);
+
+        let calc_probability = |new, current, temp| -> f32 {
+            E.powf((new - current) / temp)
+        };
+
+        let temperature = 1.0 - (i as f32 / max_iterations as f32);
+        let probability = calc_probability(new_score, current_score, temperature);
+
+        println!("Temperature is {}.", temperature);
+        println!("Porbability of being selected is {}.", probability);
+
+        let random = Range::new(0.0, 1.0).ind_sample(&mut rng);
+
+        if probability >= random {
+            println!("Neighbour was selected.");
+
+            distribution = new_distribution;
+            current_score = new_score;
+
+            distribution_save_future.wait().unwrap();
+            distribution_save_future = {
+                let distribution = distribution.clone();
+
+                pool.spawn_fn(move || -> FutureResult<(), ()> {
+                    let filename = format!("{}.csv", num_samples);
+                    let file_path = dist_dump_path.join(filename);
+                    let mut csv_file = File::create(file_path).unwrap();
+                    csv_file
+                        .write_all(distribution.to_csv().as_bytes())
+                        .unwrap();
+
+                    future::ok(())
+                })
+            };
+        } else {
+            println!("Neighbour was discarded.");
         }
 
-        println!("Quitting...");
-        run.store(false, Ordering::Relaxed);
-    });
+    }
+
+    println!("Finished search.");
+
+    distribution_save_future.wait().unwrap();
 
     let end_time = time::now();
     let duration = end_time - start_time;
