@@ -278,7 +278,7 @@ pub fn run_generated(window: &mut Window, camera: &mut Camera) {
 
     let instructions = system.instructions(settings.iterations, &settings.command_map);
 
-    let mut model = lsys3d::build_model(instructions.iter().cloned(), &settings);
+    let mut model = lsys3d::build_model(instructions, &settings);
     window.scene_mut().add_child(model.clone());
 
     while window.render_with_camera(camera) {
