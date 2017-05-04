@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 use std::f32;
-use std::{cmp, fmt};
+use std::{cmp, fmt, iter};
 use std::collections::HashMap;
 use std::io::{self, BufWriter, BufReader, Write};
 use std::fs::{self, File, OpenOptions};
@@ -784,6 +784,7 @@ type SelectionChoice = Vec<usize>;
 type SelectionRule = Vec<SelectionChoice>;
 type SelectionDepth = HashMap<String, SelectionRule>;
 
+#[derive(Clone)]
 struct SelectionStats {
     data: Vec<SelectionDepth>,
 }
@@ -920,6 +921,40 @@ impl<'a> Add<&'a SelectionStats> for SelectionStats {
         }
 
         self
+    }
+}
+
+impl iter::Sum for SelectionStats {
+    fn sum<I>(mut iter: I) -> Self
+        where I: Iterator<Item=Self>
+    {
+        let mut sum = match iter.next() {
+            Some(stats) => stats,
+            None => return SelectionStats::new(),
+        };
+
+        for stats in iter {
+            sum = sum + stats;
+        }
+
+        sum
+    }
+}
+
+impl<'a> iter::Sum<&'a Self> for SelectionStats {
+    fn sum<I>(mut iter: I) -> Self
+        where I: Iterator<Item=&'a Self>
+    {
+        let mut sum = match iter.next() {
+            Some(stats) => stats.clone(),
+            None => return SelectionStats::new(),
+        };
+
+        for stats in iter {
+            sum = sum + stats;
+        }
+
+        sum
     }
 }
 
