@@ -1813,7 +1813,13 @@ fn run_learning(matches: &ArgMatches) {
         generate_system(grammar, &mut genotype)
     }
 
-    let learning_rate: f32 = matches.value_of("learning-rate").unwrap().parse().unwrap();
+    let learning_rate: f32 = match matches.value_of("learning-rate").unwrap().parse() {
+        Ok(value) => value,
+        Err(err) => {
+            println!("Failed parsing learning-rate argument: {}", err);
+            return;
+        }
+    };
     println!("Using a learning rate of {}", learning_rate);
 
     let (grammar, distribution) = get_sample_setup();
@@ -1822,8 +1828,22 @@ fn run_learning(matches: &ArgMatches) {
     let distribution = match matches.value_of("distribution") {
         Some(filename) => {
             println!("Using distribution from {}", filename);
-            let file = File::open(filename).unwrap();
-            bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite).unwrap()
+
+            let file = match File::open(filename) {
+                Ok(file) => file,
+                Err(err) => {
+                    println!("Failed opening distribution file \"{}\": {}", filename, err);
+                    return;
+                }
+            };
+
+            match bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite) {
+                Ok(dist) => dist,
+                Err(err) => {
+                    println!("Failed deserializing distribution file \"{}\": {}", filename, err);
+                    return;
+                }
+            }
         }
         None => distribution,
     };
@@ -1846,7 +1866,15 @@ fn run_learning(matches: &ArgMatches) {
     let num_workers = matches.value_of("workers").map_or(num_cpus::get() + 1, |w| w.parse().unwrap());
 
     let dist_dump_path = Path::new("dist");
-    fs::create_dir_all(dist_dump_path).unwrap();
+    match fs::create_dir_all(dist_dump_path) {
+        Ok(_) => {}
+        Err(err) => {
+            println!("Failed creating distribution dump directory \"{}\": {}",
+                     dist_dump_path.to_str().unwrap(),
+                     err);
+            return;
+        }
+    }
 
     let mut dist_files = fs::read_dir(dist_dump_path).unwrap().peekable();
     if dist_files.peek().is_some() {
@@ -1898,7 +1926,12 @@ fn run_learning(matches: &ArgMatches) {
                 })
                 .collect();
 
-            let result = future::join_all(tasks).wait().unwrap();
+            let result = match future::join_all(tasks).wait() {
+                Ok(result) => result,
+                Err(()) => {
+                    panic!("Failed joining tasks: Unknown reason.");
+                }
+            };
             let batch_scores: Vec<_> = result;
 
             step_scores.extend(batch_scores);
