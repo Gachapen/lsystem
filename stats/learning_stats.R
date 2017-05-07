@@ -51,3 +51,13 @@ plot_new <- function(file) {
     geom_smooth(data = stats, aes(samples, score), color = "blue") +
     geom_smooth(data = stats, aes(samples, score), method = lm, color = "red")
 }
+
+plot_sa <- function(file) {
+  stats <- read.csv(file = file, header = TRUE)
+
+  ggplot() +
+    geom_point(data = stats[stats$accepted == "true",], aes(iteration, score), size = 1, color = "blue") +
+    geom_smooth(data = stats, aes(iteration, score), color = "blue") +
+    geom_point(data = stats[stats$accepted == "false",], aes(iteration, score), size = 1, color = "red") +
+    geom_smooth(data = stats[stats$accepted == "false",], aes(iteration, score), color = "red")
+}
