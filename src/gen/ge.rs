@@ -2,9 +2,9 @@ use std::f32::consts::{PI, E};
 use std::f32;
 use std::{cmp, fmt, iter};
 use std::collections::HashMap;
-use std::io::{self, BufWriter, BufReader, Write};
+use std::io::{self, BufWriter, BufReader, Write, Read};
 use std::fs::{self, File, OpenOptions};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::ops::Add;
@@ -25,6 +25,7 @@ use futures_cpupool::CpuPool;
 use bincode;
 use crossbeam;
 use clap::{App, SubCommand, Arg, ArgMatches};
+use csv;
 
 use abnf;
 use abnf::expand::{SelectionStrategy, expand_grammar};
@@ -177,6 +178,20 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .help("How many workers (threads) to run. Default is number of CPU cores + 1.")
             )
         )
+        .subcommand(SubCommand::with_name("dist-csv-to-bin")
+            .about("Convert a CSV distribution file to a bincode file")
+            .arg(Arg::with_name("INPUT")
+                .required(true)
+                .index(1)
+                .help("Distribution CSV file to convert")
+            )
+            .arg(Arg::with_name("output")
+                .long("output")
+                .short("o")
+                .takes_value(true)
+                .help("Name of the output bincode file. Defaults to INPUT with .csv extension")
+            )
+        )
 }
 
 pub fn run_ge(matches: &ArgMatches) {
@@ -196,6 +211,8 @@ pub fn run_ge(matches: &ArgMatches) {
         run_stats(matches);
     } else if let Some(matches) = matches.subcommand_matches("learning") {
         run_learning(matches);
+    } else if let Some(matches) = matches.subcommand_matches("dist-csv-to-bin") {
+        run_distribution_csv_to_bin(matches);
     } else {
         println!("A subcommand must be specified. See help by passing -h.");
     }
@@ -1301,6 +1318,33 @@ impl Distribution {
         None
     }
 
+    fn set_weight(&mut self,
+                  depth: usize,
+                  rule: &str,
+                  choice: u32,
+                  alternative: usize,
+                  weight: f32)
+    {
+        while self.depths.len() < depth + 1 {
+            self.depths.push(HashMap::new());
+        }
+
+        let choices = self.depths[depth]
+            .entry(rule.to_string())
+            .or_insert_with(Vec::new);
+        let choice = choice as usize;
+        while choices.len() < choice + 1 {
+            choices.push(Vec::new());
+        }
+
+        let alternatives = &mut choices[choice];
+        while alternatives.len() < alternative + 1 {
+            alternatives.push(f32::NAN);
+        }
+
+        alternatives[alternative] = weight;
+    }
+
     fn set_weights(&mut self, depth: usize, rule: &str, choice: u32, weights: &[f32]) {
         while self.depths.len() < depth + 1 {
             self.depths.push(HashMap::new());
@@ -1367,6 +1411,19 @@ impl Distribution {
         }
 
         csv
+    }
+
+    fn from_csv(csv: &str) -> Distribution {
+        let mut reader = csv::Reader::from_string(csv).has_headers(true);
+        let mut dist = Distribution::new();
+
+        for row in reader.decode() {
+            let (depth, rule, choice, alternative, weight): (usize, String, u32, usize, f32)
+                = row.unwrap();
+            dist.set_weight(depth, &rule, choice, alternative, weight);
+        }
+
+        dist
     }
 }
 
@@ -2074,6 +2131,29 @@ fn run_learning(matches: &ArgMatches) {
                             &distribution,
                             bincode::Infinite)
         .unwrap();
+}
+
+fn run_distribution_csv_to_bin(matches: &ArgMatches) {
+    let input_path = Path::new(matches.value_of("INPUT").unwrap());
+    let output_path = match matches.value_of("output") {
+        Some(path) => PathBuf::from(path),
+        None => input_path.with_extension("bin"),
+    };
+
+    let mut input_file = File::open(input_path)
+        .expect("Could not open input file");
+    let mut csv = String::new();
+    input_file.read_to_string(&mut csv).expect("Could not read input file");
+
+    let distribution = Distribution::from_csv(&csv);
+
+    let output_file = File::create(&output_path).unwrap();
+    bincode::serialize_into(&mut BufWriter::new(output_file),
+                            &distribution,
+                            bincode::Infinite)
+        .expect("Could not write output file");
+
+    println!("Wrote \"{}\"", output_path.to_str().unwrap());
 }
 
 #[cfg(test)]

@@ -16,6 +16,7 @@ extern crate serde;
 extern crate serde_derive;
 extern crate clap;
 extern crate parking_lot;
+extern crate csv;
 
 #[macro_use]
 extern crate lsys;
