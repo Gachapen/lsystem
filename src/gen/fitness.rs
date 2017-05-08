@@ -5,7 +5,7 @@ use std::fmt;
 use na::{self, Unit, UnitQuaternion, Point2, Point3, Vector2, Vector3, Translation3, Rotation3};
 use ncu;
 use kiss3d::scene::SceneNode;
-use yobun::partial_min;
+use yobun::partial_clamp;
 
 use lsys::{self, ol, Command};
 use yobun::*;
@@ -260,16 +260,18 @@ impl Fitness {
 
     pub fn reward(&self) -> f32 {
         let branching_reward = *na::partial_max(&self.branching, &0.0).unwrap();
-        (self.balance + branching_reward) / 2.0
+        let balance_reward = *na::partial_max(&self.balance, &0.0).unwrap();
+        (balance_reward + branching_reward) / 2.0
     }
 
     pub fn nothing_punishment(&self) -> f32 {
-        if self.is_nothing { 3.0 } else { 0.0 }
+        if self.is_nothing { 2.0 } else { 0.0 }
     }
 
     pub fn punishment(&self) -> f32 {
         let branching_punishment = *na::partial_max(&-self.branching, &0.0).unwrap();
-        self.closeness + self.drop + branching_punishment + self.nothing_punishment()
+        let balance_punishment = *na::partial_max(&-self.balance, &0.0).unwrap();
+        (balance_punishment + self.drop + branching_punishment + self.closeness) / 4.0 + self.nothing_punishment()
     }
 
     pub fn score(&self) -> f32 {
@@ -352,8 +354,9 @@ fn evaluate_drop(skeleton: &Skeleton) -> (f32, f32) {
         .unwrap()
         .y;
 
-    let drop = partial_min(drop, 0.0);
-    (-partial_max(drop, -1.0), drop)
+    let drop = (drop * PI / 2.0).sin();
+    let drop = partial_clamp(drop, -1.0, 0.0);
+    (-drop, drop)
 }
 
 struct Balance {
@@ -363,6 +366,10 @@ struct Balance {
     center_spread: f32
 }
 
+/// Evaluate the balance of the plant.
+/// A plant with the center of gravity in the origin has a score of 1.
+/// A plant with the center of gravity at the furthest plant point away from the origin has a score
+/// of -1. The rest is linear.
 fn evaluate_balance(skeleton: &Skeleton) -> Balance {
     let floor_points: Vec<_> = skeleton
         .points
