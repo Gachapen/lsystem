@@ -2034,8 +2034,8 @@ fn run_learning(matches: &ArgMatches) {
                 .write_all(distribution.to_csv().as_bytes())
                 .unwrap();
 
-            let stats_csv = "iteration,samples,measure samples,score,accepted\n".to_string() +
-                &format!("{},{},{},{},\n", 0, num_samples, num_samples, current_score);
+            let stats_csv = "iteration,samples,measure samples,score,accepted,temperature\n".to_string() +
+                &format!("{},{},{},{},,\n", 0, num_samples, num_samples, current_score);
             let mut stats_csv_file = File::create(&*stats_csv_path).unwrap();
             stats_csv_file
                 .write_all(stats_csv.as_bytes())
@@ -2098,14 +2098,14 @@ fn run_learning(matches: &ArgMatches) {
                     .write_all(distribution.to_csv().as_bytes())
                     .unwrap();
 
-                let stats_csv = &format!("{},{},{},{},{}\n",
+                let stats_csv = &format!("{},{},{},{},{},{}\n",
                                          i + 1,
                                          num_samples,
                                          new_num_samples,
                                          new_score,
-                                         accepted);
-                let mut stats_csv_file =
-                    OpenOptions::new()
+                                         accepted,
+                                         temperature);
+                let mut stats_csv_file = OpenOptions::new()
                     .append(true)
                     .open(&*stats_csv_path)
                     .unwrap();
