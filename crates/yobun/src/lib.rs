@@ -159,6 +159,13 @@ pub fn partial_max<T>(a: T, b: T) -> T
     }
 }
 
+#[inline]
+pub fn partial_clamp<T>(v: T, min: T, max: T) -> T
+    where T: PartialOrd
+{
+    partial_min(partial_max(v, min), max)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -216,5 +223,14 @@ mod test {
                         "testdata/read_dir_all/a/b/y",
                         "testdata/read_dir_all/a/b/z",
                         "testdata/read_dir_all/a/b/x"])
+    }
+
+    #[test]
+    fn test_partial_clamp() {
+        assert_eq!(partial_clamp(0.0, -1.0, 1.0), 0.0);
+        assert_eq!(partial_clamp(-1.0, -1.0, 1.0), -1.0);
+        assert_eq!(partial_clamp(-2.0, -1.0, 1.0), -1.0);
+        assert_eq!(partial_clamp(1.0, -1.0, 1.0), 1.0);
+        assert_eq!(partial_clamp(2.0, -1.0, 1.0), 1.0);
     }
 }
