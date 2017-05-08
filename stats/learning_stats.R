@@ -56,6 +56,7 @@ plot_sa <- function(file) {
   stats <- read.csv(file = file, header = TRUE)
 
   ggplot() +
+    scale_x_continuous(breaks = seq(0, nrow(stats), by = 64)) +
     geom_point(data = stats[stats$accepted == "true",], aes(iteration, score), size = 1, color = "blue") +
     geom_smooth(data = stats, aes(iteration, score), color = "blue") +
     geom_point(data = stats[stats$accepted == "false",], aes(iteration, score), size = 1, color = "red") +
