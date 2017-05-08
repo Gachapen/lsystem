@@ -410,7 +410,7 @@ fn run_with_distribution(matches: &ArgMatches) {
                                                 GENOME_LENGTH);
                     system = generate_system(&grammar,
                                              &mut WeightedGenotype::new(genes, &distribution));
-                    let (_, properties) = fitness::evaluate(&system, &settings);
+                    let (fit, properties) = fitness::evaluate(&system, &settings);
 
                     if let Some(properties) = properties {
                         println!("{} points.", properties.num_points);
@@ -423,6 +423,8 @@ fn run_with_distribution(matches: &ArgMatches) {
                         println!("");
                         println!("LSystem:");
                         println!("{}", system);
+
+                        println!("Fitness: {}", fit);
 
                         model_index = 0;
                     } else {
