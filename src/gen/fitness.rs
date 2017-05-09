@@ -212,6 +212,7 @@ pub struct Properties {
     pub center: Point3<f32>,
     pub center_spread: f32,
     pub num_points: usize,
+    pub complexity: f32,
 }
 
 const SKELETON_LIMIT: usize = 20000;
@@ -321,7 +322,7 @@ pub fn evaluate(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (Fitness, O
         let (drop_fitness, drop) = evaluate_drop(&skeleton);
         let balance = evaluate_balance(&skeleton);
         let closeness = evaluate_closeness(&skeleton);
-        let branching = evaluate_branching(&skeleton);
+        let (branching, complexity) = evaluate_branching(&skeleton);
 
         let fit = Fitness {
             balance: balance.fitness,
@@ -338,6 +339,7 @@ pub fn evaluate(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (Fitness, O
             center: balance.center,
             center_spread: balance.center_spread,
             num_points: skeleton.points.len(),
+            complexity: complexity,
         };
 
         (fit, Some(prop))
@@ -492,9 +494,9 @@ fn branching_fitness(complexity: f32) -> f32 {
     }
 }
 
-fn evaluate_branching(skeleton: &Skeleton) -> f32 {
+fn evaluate_branching(skeleton: &Skeleton) -> (f32, f32) {
     let complexity = branching_complexity(skeleton);
-    branching_fitness(complexity)
+    (branching_fitness(complexity), complexity)
 }
 
 pub fn add_properties_rendering(node: &mut SceneNode, properties: &Properties) {
