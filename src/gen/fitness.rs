@@ -481,8 +481,10 @@ fn branching_fitness(complexity: f32) -> f32 {
     if complexity < 1.0 {
         // No branches.
         -1.0
+    } else if complexity < 1.2 {
+        interpolate_cos(-1.0, 0.0, (complexity - 1.0) / (1.2 - 1.0))
     } else if complexity < 2.0 {
-        interpolate_cos(0.0, 1.0, complexity - 1.0)
+        interpolate_cos(0.0, 1.0, (complexity - 1.2) / (2.0 - 1.2))
     } else if complexity < 3.0 {
         1.0
     } else if complexity < 7.0 {
@@ -564,8 +566,10 @@ mod test {
     fn test_branching_fitness() {
         assert_eq!(branching_fitness(0.0), -1.0);
         assert_eq!(branching_fitness(0.5), -1.0);
-        assert_eq!(branching_fitness(1.0), 0.0);
-        assert_eq!(branching_fitness(1.5), 0.5);
+        assert_eq!(branching_fitness(1.0), -1.0);
+        assert_eq!(branching_fitness(1.1), -0.5);
+        assert_eq!(branching_fitness(1.2), 0.0);
+        assert_eq!(branching_fitness(1.6), 0.5);
         assert_eq!(branching_fitness(2.0), 1.0);
         assert_eq!(branching_fitness(2.5), 1.0);
         assert_eq!(branching_fitness(3.0), 1.0);
