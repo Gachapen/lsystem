@@ -424,6 +424,7 @@ fn run_with_distribution(matches: &ArgMatches) {
                         println!("LSystem:");
                         println!("{}", system);
 
+                        println!("{:#?}", properties);
                         println!("Fitness: {}", fit);
 
                         model_index = 0;
@@ -456,6 +457,7 @@ fn run_with_distribution(matches: &ArgMatches) {
                         let instructions =
                             system.instructions_iter(settings.iterations, &settings.command_map);
                         let (fit, properties) = fitness::evaluate(&system, &settings);
+                        println!("{:#?}", properties);
                         println!("Fitness: {}", fit);
 
                         if let Some(properties) = properties {
