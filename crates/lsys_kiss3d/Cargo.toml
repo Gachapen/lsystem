@@ -4,13 +4,13 @@ version = "0.1.0"
 authors = ["Magnus Bjerke Vik <mbvett@gmail.com>"]
 
 [dependencies]
-kiss3d = "0.8"
+kiss3d = "0.9"
 num-traits = "0.1"
 time = "0.1"
 
 # Dependencies of kiss3d also used by the project.
 # Dependencies must match the same versions kiss3d uses.
-nalgebra = "0.11"
-ncollide_transformation = "0.6"
+nalgebra = "0.12"
+ncollide_transformation = "0.7"
 
 lsys = { path = "../lsys" }

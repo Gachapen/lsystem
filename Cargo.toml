@@ -4,27 +4,27 @@ version = "0.0.1"
 authors = [ "Magnus Bjerke Vik <mbvett@gmail.com>" ]
 
 [dependencies]
-kiss3d = "0.8"
+kiss3d = "0.9"
 rand = "0.3"
 num = "0.1"
-serde_yaml = "0.6"
 time = "0.1"
 crossbeam = "0.2"
 num_cpus = "1"
 futures = "0.1"
 futures-cpupool = "0.1"
-bincode = "0.7"
-serde = "0.9"
-serde_derive = "0.9"
+serde = "1"
+serde_derive = "1"
+serde_yaml = "0.7"
+bincode = "0.8"
 clap = "2"
 parking_lot = { version = "0.4", features = ["nightly"] }
 csv = "0.15"
 
 # Dependencies of kiss3d also used by the project.
 # Dependencies must match the same versions kiss3d uses.
-nalgebra = "0.11"
+nalgebra = "0.12"
 glfw = "0.8"
-ncollide_utils = "0.6"
+ncollide_utils = "0.7"
 
 # Local dependencies.
 yobun = { path = "crates/yobun" }

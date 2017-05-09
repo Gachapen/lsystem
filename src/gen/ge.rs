@@ -2128,11 +2128,18 @@ fn run_learning(matches: &ArgMatches) {
              duration.num_seconds() % 60,
              duration.num_milliseconds() % 1000);
 
-    let dist_file = File::create(bin_path).unwrap();
-    bincode::serialize_into(&mut BufWriter::new(dist_file),
-                            &distribution,
-                            bincode::Infinite)
-        .unwrap();
+    match Arc::try_unwrap(distribution) {
+        Ok(distribution) => {
+            let dist_file = File::create(bin_path).unwrap();
+            bincode::serialize_into(&mut BufWriter::new(dist_file),
+                                    &distribution,
+                                    bincode::Infinite)
+                .expect("Failed writing distribution bin file");
+        },
+        Err(_) => {
+            println!("Error: Could not save distribution: Failed unwrapping distribution Arc.");
+        }
+    }
 }
 
 fn run_distribution_csv_to_bin(matches: &ArgMatches) {

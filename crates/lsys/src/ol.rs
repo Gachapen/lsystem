@@ -109,27 +109,27 @@ impl Serialize for RuleMap {
     }
 }
 
-impl Deserialize for RuleMap {
-    fn deserialize<D: Deserializer>(deserializer: D) -> Result<Self, D::Error> {
+impl<'de> Deserialize<'de> for RuleMap {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         deserializer.deserialize_map(RuleMapVisitor {})
     }
 }
 
 struct RuleMapVisitor {}
 
-impl de::Visitor for RuleMapVisitor {
+impl<'de> de::Visitor<'de> for RuleMapVisitor {
     type Value = RuleMap;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("an ol::RuleMap")
     }
 
-    fn visit_map<M>(self, mut visitor: M) -> Result<Self::Value, M::Error>
-        where M: de::MapVisitor
+    fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+        where M: de::MapAccess<'de>
     {
         let mut values = RuleMap::new();
 
-        while let Some((key, value)) = visitor.visit::<char, String>()? {
+        while let Some((key, value)) = access.next_entry::<char, String>()? {
             values[key] = value;
         }
 
