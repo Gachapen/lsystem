@@ -1,9 +1,7 @@
+require(ggplot2)
+library(reshape)
+
 stats <- read.csv(file = "stats.csv", header = TRUE)
-
-stats <- split(stats, stats$distribution)  # Create list with each distribution
-stats <- lapply(stats, subset, select = -distribution)  # Remove distribution variable
-
-distribution_names <- c("uniform", "something", "zero")
 
 # Calculate the percentage of available values (not NA) in a list x.
 available_percentage <- function(x) {
@@ -14,32 +12,32 @@ available_percentage <- function(x) {
 }
 
 percentage_something <- function(stats) {
-  scores <- lapply(stats, "[[", "score")
+  scores <- lapply(stats, "[[", "balance")
   success_rate <- sapply(scores, available_percentage)
-  names(success_rate) <- distribution_names
-  barplot(success_rate, ylim = c(0, 4), ylab = "% of something", xlab = "distribution")
+  barplot(success_rate, ylim = c(0, 100), ylab = "% of something", xlab = "distribution")
+}
+
+se <- function(x) {
+  return(sd(x, na.rm = TRUE) / sqrt(length(na.omit(x))))
 }
 
 score_changes <- function(stats) {
-  mean_scores <- lapply(stats, lapply, mean, na.rm = TRUE)
-  mean_scores <- matrix(unlist(mean_scores), ncol = 3)  # transform to matrix
-  colnames(mean_scores) <- c(0, 1, 2)
-  rownames(mean_scores) <- c("score", "balance", "branching", "closeness", "drop")
+  mean_scores <- aggregate(stats, list(stats$distribution), mean, na.rm = TRUE)
+  mean_scores <- mean_scores[2:8]
+  mean_scores$drop <- -mean_scores$drop
+  mean_scores$closeness <- -mean_scores$closeness
+  mean_scores$nothing <- -mean_scores$nothing
+  mean_scores <- melt(mean_scores, id = c("distribution"))
 
-  # Negate closenss and drop scores as they are punishments, not rewards.
-  mean_scores["closeness", ] <- -mean_scores["closeness", ]
-  mean_scores["drop", ] <- -mean_scores["drop", ]
+  scores_se <- aggregate(stats, list(stats$distribution), se)
+  scores_se <- scores_se[2:8]
+  scores_se <- melt(scores_se, id = c("distribution"))
 
-  num_colors <- 5
-  colors <- rainbow(num_colors)
-  pch <- 21:25
-  lty <- 1:5
-  plot(0, 0, xlim = c(0, 2), ylim = c(-1.5, 1), ylab = "score", xlab = "distribution level",
-    type = "n", xaxt = "n")
-  for (i in 1:5) {
-    lines(c(0, 1, 2), mean_scores[i, ], type = "o", col = colors[i], pch = pch[i],
-      lty = lty[i])
-  }
-  axis(1, at = 0:2, labels = distribution_names)
-  legend(0, 1, rownames(mean_scores), col = colors, cex = 0.8, pch = pch, lty = lty)
+  mean_scores$se <- scores_se$value
+
+  ggplot(data = mean_scores, aes(x = distribution, y = value, colour = variable)) +
+    geom_point() +
+    geom_line() +
+    geom_errorbar(aes(ymin = value - se, ymax = value + se), width = 0.1, alpha = 0.5) +
+    ylim(-1.01, 1.01)
 }
