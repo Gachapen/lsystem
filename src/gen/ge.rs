@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::ops::Add;
+use std::time::Instant;
 
 use rand::{self, Rng, XorShiftRng, SeedableRng};
 use rand::distributions::{IndependentSample, Range};
@@ -17,7 +18,6 @@ use kiss3d::scene::SceneNode;
 use num::{self, Unsigned, NumCast};
 use glfw::{Key, WindowEvent, Action};
 use serde_yaml;
-use time;
 use num_cpus;
 use futures::Future;
 use futures::future::{self, FutureResult};
@@ -26,6 +26,7 @@ use bincode;
 use crossbeam;
 use clap::{App, SubCommand, Arg, ArgMatches};
 use csv;
+use chrono::prelude::*;
 
 use abnf;
 use abnf::expand::{SelectionStrategy, expand_grammar};
@@ -328,7 +329,7 @@ fn run_with_distribution(matches: &ArgMatches) {
         for event in window.events().iter() {
             match event.value {
                 WindowEvent::Key(Key::S, _, Action::Release, _) => {
-                    let filename = format!("{}.yaml", time::now().rfc3339());
+                    let filename = format!("{}.yaml", Local::now().to_rfc3339());
                     let path = model_dir.join(filename);
 
                     let file = File::create(&path).unwrap();
@@ -360,7 +361,7 @@ fn run_with_distribution(matches: &ArgMatches) {
                     }
 
                     println!("Generating {} samples...", num_samples);
-                    let start_time = time::now();
+                    let start_time = Instant::now();
 
                     let mut samples = {
                         let workers = num_cpus::get() + 1;
@@ -391,11 +392,11 @@ fn run_with_distribution(matches: &ArgMatches) {
                         }
                     };
 
-                    let end_time = time::now();
+                    let end_time = Instant::now();
                     let duration = end_time - start_time;
                     println!("Duration: {}.{}",
-                             duration.num_seconds(),
-                             duration.num_milliseconds());
+                             duration.as_secs(),
+                             duration.subsec_nanos());
 
                     samples.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
 
@@ -571,7 +572,7 @@ fn run_random_sampling(matches: &ArgMatches) {
 
     const SEQUENCE_SIZE: usize = 16;
 
-    let sample_dir = Path::new("sample").join(format!("{}", time::now().rfc3339()));
+    let sample_dir = Path::new("sample").join(Local::now().to_rfc3339());
     fs::create_dir_all(&sample_dir).unwrap();
 
     println!("Starting random sampling...");
@@ -581,7 +582,7 @@ fn run_random_sampling(matches: &ArgMatches) {
     let num_samples = Arc::new(AtomicUsize::new(0));
     let num_good_samples = Arc::new(AtomicUsize::new(0));
 
-    let start_time = time::now();
+    let start_time = Instant::now();
 
     crossbeam::scope(|scope| {
         let sample_dir = &sample_dir;
@@ -658,13 +659,16 @@ fn run_random_sampling(matches: &ArgMatches) {
         work.store(false, Ordering::Relaxed);
     });
 
-    let end_time = time::now();
+    let end_time = Instant::now();
     let duration = end_time - start_time;
+    let seconds = duration.as_secs();
+    let hours = seconds / (60 * 60);
+    let minutes = seconds % (60 * 60) / 60;
     println!("Duration: {}:{}:{}.{}",
-             duration.num_hours(),
-             duration.num_minutes() % 60,
-             duration.num_seconds() % 60,
-             duration.num_milliseconds() % 1000);
+             hours,
+             minutes,
+             seconds,
+             duration.subsec_nanos());
 
     let num_samples = Arc::try_unwrap(num_samples).unwrap().into_inner();
     let num_good_samples = Arc::try_unwrap(num_good_samples).unwrap().into_inner();
@@ -1804,7 +1808,7 @@ fn run_stats(matches: &ArgMatches) {
 
     println!("Generating {} samples...",
              num_samples * distributions.len());
-    let start_time = time::now();
+    let start_time = Instant::now();
 
     let samples = {
         let workers = num_cpus::get() + 1;
@@ -1830,11 +1834,11 @@ fn run_stats(matches: &ArgMatches) {
         future::join_all(tasks).wait().unwrap()
     };
 
-    let end_time = time::now();
+    let end_time = Instant::now();
     let duration = end_time - start_time;
     println!("Duration: {}.{}",
-             duration.num_seconds(),
-             duration.num_milliseconds());
+             duration.as_secs(),
+             duration.subsec_nanos());
 
     let mut csv = String::new();
 
@@ -1958,7 +1962,7 @@ fn run_learning(matches: &ArgMatches) {
         }
     }
 
-    let start_time = time::now();
+    let start_time = Instant::now();
     let pool = CpuPool::new(num_workers);
     let mut rng = rand::thread_rng();
 
@@ -2122,13 +2126,16 @@ fn run_learning(matches: &ArgMatches) {
 
     distribution_save_future.wait().unwrap();
 
-    let end_time = time::now();
+    let end_time = Instant::now();
     let duration = end_time - start_time;
+    let seconds = duration.as_secs();
+    let hours = seconds / (60 * 60);
+    let minutes = seconds % (60 * 60) / 60;
     println!("Duration: {}:{}:{}.{}",
-             duration.num_hours(),
-             duration.num_minutes() % 60,
-             duration.num_seconds() % 60,
-             duration.num_milliseconds() % 1000);
+             hours,
+             minutes,
+             seconds,
+             duration.subsec_nanos());
 
     match Arc::try_unwrap(distribution) {
         Ok(distribution) => {

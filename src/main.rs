@@ -4,7 +4,6 @@ extern crate ncollide_utils as ncu;
 extern crate rand;
 extern crate num;
 extern crate serde_yaml;
-extern crate time;
 extern crate glfw;
 extern crate crossbeam;
 extern crate num_cpus;
@@ -17,6 +16,7 @@ extern crate serde_derive;
 extern crate clap;
 extern crate parking_lot;
 extern crate csv;
+extern crate chrono;
 
 #[macro_use]
 extern crate lsys;
