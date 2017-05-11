@@ -1,9 +1,13 @@
 extern crate alga;
 extern crate nalgebra as na;
+#[macro_use]
+extern crate nom;
 
 use std::f32::consts::{PI, E};
 use std::path::Path;
-use std::{fs, io};
+use std::{fs, io, str};
+use std::time::Duration;
+
 use na::Unit;
 use alga::general::Real;
 use alga::linear::FiniteDimVectorSpace;
@@ -164,6 +168,60 @@ pub fn partial_clamp<T>(v: T, min: T, max: T) -> T
     where T: PartialOrd
 {
     partial_min(partial_max(v, min), max)
+}
+
+pub fn parse_duration_hms(string: &str) -> Result<Duration, &str> {
+    use nom::IResult::{Done, Error, Incomplete};
+
+    match parse::duration(string.as_bytes()) {
+        Done(_, duration) => Ok(duration),
+        Error(_) | Incomplete(_) => Err("Failed parsing duration in H:M:(S) format")
+    }
+}
+
+mod parse {
+    use std::str;
+    use std::time::Duration;
+    use nom::{digit};
+
+    named!(number<u64>,
+        fold_many1!(
+            call!(digit),
+            0_u64,
+            |mut acc: u64, item| {
+                acc += str::from_utf8(item).unwrap().parse().unwrap();
+                acc
+            }
+        )
+    );
+
+    named!(pub duration<Duration>,
+        alt!(
+            map!(call!(number), |seconds| Duration::new(seconds, 0)) |
+            map!(
+                do_parse!(
+                    hours: call!(number) >>
+                    tag!(&b":"[..]) >>
+                    minutes: call!(number) >>
+                    seconds: opt!(
+                        do_parse!(
+                            tag!(&b":"[..]) >>
+                            seconds: call!(number) >>
+                            (seconds)
+                        )
+                    ) >>
+                    (hours, minutes, seconds)
+                ),
+                |(hours, minutes, seconds)| {
+                    let mut duration = minutes * 60 + hours * 60 * 60;
+                    if let Some(seconds) = seconds {
+                        duration += seconds;
+                    }
+                    Duration::new(duration, 0)
+                }
+            )
+        )
+    );
 }
 
 #[cfg(test)]

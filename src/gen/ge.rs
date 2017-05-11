@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::ops::Add;
-use std::time::Instant;
+use std::time::{Instant, Duration};
 
 use rand::{self, Rng, XorShiftRng, SeedableRng};
 use rand::distributions::{IndependentSample, Range};
@@ -27,13 +27,14 @@ use crossbeam;
 use clap::{App, SubCommand, Arg, ArgMatches};
 use csv;
 use chrono::prelude::*;
+use chrono::format::strftime::StrftimeItems;
 
 use abnf;
 use abnf::expand::{SelectionStrategy, expand_grammar};
 use lsys::{self, ol};
 use lsys3d;
 use lsystems;
-use yobun::read_dir_all;
+use yobun::{read_dir_all, parse_duration_hms};
 use setup_window;
 use gen::fitness::{self, Fitness};
 
@@ -177,6 +178,21 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .long("workers")
                 .takes_value(true)
                 .help("How many workers (threads) to run. Default is number of CPU cores + 1.")
+            )
+            .arg(Arg::with_name("until")
+                .long("until")
+                .takes_value(true)
+                .help("Run learning until specified time")
+            )
+            .arg(Arg::with_name("duration")
+                .long("duration")
+                .takes_value(true)
+                .help("Run learning for specified amount of time")
+            )
+            .arg(Arg::with_name("iterations")
+                .long("iterations")
+                .takes_value(true)
+                .help("Run learning for specified number of iterations")
             )
         )
         .subcommand(SubCommand::with_name("dist-csv-to-bin")
@@ -1869,6 +1885,126 @@ fn run_stats(matches: &ArgMatches) {
 }
 
 fn run_learning(matches: &ArgMatches) {
+    enum Schedule {
+        Iterations{ current: usize, max: usize },
+        EndTime{ start: NaiveDateTime, end: NaiveDateTime },
+        Duration{ start: NaiveDateTime, max: Duration },
+    }
+
+    impl Schedule {
+        fn new_iterations(max: usize) -> Schedule {
+            Schedule::Iterations{ current: 0, max }
+        }
+
+        fn new_end_time(end_time: NaiveDateTime) -> Schedule {
+            Schedule::EndTime{ start: Local::now().naive_local(), end: end_time }
+        }
+
+        fn new_duration(max: Duration) -> Schedule {
+            Schedule::Duration{ start: Local::now().naive_local(), max }
+        }
+
+        fn start(&mut self) {
+            if let Schedule::Duration{ ref mut start, .. } = *self {
+                *start = Local::now().naive_local()
+            }
+        }
+
+        fn keep_going(&mut self) -> bool {
+            match *self {
+                Schedule::Iterations{ ref mut current, max } => {
+                    let keep_going = *current < max;
+                    *current += 1;
+                    keep_going
+                }
+                Schedule::EndTime{ end, .. } => {
+                    Local::now().naive_local() < end
+                }
+                Schedule::Duration{ start, max } => {
+                    Local::now().naive_local().signed_duration_since(start).to_std().unwrap() < max
+                }
+            }
+        }
+
+        fn progress(&self) -> f32 {
+            match *self {
+                Schedule::Iterations{ current, max } => {
+                    current as f32 / max as f32
+                }
+                Schedule::EndTime{ start, end } => {
+                    let max = end
+                        .signed_duration_since(start)
+                        .to_std()
+                        .unwrap();
+                    let spent = Local::now()
+                        .naive_local()
+                        .signed_duration_since(start)
+                        .to_std()
+                        .unwrap();
+                    let max = max.as_secs();
+                    let spent = spent.as_secs();
+
+                    spent as f32 / max as f32
+                }
+                Schedule::Duration{ start, max } => {
+                    let spent = Local::now()
+                        .naive_local()
+                        .signed_duration_since(start)
+                        .to_std()
+                        .unwrap();
+                    let max = max.as_secs();
+                    let spent = spent.as_secs();
+
+                    spent as f32 / max as f32
+                }
+            }
+
+        }
+    }
+
+    impl fmt::Display for Schedule {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            match *self {
+                Schedule::Iterations{ current, max } => {
+                    write!(f, "iteration {} of {}", current, max)
+                }
+                Schedule::EndTime{ end, .. } => {
+                    let now = Local::now().naive_local();
+                    let remaining = match end.signed_duration_since(now).to_std() {
+                        Ok(duration) => duration.as_secs(),
+                        Err(_) => 0,
+                    };
+                    write!(f, "{}h {}m {}s remaining until {}",
+                           remaining / 60 / 60,
+                           remaining % (60 * 60) / 60,
+                           remaining % 60,
+                           end)
+                }
+                Schedule::Duration{ start, max } => {
+                    let spent = Local::now()
+                        .naive_local()
+                        .signed_duration_since(start)
+                        .to_std()
+                        .unwrap();
+                    let remaining = (max - spent).as_secs();
+                    let max = max.as_secs();
+                    let spent = spent.as_secs();
+
+                    write!(f, "{}h {}m {}s remaining of {}h {}m {}s (spent {}h {}m {}s)",
+                           remaining / 60 / 60,
+                           remaining % (60 * 60) / 60,
+                           remaining % 60,
+                           max / 60 / 60,
+                           max % (60 * 60) / 60,
+                           max % 60,
+                           spent / 60 / 60,
+                           spent % (60 * 60) / 60,
+                           spent % 60)
+                }
+            }
+        }
+    }
+
     fn generate_sample(grammar: &abnf::Ruleset,
                        distribution: &Distribution)
                        -> ol::LSystem {
@@ -1878,14 +2014,66 @@ fn run_learning(matches: &ArgMatches) {
         generate_system(grammar, &mut genotype)
     }
 
-    let learning_rate: f32 = match matches.value_of("learning-rate").unwrap().parse() {
-        Ok(value) => value,
-        Err(err) => {
-            println!("Failed parsing learning-rate argument: {}", err);
-            return;
+    let schedule = {
+        if let Some(iterations_str) = matches.value_of("iterations") {
+            let iterations = match iterations_str.parse() {
+                Ok(iterations) => iterations,
+                Err(err) => {
+                    println!("Could not parse --iterations argument: {}", err);
+                    return;
+                }
+            };
+
+            println!("Running learning for {} iterations.", iterations);
+            Schedule::new_iterations(iterations)
+        } else if let Some(time) = matches.value_of("until") {
+            use chrono::format::parsed::Parsed;
+            use chrono::format::parse;
+
+            // This can probably be done in a nicer way...
+            let mut parsed = Parsed::new();
+            if parse(&mut parsed, time, StrftimeItems::new("%F %T")).is_err() &&
+               parse(&mut parsed, time, StrftimeItems::new("%F %R")).is_err() &&
+               parse(&mut parsed, time, StrftimeItems::new("%T")).is_err() &&
+               parse(&mut parsed, time, StrftimeItems::new("%R")).is_err()
+            {
+                println!("Could not parse --until argument.");
+                return;
+            }
+
+            let end_date = parsed.to_naive_date().unwrap_or_else(|_| Local::today().naive_local());
+            let end_time = parsed.to_naive_time().unwrap();
+            let end_datetime = NaiveDateTime::new(
+                end_date,
+                end_time);
+            // println!("Until: {}", end_datetime);
+            // let now = Local::now().naive_local();
+            // println!("Now: {}", now);
+            // let time_left = end_datetime.signed_duration_since(now);
+            // println!("Remaining: {}", time_left.num_minutes());
+
+            println!("Running learning until {}.", end_datetime);
+            Schedule::new_end_time(end_datetime)
+        } else if let Some(duration_str) = matches.value_of("duration") {
+            let duration = match parse_duration_hms(duration_str) {
+                Ok(duration) => duration,
+                Err(err) => {
+                    println!("Could not parse --duration argument: {}", err);
+                    return;
+                }
+            };
+
+            println!("Running learning for {}h {}m {}s.",
+                     duration.as_secs() / 60 / 60,
+                     duration.as_secs() % (60 * 60) / 60,
+                     duration.as_secs() % (60 * 60 * 60));
+            Schedule::new_duration(duration)
+        } else {
+            let default = 128;
+            println!("Schedule not specified. Using default of {} iterations.", default);
+            Schedule::new_iterations(default)
         }
     };
-    println!("Using a learning rate of {}", learning_rate);
 
     let (grammar, distribution) = get_sample_setup();
 
@@ -2051,11 +2239,15 @@ fn run_learning(matches: &ArgMatches) {
         })
     };
 
-    let max_iterations = 128_usize;
+    let mut iteration = 0_usize;
     let mutation_factor = 0.2;
 
-    for i in 0..max_iterations {
-        println!("Iteration {} of {}.", i, max_iterations);
+    let mut schedule = schedule;
+    schedule.start();
+
+    while schedule.keep_going() {
+        println!("Iteration {}.", iteration);
+        println!("Schedule: {}", schedule);
 
         let mut new_distribution = (*distribution).clone();
         mutate_distribution(&mut new_distribution, mutation_factor, &mut rng);
@@ -2072,11 +2264,11 @@ fn run_learning(matches: &ArgMatches) {
             E.powf((new - current) / temp)
         };
 
-        let temperature = 1.0 - (i as f32 / max_iterations as f32);
+        let temperature = 1.0 - schedule.progress();
         let probability = calc_probability(new_score, current_score, temperature);
 
         println!("Temperature is {}.", temperature);
-        println!("Porbability of being selected is {}.", probability);
+        println!("Probability of being selected is {}.", probability);
 
         let random = Range::new(0.0, 1.0).ind_sample(&mut rng);
 
@@ -2097,7 +2289,7 @@ fn run_learning(matches: &ArgMatches) {
             let stats_csv_path = stats_csv_path.clone();
 
             pool.spawn_fn(move || -> FutureResult<(), ()> {
-                let filename = format!("{}.csv", i);
+                let filename = format!("{}.csv", iteration);
                 let file_path = dist_dump_path.join(filename);
                 let mut csv_file = File::create(file_path).unwrap();
                 csv_file
@@ -2105,7 +2297,7 @@ fn run_learning(matches: &ArgMatches) {
                     .unwrap();
 
                 let stats_csv = &format!("{},{},{},{},{},{}\n",
-                                         i + 1,
+                                         iteration + 1,
                                          num_samples,
                                          new_num_samples,
                                          new_score,
@@ -2120,6 +2312,8 @@ fn run_learning(matches: &ArgMatches) {
                 future::ok(())
             })
         };
+
+        iteration += 1;
     }
 
     println!("Finished search.");
