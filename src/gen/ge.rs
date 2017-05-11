@@ -1880,7 +1880,7 @@ fn run_stats(matches: &ArgMatches) {
     let mut csv_file = match OpenOptions::new().append(true).open(csv_path) {
         Ok(file) => file,
         Err(_) => {
-            csv += "distribution,score,balance,branching,closeness,drop.nothing\n";
+            csv += "distribution,score,balance,branching,closeness,drop,nothing\n";
             File::create(csv_path).unwrap()
         }
     };
