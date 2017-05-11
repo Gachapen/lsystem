@@ -1880,7 +1880,7 @@ fn run_stats(matches: &ArgMatches) {
     let mut csv_file = match OpenOptions::new().append(true).open(csv_path) {
         Ok(file) => file,
         Err(_) => {
-            csv += "distribution,score,balance,branching,closeness,drop\n";
+            csv += "distribution,score,balance,branching,closeness,drop.nothing\n";
             File::create(csv_path).unwrap()
         }
     };
@@ -1888,16 +1888,21 @@ fn run_stats(matches: &ArgMatches) {
     let csv = samples
         .iter()
         .fold(csv, |csv, &(d, ref f)| if f.is_nothing {
-            csv + &format!("{},,,,,\n", d)
+            csv +
+            &format!("{},{},,,,,{}\n",
+                     d,
+                     f.score(),
+                     f.nothing_punishment())
         } else {
             csv +
-            &format!("{},{},{},{},{},{}\n",
+            &format!("{},{},{},{},{},{},{}\n",
                      d,
                      f.score(),
                      f.balance,
                      f.branching,
                      f.closeness,
-                     f.drop)
+                     f.drop,
+                     f.nothing_punishment())
         });
 
     csv_file.write_all(csv.as_bytes()).unwrap();
