@@ -1856,6 +1856,25 @@ fn run_stats(matches: &ArgMatches) {
              duration.as_secs(),
              duration.subsec_nanos());
 
+    print!("Append to existing file? (Y/n): ");
+    io::stdout().flush().unwrap();
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).unwrap();
+    input.pop().unwrap(); // remove '\n'.
+
+    if input != "n" && input != "N" {
+        println!("Appending to file.");
+    } else {
+        println!("Overwriting file.");
+        match fs::remove_file(csv_path) {
+            Err(ref error) if error.kind() != io::ErrorKind::NotFound => {
+                panic!("Failed removing file: {}", error);
+            }
+            Ok(_) | Err(_) => {}
+        }
+    }
+
     let mut csv = String::new();
 
     let mut csv_file = match OpenOptions::new().append(true).open(csv_path) {
