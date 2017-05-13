@@ -34,7 +34,7 @@ use abnf::expand::{SelectionStrategy, expand_grammar};
 use lsys::{self, ol};
 use lsys3d;
 use lsystems;
-use yobun::{read_dir_all, parse_duration_hms};
+use yobun::{read_dir_all, parse_duration_hms, partial_clamp};
 use setup_window;
 use gen::fitness::{self, Fitness};
 
@@ -1953,7 +1953,7 @@ fn run_learning(matches: &ArgMatches) {
         fn progress(&self) -> f32 {
             match *self {
                 Schedule::Iterations{ current, max } => {
-                    current as f32 / max as f32
+                    partial_clamp(current as f32 / max as f32, 0.0, 1.0)
                 }
                 Schedule::EndTime{ start, end } => {
                     let max = end
@@ -1968,7 +1968,7 @@ fn run_learning(matches: &ArgMatches) {
                     let max = max.as_secs();
                     let spent = spent.as_secs();
 
-                    spent as f32 / max as f32
+                    partial_clamp(spent as f32 / max as f32, 0.0, 1.0)
                 }
                 Schedule::Duration{ start, max } => {
                     let spent = Local::now()
@@ -1979,7 +1979,7 @@ fn run_learning(matches: &ArgMatches) {
                     let max = max.as_secs();
                     let spent = spent.as_secs();
 
-                    spent as f32 / max as f32
+                    partial_clamp(spent as f32 / max as f32, 0.0, 1.0)
                 }
             }
 
@@ -2070,11 +2070,6 @@ fn run_learning(matches: &ArgMatches) {
             let end_datetime = NaiveDateTime::new(
                 end_date,
                 end_time);
-            // println!("Until: {}", end_datetime);
-            // let now = Local::now().naive_local();
-            // println!("Now: {}", now);
-            // let time_left = end_datetime.signed_duration_since(now);
-            // println!("Remaining: {}", time_left.num_minutes());
 
             println!("Running learning until {}.", end_datetime);
             Schedule::new_end_time(end_datetime)
@@ -2285,7 +2280,13 @@ fn run_learning(matches: &ArgMatches) {
         println!("Neighbour score was {} with a difference of {}.", new_score, new_score - current_score);
 
         let calc_probability = |new, current, temp| -> f32 {
-            E.powf((new - current) / temp)
+            if temp > 0.0 {
+                E.powf((new - current) / temp)
+            } else if new > current {
+                1.0
+            } else {
+                0.0
+            }
         };
 
         let temperature = 1.0 - schedule.progress();
