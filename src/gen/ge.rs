@@ -2250,8 +2250,8 @@ fn run_learning(matches: &ArgMatches) {
                 .write_all(distribution.to_csv().as_bytes())
                 .unwrap();
 
-            let stats_csv = "iteration,samples,measure samples,score,accepted,temperature\n".to_string() +
-                &format!("{},{},{},{},,\n", 0, num_samples, num_samples, current_score);
+            let stats_csv = "iteration,samples,measure samples,score,accepted,temperature,type\n".to_string() +
+                &format!("{},{},{},{},,,{}\n", 0, num_samples, num_samples, current_score, "init");
             let mut stats_csv_file = File::create(&*stats_csv_path).unwrap();
             stats_csv_file
                 .write_all(stats_csv.as_bytes())
@@ -2282,10 +2282,10 @@ fn run_learning(matches: &ArgMatches) {
         println!("Generated {} of total {} samples.", new_num_samples, num_samples);
         println!("Neighbour score was {} with a difference of {}.", new_score, new_score - current_score);
 
-        let calc_probability = |new, current, temp| -> f32 {
+        let calc_probability = |score_diff, temp| -> f32 {
             if temp > 0.0 {
-                E.powf((new - current) / temp)
-            } else if new > current {
+                E.powf(score_diff / temp)
+            } else if score_diff > 0.0 {
                 1.0
             } else {
                 0.0
@@ -2293,7 +2293,8 @@ fn run_learning(matches: &ArgMatches) {
         };
 
         let temperature = 1.0 - schedule.progress();
-        let probability = calc_probability(new_score, current_score, temperature);
+        let score_diff = new_score - current_score;
+        let probability = calc_probability(score_diff, temperature);
 
         println!("Temperature is {}.", temperature);
         println!("Probability of being selected is {}.", probability);
@@ -2324,13 +2325,22 @@ fn run_learning(matches: &ArgMatches) {
                     .write_all(distribution.to_csv().as_bytes())
                     .unwrap();
 
-                let stats_csv = &format!("{},{},{},{},{},{}\n",
+                let iteration_type = if !accepted {
+                    "stay"
+                } else if score_diff < 0.0 {
+                    "explore"
+                } else {
+                    "improve"
+                };
+
+                let stats_csv = &format!("{},{},{},{},{},{},{}\n",
                                          iteration + 1,
                                          num_samples,
                                          new_num_samples,
                                          new_score,
                                          accepted,
-                                         temperature);
+                                         temperature,
+                                         iteration_type);
                 let mut stats_csv_file = OpenOptions::new()
                     .append(true)
                     .open(&*stats_csv_path)
