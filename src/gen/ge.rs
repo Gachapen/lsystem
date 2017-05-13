@@ -2125,6 +2125,9 @@ fn run_learning(matches: &ArgMatches) {
     let bin_path = Path::new(matches.value_of("bin").unwrap());
     println!("Saving distribution to \"{}\".", bin_path.to_str().unwrap());
 
+    let csv_path = Path::new(matches.value_of("csv").unwrap());
+    println!("Saving distribution to \"{}\".", csv_path.to_str().unwrap());
+
     let stats_csv_path = Arc::new(matches.value_of("stats-csv").unwrap().to_string());
     println!("Saving distribution to \"{}\".", stats_csv_path);
 
@@ -2363,6 +2366,11 @@ fn run_learning(matches: &ArgMatches) {
                                     &distribution,
                                     bincode::Infinite)
                 .expect("Failed writing distribution bin file");
+
+            let mut dist_file = File::create(csv_path).unwrap();
+            dist_file
+                .write_all(distribution.to_csv().as_bytes())
+                .expect("Failed writing distribution csv file");
         },
         Err(_) => {
             println!("Error: Could not save distribution: Failed unwrapping distribution Arc.");
