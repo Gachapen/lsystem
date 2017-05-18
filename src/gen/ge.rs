@@ -194,6 +194,27 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .takes_value(true)
                 .help("Run learning for specified number of iterations")
             )
+            .arg(Arg::with_name("mutation-rate")
+                .long("mutation-rate")
+                .short("m")
+                .takes_value(true)
+                .default_value("0.1")
+                .help("How strongly the distribution should be mutated for each iteration, \
+                       in range [0,1], where 0 is no  mutation")
+            )
+            .arg(Arg::with_name("error-threshold")
+                .long("error-threshold")
+                .short("e")
+                .takes_value(true)
+                .default_value("0.002")
+                .help("The required maximum standard error threshold for a distribution score to be accepted")
+            )
+            .arg(Arg::with_name("min-samples")
+                .long("min-samples")
+                .takes_value(true)
+                .default_value("64")
+                .help("Minimum number of samples to generate before calculating standard error")
+            )
         )
         .subcommand(SubCommand::with_name("dist-csv-to-bin")
             .about("Convert a CSV distribution file to a bincode file")
@@ -2172,21 +2193,22 @@ fn run_learning(matches: &ArgMatches) {
         }
     }
 
+    let error_threshold = matches.value_of("error-threshold").unwrap().parse().unwrap();
+    let min_samples = matches.value_of("min-samples").unwrap().parse().unwrap();
+    let mutation_factor = matches.value_of("mutation-factor").unwrap().parse().unwrap();
+
     let start_time = Instant::now();
     let pool = CpuPool::new(num_workers);
     let mut rng = rand::thread_rng();
 
     let measure_distribution = |distribution: Arc<Distribution>| -> (f32, usize) {
-        const ERROR_THRESHOLD: f32 = 0.002;
-        const MIN_SAMPLES: usize = 64;
-
         let mut error = f32::MAX;
         let mut step_mean = 0.0;
         let mut step_scores = Vec::new();
 
         // Generate samples until error is with accepted threshold.
-        while error > ERROR_THRESHOLD {
-            let tasks: Vec<_> = (0..MIN_SAMPLES)
+        while error > error_threshold {
+            let tasks: Vec<_> = (0..min_samples)
                 .map(|_| {
                     let grammar = grammar.clone();
                     let settings = settings.clone();
@@ -2262,7 +2284,6 @@ fn run_learning(matches: &ArgMatches) {
     };
 
     let mut iteration = 0_usize;
-    let mutation_factor = 0.2;
 
     let mut schedule = schedule;
     schedule.start();
