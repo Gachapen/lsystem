@@ -179,6 +179,33 @@ pub fn parse_duration_hms(string: &str) -> Result<Duration, &str> {
     }
 }
 
+#[macro_export]
+macro_rules! assert_slice_approx_eq {
+    ($x:expr, $y:expr) => {
+        {
+            assert!($x.len() == $y.len(),
+                    "assertion failed: `(left !== right)` \
+                     (left: `{:?}`, right: `{:?}`)",
+                     $x,
+                     $y);
+
+            let mut equal = true;
+            for (a, b) in $x.iter().zip($y.iter()) {
+                if (a - b).abs() >= f32::EPSILON {
+                    equal = false;
+                    break;
+                }
+            }
+
+            assert!(equal,
+                    "assertion failed: `(left !== right)` \
+                     (left: `{:?}`, right: `{:?}`)",
+                     $x,
+                     $y);
+        }
+    };
+}
+
 mod parse {
     use std::str;
     use std::time::Duration;
