@@ -841,11 +841,11 @@ fn mutate_distribution<R>(distribution: &mut Distribution, factor: f32, rng: &mu
     for rules in &mut distribution.depths {
         for choices in rules.values_mut() {
             for options in choices {
-                let num_weights = options.len() as f32;
-                for weight in options {
-                    let change = Range::new(-factor, factor).ind_sample(rng) / num_weights;
-                    *weight = na::clamp(*weight + change, 0.0, 1.0);
-                }
+                let mut dividers = dividers_from_weights(options);
+                let i = Range::new(0, dividers.len()).ind_sample(rng);
+                let change = Range::new(-factor, factor).ind_sample(rng);
+                dividers[i] = na::clamp(dividers[i] + change, 0.0, 1.0);
+                *options = weights_from_dividers(&dividers);
             }
         }
     }
@@ -2429,6 +2429,42 @@ fn run_distribution_csv_to_bin(matches: &ArgMatches) {
     println!("Wrote \"{}\"", output_path.to_str().unwrap());
 }
 
+fn dividers_from_weights(weights: &[f32]) -> Vec<f32> {
+    (0..weights.len() - 1)
+        .map(|i| {
+            weights[i] / (weights[i] + weights[i + 1])
+        })
+        .collect()
+}
+
+fn weights_from_dividers(dividers: &[f32]) -> Vec<f32> {
+    if dividers.is_empty() {
+        return vec![1.0];
+    }
+
+    let mut weights = Vec::with_capacity(dividers.len() + 1);
+
+    let mut length = 1.0;
+    let mut previous_length = dividers[0];
+    weights.push(previous_length);
+    for divider in dividers.iter().skip(1) {
+        weights.push(length - previous_length);
+        let new_length = length + (length - previous_length) * (1.0 / divider - 1.0);
+        previous_length = length;
+        length = new_length;
+    }
+
+    for weight in &mut weights {
+        *weight /= length;
+    }
+
+    let last_weight = 1.0 - weights.iter().sum::<f32>();
+
+    weights.push(last_weight);
+
+    weights
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -2563,5 +2599,23 @@ mod test {
         ];
 
         assert_eq!(infer_selections("F[FX]X", &grammar, "axiom"), Ok(genes));
+    }
+
+    #[test]
+    fn test_dividers_from_weights() {
+        assert_slice_approx_eq!(dividers_from_weights(&[1.0]), Vec::<f32>::new());
+        assert_slice_approx_eq!(dividers_from_weights(&[0.5, 0.5]), &[0.5]);
+        assert_slice_approx_eq!(dividers_from_weights(&[0.75, 0.25]), &[0.75]);
+        assert_slice_approx_eq!(dividers_from_weights(&[0.5, 0.25, 0.25]), &[2.0 / 3.0, 0.5]);
+        assert_slice_approx_eq!(dividers_from_weights(&[0.25, 0.25, 0.25, 0.25]), &[0.5, 0.5, 0.5]);
+    }
+
+    #[test]
+    fn test_weights_from_dividers() {
+        assert_slice_approx_eq!(weights_from_dividers(&[]), &[1.0]);
+        assert_slice_approx_eq!(weights_from_dividers(&[0.5]), &[0.5, 0.5]);
+        assert_slice_approx_eq!(weights_from_dividers(&[0.75]), &[0.75, 0.25]);
+        assert_slice_approx_eq!(weights_from_dividers(&[2.0 / 3.0, 0.5]), &[0.5, 0.25, 0.25]);
+        assert_slice_approx_eq!(weights_from_dividers(&[0.5, 0.5, 0.5]), &[0.25, 0.25, 0.25, 0.25]);
     }
 }

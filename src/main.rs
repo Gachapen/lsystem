@@ -22,6 +22,7 @@ extern crate chrono;
 extern crate lsys;
 extern crate lsys_kiss3d as lsys3d;
 extern crate abnf;
+#[macro_use]
 extern crate yobun;
 
 use na::Point3;
