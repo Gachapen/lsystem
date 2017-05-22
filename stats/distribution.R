@@ -69,6 +69,23 @@ plot_all <- function(file) {
     ncol=2)
 }
 
+plot_dist_png <- function(file) {
+  distribution <- read.csv(file = file, header = TRUE)
+
+  g <- arrangeGrob(
+    productions(distribution),
+    strlen(distribution),
+    stack(distribution),
+    symbol(distribution),
+    variable(distribution),
+    operation(distribution),
+    nrow=3,
+    ncol=2)
+
+  png <- paste(file, ".png", sep = "")
+  ggsave(file = png, g)
+}
+
 plot_directory <- function(dir) {
   dists <- list.files(dir, full.names = TRUE)
   for (dist in dists) {
