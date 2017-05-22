@@ -2190,6 +2190,10 @@ fn run_learning(matches: &ArgMatches) {
     let min_samples = matches.value_of("min-samples").unwrap().parse().unwrap();
     let mutation_factor = matches.value_of("mutation-factor").unwrap().parse().unwrap();
 
+    println!("Using error error threshold {}.", error_threshold);
+    println!("Using minimum samples {}.", min_samples);
+    println!("Using mutation factor {}.", mutation_factor);
+
     let start_time = Instant::now();
     let pool = CpuPool::new(num_workers);
     let mut rng = rand::thread_rng();
