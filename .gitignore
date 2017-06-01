@@ -1,3 +1,11 @@
 target
 crates/**/Cargo.lock
+.RData
+.Rhistory
 model
+dist/
+distribution.bin
+distribution.csv
+learning-stats.csv
+sample/
+stats.csv
