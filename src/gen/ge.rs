@@ -2539,11 +2539,17 @@ fn run_sample_weight_space(matches: &ArgMatches) {
 
     fn generate_weight(d: usize) -> Vec<f32> {
         let mut rng = rand::thread_rng();
-        let components: Vec<f32> = (0..d)
-            .map(|_| Range::new(0.0, 1.0).ind_sample(&mut rng))
+        let mut remaining = 1.0;
+        let mut components: Vec<f32> = (0..d - 1)
+            .map(|_| {
+                let w = Range::new(0.0, remaining).ind_sample(&mut rng);
+                remaining -= w;
+                w
+            })
             .collect();
-        let sum: f32 = components.iter().sum();
-        components.iter().map(|c| c / sum).collect()
+        components.push(remaining);
+        rng.shuffle(&mut components);
+        components
     };
 
     let tasks: Vec<_> = (0..num_samples)
