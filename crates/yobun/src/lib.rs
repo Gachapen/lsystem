@@ -207,15 +207,16 @@ macro_rules! assert_approx_eq {
 macro_rules! assert_slice_approx_eq {
     ($x:expr, $y:expr, $eps:expr) => {
         {
-            assert!($x.len() == $y.len(),
+            let (x, y) = ($x, $y);
+            assert!(x.len() == y.len(),
                     "assertion failed: `(left !== right)` \
                      (left: `{:?}`, right: `{:?}`)",
-                     $x,
-                     $y);
+                     x,
+                     y);
 
             let epsilon = $eps;
             let mut equal = true;
-            for (a, b) in $x.iter().zip($y.iter()) {
+            for (a, b) in x.iter().zip(y.iter()) {
                 let ordering = (a - b).abs().partial_cmp(&epsilon);
                 if let Some(ordering) = ordering {
                     match ordering {
@@ -234,8 +235,8 @@ macro_rules! assert_slice_approx_eq {
             assert!(equal,
                     "assertion failed: `(left !== right)` \
                      (left: `{:?}`, right: `{:?}`)",
-                     $x,
-                     $y);
+                     x,
+                     y);
         }
     };
 }
