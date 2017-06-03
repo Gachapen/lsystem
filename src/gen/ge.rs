@@ -784,7 +784,7 @@ fn run_sampling_distribution(matches: &ArgMatches) {
 
         tasks.push(pool.spawn_fn(move || {
             let genes = generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
-            let mut stats_genotype = WeightedGenotypeStats::with_genes(genes, &distribution);
+            let mut stats_genotype = WeightedGenotypeStats::new(genes, &distribution);
             expand_grammar(&grammar, "axiom", &mut stats_genotype);
             expand_productions(&grammar, &mut stats_genotype);
 
@@ -815,6 +815,7 @@ fn run_sampling_distribution(matches: &ArgMatches) {
             .unwrap();
 }
 
+#[allow(dead_code)]
 fn adjust_distribution(distribution: &mut Distribution, stats: &SelectionStats, factor: f32) {
     for (depth, rules) in stats.data.iter().enumerate() {
         for (rule, choices) in rules.iter() {
@@ -1049,15 +1050,11 @@ struct WeightedGenotypeStats<'a, G> {
 }
 
 impl<'a, G: Gene> WeightedGenotypeStats<'a, G> {
-    fn with_genes(genes: Vec<G>, distribution: &'a Distribution) -> WeightedGenotypeStats<G> {
+    fn new(genes: Vec<G>, distribution: &'a Distribution) -> WeightedGenotypeStats<G> {
         WeightedGenotypeStats {
             weighted_genotype: WeightedGenotype::new(genes, distribution),
             stats: SelectionStats::new(),
         }
-    }
-
-    fn new(distribution: &'a Distribution) -> WeightedGenotypeStats<G> {
-        Self::with_genes(vec![], distribution)
     }
 
     fn take_stats(self) -> SelectionStats {
@@ -1425,6 +1422,7 @@ impl Distribution {
         choices[choice] = weights.to_vec();
     }
 
+    #[allow(dead_code)]
     fn normalize(&mut self) {
         for rules in &mut self.depths {
             for choices in rules.values_mut() {
@@ -1438,6 +1436,7 @@ impl Distribution {
         }
     }
 
+    #[allow(dead_code)]
     fn into_normalized(mut self) -> Distribution {
         self.normalize();
         self
