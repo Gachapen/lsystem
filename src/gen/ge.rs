@@ -2471,8 +2471,6 @@ fn run_distribution_csv_to_bin(matches: &ArgMatches) {
 }
 
 fn dividers_from_weights(weights: &[f32]) -> Vec<f32> {
-    println!("w: {:?}", weights);
-
     (0..weights.len() - 1)
         .map(|i| {
             let width: f32 = weights.iter().take(i + 1).sum();
