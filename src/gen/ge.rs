@@ -2475,8 +2475,13 @@ fn dividers_from_weights(weights: &[f32]) -> Vec<f32> {
 
     (0..weights.len() - 1)
         .map(|i| {
-            let parent_width = weights[i] + weights[i + 1];
-            weights[i] / parent_width
+            let width: f32 = weights.iter().take(i + 1).sum();
+            let parent_width: f32 = weights.iter().take(i + 2).sum();
+            if parent_width == 0.0 {
+                0.0
+            } else {
+                width / parent_width
+            }
         })
         .collect()
 }
@@ -2486,51 +2491,18 @@ fn weights_from_dividers(dividers: &[f32]) -> Vec<f32> {
         return vec![1.0];
     }
 
-    let mut markers = Vec::with_capacity(dividers.len() + 2);
-    markers.push(0.0);
+    let mut weights = Vec::with_capacity(dividers.len() + 1);
+    let mut remaining = 1.0;
 
-    let first = *dividers.first().unwrap();
-    if first.is_nan() {
-        markers.push(0.0);
-    } else {
-        markers.push(first);
+    for divider in dividers.iter().rev() {
+        let parent = remaining;
+        remaining = divider * parent;
+        weights.push(parent - remaining);
     }
 
-    for (i, divider) in dividers.iter().enumerate().skip(1) {
-        let (marker, length) = if divider.is_nan() {
-            (*markers.last().unwrap(), 1.0)
-        } else {
-            let left = 1.0 - markers[i];
-            let right = *divider;
-            let proportion = if left == 0.0 && right == 0.0 {
-                1.0
-            } else {
-                left / right
-            };
+    weights.push(remaining);
 
-            let length = 1.0 + proportion * (1.0 - right);
-
-            (1.0, length)
-        };
-
-        markers.push(marker);
-
-        for marker in &mut markers {
-            *marker /= length;
-        }
-    }
-
-    markers.push(1.0);
-
-    println!("d: {:?}", dividers);
-    println!("m: {:?}", markers);
-
-    markers
-        .iter()
-        .enumerate()
-        .skip(1)
-        .map(|(i, m)| m - markers[i - 1])
-        .collect()
+    weights.into_iter().rev().collect()
 }
 
 fn run_sample_weight_space(matches: &ArgMatches) {
@@ -2754,14 +2726,14 @@ mod test {
         assert_slice_approx_eq!(dividers_from_weights(&[0.5, 0.5]), &[0.5], f32::EPSILON);
         assert_slice_approx_eq!(dividers_from_weights(&[0.75, 0.25]), &[0.75], f32::EPSILON);
         assert_slice_approx_eq!(dividers_from_weights(&[0.5, 0.25, 0.25]),
-                                &[2.0 / 3.0, 0.5],
+                                &[2.0 / 3.0, 0.75],
                                 f32::EPSILON);
         assert_slice_approx_eq!(dividers_from_weights(&[0.25, 0.25, 0.25, 0.25]),
-                                &[0.5, 0.5, 0.5],
+                                &[0.5, 2.0 / 3.0, 0.75],
                                 f32::EPSILON);
         assert_slice_approx_eq!(dividers_from_weights(&[0.0, 1.0]), &[0.0], f32::EPSILON);
         assert_slice_approx_eq!(dividers_from_weights(&[1.0, 0.0]), &[1.0], f32::EPSILON);
-        assert_slice_approx_eq!(dividers_from_weights(&[0.0, 0.0]), &[f32::NAN], f32::EPSILON);
+        assert_slice_approx_eq!(dividers_from_weights(&[0.0, 0.0]), &[0.0], f32::EPSILON);
         assert_slice_approx_eq!(dividers_from_weights(&[1.0, 1.0]), &[0.5], f32::EPSILON);
     }
 
@@ -2771,19 +2743,19 @@ mod test {
                                 &[0.0, 1.0],
                                 f32::EPSILON);
         assert_slice_approx_eq!(dividers_from_weights(&[0.0, 0.5, 0.5]),
-                                &[0.0 * 2.0, 0.5],
+                                &[0.0, 0.5],
                                 f32::EPSILON);
         assert_slice_approx_eq!(dividers_from_weights(&[0.5, 0.5, 0.0]),
-                                &[0.5, 1.0 - 0.0 * 2.0],
+                                &[0.5, 1.0],
                                 f32::EPSILON);
         assert_slice_approx_eq!(dividers_from_weights(&[0.0, 0.0, 1.0]),
-                                &[f32::NAN, 0.0],
+                                &[0.0, 0.0],
                                 f32::EPSILON);
         assert_slice_approx_eq!(dividers_from_weights(&[1.0, 0.0, 0.0]),
-                                &[1.0, f32::NAN],
+                                &[1.0, 1.0],
                                 f32::EPSILON);
         assert_slice_approx_eq!(dividers_from_weights(&[0.5, 0.0, 0.5]),
-                                &[1.0 - 0.0 * 2.0, 0.0 * 2.0],
+                                &[1.0, 0.5],
                                 f32::EPSILON);
     }
 
@@ -2804,10 +2776,10 @@ mod test {
 
     #[test]
     fn test_weights_from_dividers_multiple() {
-        assert_slice_approx_eq!(weights_from_dividers(&[2.0 / 3.0, 0.5]),
+        assert_slice_approx_eq!(weights_from_dividers(&[2.0 / 3.0, 0.75]),
                                 &[0.5, 0.25, 0.25],
                                 f32::EPSILON);
-        assert_slice_approx_eq!(weights_from_dividers(&[0.5, 0.5, 0.5]),
+        assert_slice_approx_eq!(weights_from_dividers(&[0.5, 2.0 / 3.0, 0.75]),
                                 &[0.25, 0.25, 0.25, 0.25],
                                 f32::EPSILON);
     }
@@ -2845,13 +2817,13 @@ mod test {
 
     #[test]
     fn test_weights_from_dividers_zero_between() {
-        assert_slice_approx_eq!(weights_from_dividers(&[0.0 * 2.0, 0.5]),
+        assert_slice_approx_eq!(weights_from_dividers(&[0.0, 0.5]),
                                 &[0.0, 0.5, 0.5],
                                 f32::EPSILON);
         assert_slice_approx_eq!(weights_from_dividers(&[0.5, 1.0]),
                                 &[0.5, 0.5, 0.0],
-                                f32::EPSILON * 2.0);
-        assert_slice_approx_eq!(weights_from_dividers(&[1.0, 0.0]),
+                                f32::EPSILON);
+        assert_slice_approx_eq!(weights_from_dividers(&[1.0, 0.5]),
                                 &[0.5, 0.0, 0.5],
                                 f32::EPSILON);
     }
@@ -2888,7 +2860,7 @@ mod test {
     #[test]
     #[ignore]
     fn test_weight_divider_consistency_rand() {
-        const NUM: usize = 1000;
+        const NUM: usize = 10000;
         const LEN: usize = 20;
         let mut rng = rand::thread_rng();
 
@@ -2902,7 +2874,7 @@ mod test {
                     let weights: Vec<f32> = weights.iter().map(|w| w / sum).collect();
                     assert_slice_approx_eq!(&weights,
                                             weights_from_dividers(&dividers_from_weights(&weights)),
-                                            0.01);
+                                            0.000001);
                 }
             }
         }
