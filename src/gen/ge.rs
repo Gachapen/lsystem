@@ -208,6 +208,13 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .default_value("64")
                 .help("Minimum number of samples to generate before calculating standard error")
             )
+            .arg(Arg::with_name("fitness-scale")
+                .long("fitness-scale")
+                .short("s")
+                .takes_value(true)
+                .default_value("1")
+                .help("A factor multiplied with the fitness when calculating the acceptance probability")
+            )
         )
         .subcommand(SubCommand::with_name("dist-csv-to-bin")
             .about("Convert a CSV distribution file to a bincode file")
@@ -2196,10 +2203,12 @@ fn run_learning(matches: &ArgMatches) {
     let error_threshold = matches.value_of("error-threshold").unwrap().parse().unwrap();
     let min_samples = matches.value_of("min-samples").unwrap().parse().unwrap();
     let mutation_factor = matches.value_of("mutation-factor").unwrap().parse().unwrap();
+    let fitness_scale: f32 = matches.value_of("fitness-scale").unwrap().parse().unwrap();
 
     println!("Using error error threshold {}.", error_threshold);
     println!("Using minimum samples {}.", min_samples);
     println!("Using mutation factor {}.", mutation_factor);
+    println!("Using fitness scale {}.", fitness_scale);
 
     let start_time = Instant::now();
     let pool = CpuPool::new(num_workers);
@@ -2318,7 +2327,7 @@ fn run_learning(matches: &ArgMatches) {
 
         let temperature = 1.0 - schedule.progress();
         let score_diff = new_score - current_score;
-        let probability = calc_probability(score_diff, temperature);
+        let probability = calc_probability(score_diff * fitness_scale, temperature);
 
         println!("Temperature is {}.", temperature);
         println!("Probability of being selected is {}.", probability);
