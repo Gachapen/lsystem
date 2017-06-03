@@ -227,8 +227,10 @@ macro_rules! assert_slice_approx_eq {
                         _ => {}
                     }
                 } else {
-                    equal = false;
-                    break;
+                    if !a.is_nan() || !b.is_nan() {
+                        equal = false;
+                        break;
+                    }
                 }
             }
 
