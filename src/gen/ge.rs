@@ -2461,32 +2461,38 @@ fn weights_from_dividers(dividers: &[f32]) -> Vec<f32> {
         return vec![1.0];
     }
 
-    let mut weights = Vec::with_capacity(dividers.len() + 1);
+    let mut markers = Vec::with_capacity(dividers.len() + 2);
+    markers.push(0.0);
+    markers.push(dividers[0]);
 
-    let mut length = 1.0;
-    let mut previous_length = dividers[0];
-    weights.push(previous_length);
+    for (i, divider) in dividers.iter().enumerate().skip(1) {
+        let left = 1.0 - markers[i];
+        let right = divider;
+        let mut proportion = left / right;
+        if proportion.is_nan() {
+            proportion = 0.0;
+        }
 
-    for divider in dividers.iter().skip(1) {
-        weights.push(length - previous_length);
-        let new_length = if *divider != 0.0 {
-            length + (length - previous_length) * (1.0 / divider - 1.0)
-        } else {
-            length
-        };
-        previous_length = length;
-        length = new_length;
+        let length = 1.0 + proportion * (1.0 - divider);
+
+        markers.push(1.0);
+
+        for marker in &mut markers {
+            *marker /= length;
+        }
     }
 
-    for weight in &mut weights {
-        *weight /= length;
-    }
+    markers.push(1.0);
 
-    let last_weight = 1.0 - weights.iter().sum::<f32>();
+    println!("d: {:?}", dividers);
+    println!("m: {:?}", markers);
 
-    weights.push(last_weight);
-
-    weights
+    markers
+        .iter()
+        .enumerate()
+        .skip(1)
+        .map(|(i, m)| m - markers[i - 1])
+        .collect()
 }
 
 #[cfg(test)]
@@ -2748,7 +2754,7 @@ mod test {
             vec![0.0, 1.0, 0.0],
             vec![1.0, 0.0, 0.0],
             vec![0.0, 0.5, 0.5],
-            vec![0.5, 0.0, 0.5],
+            vec![0.49, 0.02, 0.49],
             vec![0.5, 0.5, 0.0],
         ];
 
