@@ -838,13 +838,20 @@ fn adjust_distribution(distribution: &mut Distribution, stats: &SelectionStats, 
 fn mutate_distribution<R>(distribution: &mut Distribution, factor: f32, rng: &mut R)
     where R: Rng
 {
+    const MIN: f32 = 0.0 + f32::EPSILON;
+    const MAX: f32 = 1.0 - f32::EPSILON;
+
     for rules in &mut distribution.depths {
         for choices in rules.values_mut() {
             for options in choices {
                 let mut dividers = dividers_from_weights(options);
                 let i = Range::new(0, dividers.len()).ind_sample(rng);
                 let change = Range::new(-factor, factor).ind_sample(rng);
-                dividers[i] = na::clamp(dividers[i] + change, 0.0, 1.0);
+                dividers[i] += change;
+
+                for divider in &mut dividers{
+                    *divider = na::clamp(*divider, MIN, MAX);
+                }
                 *options = weights_from_dividers(&dividers);
             }
         }
@@ -2291,7 +2298,6 @@ fn run_learning(matches: &ArgMatches) {
 
         let mut new_distribution = (*distribution).clone();
         mutate_distribution(&mut new_distribution, mutation_factor, &mut rng);
-        new_distribution.normalize();
 
         let new_distribution = Arc::new(new_distribution);
         let (new_score, new_num_samples) = measure_distribution(new_distribution.clone());
@@ -2432,7 +2438,12 @@ fn run_distribution_csv_to_bin(matches: &ArgMatches) {
 fn dividers_from_weights(weights: &[f32]) -> Vec<f32> {
     (0..weights.len() - 1)
         .map(|i| {
-            weights[i] / (weights[i] + weights[i + 1])
+            let parent_width = weights[i] + weights[i + 1];
+            if parent_width != 0.0 {
+                weights[i] / parent_width
+            } else {
+                0.5
+            }
         })
         .collect()
 }
@@ -2603,19 +2614,123 @@ mod test {
 
     #[test]
     fn test_dividers_from_weights() {
-        assert_slice_approx_eq!(dividers_from_weights(&[1.0]), Vec::<f32>::new());
-        assert_slice_approx_eq!(dividers_from_weights(&[0.5, 0.5]), &[0.5]);
-        assert_slice_approx_eq!(dividers_from_weights(&[0.75, 0.25]), &[0.75]);
-        assert_slice_approx_eq!(dividers_from_weights(&[0.5, 0.25, 0.25]), &[2.0 / 3.0, 0.5]);
-        assert_slice_approx_eq!(dividers_from_weights(&[0.25, 0.25, 0.25, 0.25]), &[0.5, 0.5, 0.5]);
+        assert_slice_approx_eq!(dividers_from_weights(&[1.0]), Vec::<f32>::new(), f32::EPSILON);
+        assert_slice_approx_eq!(dividers_from_weights(&[0.5, 0.5]), &[0.5], f32::EPSILON);
+        assert_slice_approx_eq!(dividers_from_weights(&[0.75, 0.25]), &[0.75], f32::EPSILON);
+        assert_slice_approx_eq!(dividers_from_weights(&[0.5, 0.25, 0.25]), &[2.0 / 3.0, 0.5], f32::EPSILON);
+        assert_slice_approx_eq!(dividers_from_weights(&[0.25, 0.25, 0.25, 0.25]), &[0.5, 0.5, 0.5], f32::EPSILON);
+        assert_slice_approx_eq!(dividers_from_weights(&[0.0, 1.0]), &[0.0], f32::EPSILON);
+        assert_slice_approx_eq!(dividers_from_weights(&[1.0, 0.0]), &[1.0], f32::EPSILON);
+        assert_slice_approx_eq!(dividers_from_weights(&[0.0, 0.0]), &[0.5], f32::EPSILON);
+        assert_slice_approx_eq!(dividers_from_weights(&[1.0, 1.0]), &[0.5], f32::EPSILON);
     }
 
     #[test]
-    fn test_weights_from_dividers() {
-        assert_slice_approx_eq!(weights_from_dividers(&[]), &[1.0]);
-        assert_slice_approx_eq!(weights_from_dividers(&[0.5]), &[0.5, 0.5]);
-        assert_slice_approx_eq!(weights_from_dividers(&[0.75]), &[0.75, 0.25]);
-        assert_slice_approx_eq!(weights_from_dividers(&[2.0 / 3.0, 0.5]), &[0.5, 0.25, 0.25]);
-        assert_slice_approx_eq!(weights_from_dividers(&[0.5, 0.5, 0.5]), &[0.25, 0.25, 0.25, 0.25]);
+    fn test_dividers_from_weights_zero() {
+        assert_slice_approx_eq!(dividers_from_weights(&[0.0, 1.0, 0.0]), &[0.0, 1.0], f32::EPSILON);
+        assert_slice_approx_eq!(dividers_from_weights(&[0.0, 0.5, 0.5]), &[0.0, 0.5], f32::EPSILON);
+        assert_slice_approx_eq!(dividers_from_weights(&[0.5, 0.5, 0.0]), &[0.5, 1.0], f32::EPSILON);
+
+        {
+            let result = dividers_from_weights(&[0.0, 0.0, 1.0]);
+            assert!(result[0] >= 0.0 && result[0] <= 1.0);
+            assert_approx_eq!(result[1], 0.0, f32::EPSILON);
+        }
+        {
+            let result = dividers_from_weights(&[1.0, 0.0, 0.0]);
+            assert_approx_eq!(result[0], 1.0, f32::EPSILON);
+            assert!(result[1] >= 0.0 && result[1] <= 1.0);
+        }
+
+        assert_slice_approx_eq!(dividers_from_weights(&[0.5, 0.0, 0.5]), &[1.0, 0.0], f32::EPSILON);
+    }
+
+    #[test]
+    fn test_weights_from_dividers_none() {
+        assert_slice_approx_eq!(weights_from_dividers(&[]), &[1.0], f32::EPSILON);
+    }
+
+    #[test]
+    fn test_weights_from_dividers_middle() {
+        assert_slice_approx_eq!(weights_from_dividers(&[0.5]), &[0.5, 0.5], f32::EPSILON);
+    }
+
+    #[test]
+    fn test_weights_from_dividers_quarter() {
+        assert_slice_approx_eq!(weights_from_dividers(&[0.75]), &[0.75, 0.25], f32::EPSILON);
+    }
+
+    #[test]
+    fn test_weights_from_dividers_multiple() {
+        assert_slice_approx_eq!(weights_from_dividers(&[2.0 / 3.0, 0.5]), &[0.5, 0.25, 0.25], f32::EPSILON);
+        assert_slice_approx_eq!(weights_from_dividers(&[0.5, 0.5, 0.5]), &[0.25, 0.25, 0.25, 0.25], f32::EPSILON);
+    }
+
+    #[test]
+    fn test_weights_from_dividers_full_single() {
+        assert_slice_approx_eq!(weights_from_dividers(&[0.0 + f32::EPSILON]), &[0.0 + f32::EPSILON, 1.0 - f32::EPSILON], f32::EPSILON);
+        assert_slice_approx_eq!(weights_from_dividers(&[1.0 - f32::EPSILON]), &[1.0 - f32::EPSILON, 0.0 + f32::EPSILON], f32::EPSILON);
+    }
+
+    #[test]
+    fn test_weights_from_dividers_zero_sides() {
+        assert_slice_approx_eq!(weights_from_dividers(&[0.0 + f32::EPSILON,
+                                                        1.0 - f32::EPSILON]),
+                                &[0.0 + f32::EPSILON,
+                                  1.0 - f32::EPSILON,
+                                  0.0 + f32::EPSILON],
+                                f32::EPSILON * 2.0);
+    }
+
+    #[test]
+    fn test_weights_from_dividers_zero_right() {
+        assert_slice_approx_eq!(weights_from_dividers(&[1.0 - f32::EPSILON,
+                                                        1.0 - f32::EPSILON]),
+                                &[1.0 - f32::EPSILON,
+                                  0.0 + f32::EPSILON,
+                                  0.0 + f32::EPSILON],
+                                f32::EPSILON * 2.0);
+    }
+
+    #[test]
+    fn test_weights_from_dividers_zero_left() {
+        assert_slice_approx_eq!(weights_from_dividers(&[0.0 + f32::EPSILON,
+                                                        0.0 + f32::EPSILON]),
+                                &[0.0 + f32::EPSILON,
+                                  0.0 + f32::EPSILON,
+                                  1.0 - f32::EPSILON],
+                                f32::EPSILON);
+    }
+
+    #[test]
+    fn test_weights_from_dividers_zero_between() {
+        assert_slice_approx_eq!(weights_from_dividers(&[0.0 + f32::EPSILON, 0.5]), &[0.0 + f32::EPSILON, 0.5, 0.5], f32::EPSILON);
+        assert_slice_approx_eq!(weights_from_dividers(&[0.5, 1.0 - f32::EPSILON]), &[0.5, 0.5, 0.0 + f32::EPSILON], f32::EPSILON * 2.0);
+        assert_slice_approx_eq!(weights_from_dividers(&[1.0 - f32::EPSILON, 0.0 + f32::EPSILON]), &[0.5, 0.0 + f32::EPSILON, 0.5], f32::EPSILON);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_mutate_distribution_nan() {
+        let mutation_rate = 1.0;
+        let mut distribution = Distribution::new();
+        let mut rng = rand::thread_rng();
+        let num_runs = 1000000;
+
+        distribution.set_weights(0, "a", 0, &[0.5, 0.5, 0.5, 0.5, 0.5]);
+
+        for _ in 0..num_runs {
+            mutate_distribution(&mut distribution, mutation_rate, &mut rng);
+
+            for rules in &distribution.depths {
+                for choices in rules.values() {
+                    for options in choices {
+                        for weight in options {
+                            assert!(!weight.is_nan());
+                        }
+                    }
+                }
+            }
+        }
     }
 }

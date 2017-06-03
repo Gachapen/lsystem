@@ -180,8 +180,32 @@ pub fn parse_duration_hms(string: &str) -> Result<Duration, &str> {
 }
 
 #[macro_export]
+macro_rules! assert_approx_eq {
+    ($x:expr, $y:expr, $eps:expr) => {
+        {
+            let (a, b) = ($x, $y);
+            let epsilon = $eps;
+            let ordering = (a - b).abs().partial_cmp(&epsilon);
+            let equal = if let Some(ordering) = ordering {
+                match ordering {
+                    cmp::Ordering::Less => true,
+                    _ => false,
+                }
+            } else {
+                false
+            };
+
+            assert!(equal,
+                    "assertion failed: `(left !== right)` (left: `{:?}`, right: `{:?}`)",
+                    a,
+                    b);
+        }
+    }
+}
+
+#[macro_export]
 macro_rules! assert_slice_approx_eq {
-    ($x:expr, $y:expr) => {
+    ($x:expr, $y:expr, $eps:expr) => {
         {
             assert!($x.len() == $y.len(),
                     "assertion failed: `(left !== right)` \
@@ -189,9 +213,19 @@ macro_rules! assert_slice_approx_eq {
                      $x,
                      $y);
 
+            let epsilon = $eps;
             let mut equal = true;
             for (a, b) in $x.iter().zip($y.iter()) {
-                if (a - b).abs() >= f32::EPSILON {
+                let ordering = (a - b).abs().partial_cmp(&epsilon);
+                if let Some(ordering) = ordering {
+                    match ordering {
+                        cmp::Ordering::Greater | cmp::Ordering::Equal => {
+                            equal = false;
+                            break;
+                        }
+                        _ => {}
+                    }
+                } else {
                     equal = false;
                     break;
                 }
