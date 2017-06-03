@@ -230,6 +230,34 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .help("Name of the output bincode file. Defaults to INPUT with .csv extension")
             )
         )
+        .subcommand(SubCommand::with_name("sample-weight-space")
+            .about("Sample a weight space and write points to file")
+            .arg(Arg::with_name("DIMENSIONS")
+                .required(true)
+                .index(1)
+                .help("The number of dimensions of the weight space to sample")
+            )
+            .arg(Arg::with_name("output")
+                .long("output")
+                .short("o")
+                .takes_value(true)
+                .default_value("weight-space.csv")
+                .help("Name of the output csv file.")
+            )
+            .arg(Arg::with_name("num-samples")
+                .long("num-samples")
+                .short("n")
+                .takes_value(true)
+                .default_value("1000")
+                .help("Number of samples to generate")
+            )
+            .arg(Arg::with_name("dividers")
+                .long("dividers")
+                .short("d")
+                .takes_value(false)
+                .help("Sample the dividers instead of the weights")
+            )
+        )
 }
 
 pub fn run_ge(matches: &ArgMatches) {
@@ -251,6 +279,8 @@ pub fn run_ge(matches: &ArgMatches) {
         run_learning(matches);
     } else if let Some(matches) = matches.subcommand_matches("dist-csv-to-bin") {
         run_distribution_csv_to_bin(matches);
+    } else if let Some(matches) = matches.subcommand_matches("sample-weight-space") {
+        run_sample_weight_space(matches);
     } else {
         println!("A subcommand must be specified. See help by passing -h.");
     }
@@ -2501,6 +2531,83 @@ fn weights_from_dividers(dividers: &[f32]) -> Vec<f32> {
         .skip(1)
         .map(|(i, m)| m - markers[i - 1])
         .collect()
+}
+
+fn run_sample_weight_space(matches: &ArgMatches) {
+    let dimensions: usize = match matches.value_of("DIMENSIONS").unwrap().parse() {
+        Ok(d) => d,
+        Err(err) => {
+            println!("Invalid argument to DIMENSIONS: {}", err);
+            return;
+        }
+    };
+
+    let num_samples: usize = match matches.value_of("num-samples").unwrap().parse() {
+        Ok(d) => d,
+        Err(err) => {
+            println!("Invalid argument to num-samples: {}", err);
+            return;
+        }
+    };
+
+    println!("Sampling {} samples in {}-dimensinal weight space.",
+             num_samples,
+             dimensions);
+
+    let output_path = Path::new(matches.value_of("output").unwrap());
+    println!("Saving samples to \"{}\".", output_path.to_str().unwrap());
+
+    let dividers = matches.is_present("dividers");
+    if dividers {
+        println!("Sampling dividers instead.");
+    }
+
+    let workers = num_cpus::get() + 1;
+    let pool = CpuPool::new(workers);
+
+    fn generate_weight(d: usize) -> Vec<f32> {
+        let mut rng = rand::thread_rng();
+        let components: Vec<f32> = (0..d)
+            .map(|_| Range::new(0.0, 1.0).ind_sample(&mut rng))
+            .collect();
+        let sum: f32 = components.iter().sum();
+        components.iter().map(|c| c / sum).collect()
+    };
+
+    let tasks: Vec<_> = (0..num_samples)
+        .map(|_| {
+            if dividers {
+                pool.spawn_fn(move || -> FutureResult<Vec<f32>, ()> {
+                    future::ok(dividers_from_weights(&generate_weight(dimensions)))
+                })
+            } else {
+                pool.spawn_fn(move || -> FutureResult<Vec<f32>, ()> {
+                    future::ok(generate_weight(dimensions))
+                })
+            }
+        })
+        .collect();
+
+    let samples = match future::join_all(tasks).wait() {
+        Ok(result) => result,
+        Err(()) => {
+            panic!("Failed joining tasks: Unknown reason.");
+        }
+    };
+
+    let mut csv = String::new();
+    for (i, sample) in samples.iter().enumerate() {
+        csv += &format!("{}", i);
+        for component in sample {
+            csv += &format!(",{}", component);
+        }
+        csv += "\n";
+    }
+
+    let mut csv_file = File::create(output_path).unwrap();
+    csv_file
+        .write_all(csv.as_bytes())
+        .expect("Failed writing sample csv file");
 }
 
 #[cfg(test)]
