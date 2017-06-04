@@ -2885,6 +2885,78 @@ mod test {
     }
 
     #[test]
+    fn test_weight_divider_robustness() {
+        let divider_set = [vec![0.5],
+                           vec![1.0],
+                           vec![0.0],
+                           vec![0.5, 0.5],
+                           vec![2.0 / 3.0, 0.75],
+                           vec![0.5, 0.0],
+                           vec![1.0, 0.5],
+                          ];
+
+        for dividers in divider_set.iter() {
+            assert_slice_approx_eq!(&dividers,
+                                    &dividers_from_weights(&weights_from_dividers(&dividers)),
+                                    f32::EPSILON);
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn test_weight_divider_robustness_rand() {
+        const NUM: usize = 10000;
+        const LEN: usize = 20;
+        let mut rng = rand::thread_rng();
+
+        for length in 2..LEN {
+            for _ in 0..NUM {
+                let dividers: Vec<f32> = (0..length)
+                    .map(|_| Range::new(0.0, 1.0).ind_sample(&mut rng))
+                    .collect();
+                assert_slice_approx_eq!(&dividers,
+                                        &dividers_from_weights(&weights_from_dividers(&dividers)),
+                                        0.000001);
+            }
+        }
+    }
+
+    #[test]
+    fn test_weight_divider_effect() {
+        let weight_set = [vec![0.5, 0.5],
+                          vec![0.75, 0.25],
+                          vec![0.9999, 0.0001],
+                          vec![0.0001, 0.9999],
+                          vec![1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0],
+                          vec![0.25, 0.25, 0.25, 0.25],
+                          vec![1.0, 0.0],
+                          vec![0.0, 1.0],
+                          vec![0.0, 0.0, 1.0],
+                          vec![0.0, 1.0, 0.0],
+                          vec![1.0, 0.0, 0.0],
+                          vec![0.0, 0.5, 0.5],
+                          vec![0.5, 0.0, 0.5],
+                          vec![0.5, 0.5, 0.0],
+                          vec![0.5, 0.0, 0.0, 0.5]];
+
+        for weights in weight_set.iter() {
+            let dividers = dividers_from_weights(&weights);
+            for i in 0..dividers.len() {
+                for sign in [1.0_f32, -1.0].iter() {
+                    let mut dividers = dividers.clone();
+                    let changed = dividers[i] + sign * 0.1;
+                    if changed != dividers[i] {
+                        dividers[i] = changed;
+                        assert_slice_approx_ne!(&weights,
+                                                &weights_from_dividers(&dividers),
+                                                f32::EPSILON);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     #[ignore]
     fn test_mutate_distribution_valid() {
         let mutation_rate = 1.0;
