@@ -2,11 +2,14 @@ extern crate alga;
 extern crate nalgebra as na;
 #[macro_use]
 extern crate nom;
+extern crate num;
 
 use std::f32::consts::{PI, E};
 use std::path::Path;
 use std::{fs, io, str};
 use std::time::Duration;
+use std::cmp::Ordering;
+use num::Float;
 
 use na::Unit;
 use alga::general::Real;
@@ -203,39 +206,54 @@ macro_rules! assert_approx_eq {
     }
 }
 
+pub fn slice_approx_eq<T>(x: &[T], y: &[T], epsilon: T) -> bool
+    where T: Float
+{
+    if x.len() != y.len() {
+        return false;
+    }
+
+    let mut equal = true;
+    for (a, b) in x.iter().zip(y.iter()) {
+        let ordering = (*a - *b).abs().partial_cmp(&epsilon);
+        if let Some(ordering) = ordering {
+            match ordering {
+                Ordering::Greater | Ordering::Equal => {
+                    equal = false;
+                    break;
+                }
+                _ => {}
+            }
+        } else if !a.is_nan() || !b.is_nan() {
+            equal = false;
+            break;
+        }
+    }
+
+    equal
+}
+
 #[macro_export]
 macro_rules! assert_slice_approx_eq {
     ($x:expr, $y:expr, $eps:expr) => {
         {
             let (x, y) = ($x, $y);
-            assert!(x.len() == y.len(),
-                    "assertion failed: `(left !== right)` \
+            assert!($crate::slice_approx_eq(x, y, $eps),
+                    "assertion failed: `(left != right)` \
                      (left: `{:?}`, right: `{:?}`)",
                      x,
                      y);
+        }
+    };
+}
 
-            let epsilon = $eps;
-            let mut equal = true;
-            for (a, b) in x.iter().zip(y.iter()) {
-                let ordering = (a - b).abs().partial_cmp(&epsilon);
-                if let Some(ordering) = ordering {
-                    match ordering {
-                        cmp::Ordering::Greater | cmp::Ordering::Equal => {
-                            equal = false;
-                            break;
-                        }
-                        _ => {}
-                    }
-                } else {
-                    if !a.is_nan() || !b.is_nan() {
-                        equal = false;
-                        break;
-                    }
-                }
-            }
-
-            assert!(equal,
-                    "assertion failed: `(left !== right)` \
+#[macro_export]
+macro_rules! assert_slice_approx_ne {
+    ($x:expr, $y:expr, $eps:expr) => {
+        {
+            let (x, y) = ($x, $y);
+            assert!(!$crate::slice_approx_eq(x, y, $eps),
+                    "assertion failed: `(left == right)` \
                      (left: `{:?}`, right: `{:?}`)",
                      x,
                      y);
