@@ -879,15 +879,26 @@ fn mutate_distribution<R>(distribution: &mut Distribution, factor: f32, rng: &mu
     for rules in &mut distribution.depths {
         for choices in rules.values_mut() {
             for options in choices {
-                let mut dividers = dividers_from_weights(options);
-                let i = Range::new(0, dividers.len()).ind_sample(rng);
+                let i = Range::new(0, options.len()).ind_sample(rng);
                 let change = Range::new(-factor, factor).ind_sample(rng);
-                dividers[i] += change;
+                options[i] = na::clamp(options[i] + change, 0.0, 1.0);
 
-                for divider in &mut dividers{
-                    *divider = na::clamp(*divider, 0.0, 1.0);
+                let expected_remaining_sum = 1.0 - options[i];
+                let remaining_sum: f32 = options
+                    .iter()
+                    .take(i)
+                    .chain(options.iter().skip(i + 1))
+                    .sum();
+                // Based on: 1.0 / (remaining_sum * (1.0 / expected_remaining_sum))
+                let normalization_factor = expected_remaining_sum / remaining_sum;
+
+                // Can't chain mut iterators, so need to have two for loops.
+                for w in options.iter_mut().take(i) {
+                    *w *= normalization_factor;
                 }
-                *options = weights_from_dividers(&dividers);
+                for w in options.iter_mut().skip(i + 1) {
+                    *w *= normalization_factor;
+                }
             }
         }
     }
