@@ -25,8 +25,7 @@ pub fn is_nothing(lsystem: &ol::LSystem) -> bool {
     }
 
     // If some symbol in the used productions is 'F', then it draws something.
-    while !visit_stack.is_empty() {
-        let predicate = visit_stack.pop().unwrap();
+    while let Some(predicate) = visit_stack.pop() {
         let string = &lsystem.productions[predicate];
 
         for symbol in string.as_bytes() {
@@ -315,8 +314,8 @@ pub fn evaluate(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (Fitness, O
         let reach = skeleton
             .points
             .iter()
-            .max_by(|a, b| a.y.partial_cmp(&b.y).unwrap())
-            .unwrap()
+            .max_by(|a, b| a.y.partial_cmp(&b.y).expect("Points can not be compared"))
+            .expect("Can't evaluate skeleton with no points")
             .y;
 
         let (drop_fitness, drop) = evaluate_drop(&skeleton);
@@ -352,8 +351,8 @@ fn evaluate_drop(skeleton: &Skeleton) -> (f32, f32) {
     let drop = skeleton
         .points
         .iter()
-        .min_by(|a, b| a.y.partial_cmp(&b.y).unwrap())
-        .unwrap()
+        .min_by(|a, b| a.y.partial_cmp(&b.y).expect("Points can not be compared"))
+        .expect("Can't evaluate skeleton with no points")
         .y;
 
     let clamped_drop = partial_clamp(drop, -1.0, 0.0).expect("Drop is NaN");
@@ -382,8 +381,8 @@ fn evaluate_balance(skeleton: &Skeleton) -> Balance {
     let spread = floor_points
         .iter()
         .map(|p| na::norm(&Vector2::new(p.x, p.y)))
-        .max_by(|a, b| a.partial_cmp(b).unwrap())
-        .unwrap();
+        .max_by(|a, b| a.partial_cmp(b).expect("Lengths can not be compared"))
+        .expect("Can't evaluate skeleton with no points");
 
     let center = ncu::center(&skeleton.points);
     let floor_center = Point2::new(center.x, center.z);
@@ -394,8 +393,8 @@ fn evaluate_balance(skeleton: &Skeleton) -> Balance {
         .iter()
         .map(|p| Vector2::new(p.x, p.y))
         .map(|p| project_onto(&p, &center_direction))
-        .max_by(|a, b| a.partial_cmp(b).unwrap())
-        .unwrap();
+        .max_by(|a, b| a.partial_cmp(b).expect("Projections can not be compared"))
+        .expect("Can't evaluate skeleton with no points");
 
     Balance {
         fitness: (0.5 - (center_distance / center_spread)) * 2.0,
@@ -437,7 +436,7 @@ fn evaluate_closeness(skeleton: &Skeleton) -> f32 {
                         (closest - THRESHOLD) * (1.0 / (1.0 - THRESHOLD))
                     }
                 })
-                .max_by(|a, b| a.partial_cmp(b).unwrap());
+                .max_by(|a, b| a.partial_cmp(b).expect("Closeness can not be compared"));
 
             if let Some(closeness) = closeness {
                 closeness
@@ -445,8 +444,8 @@ fn evaluate_closeness(skeleton: &Skeleton) -> f32 {
                 0.0
             }
         })
-        .max_by(|a, b| a.partial_cmp(b).unwrap())
-        .unwrap()
+        .max_by(|a, b| a.partial_cmp(b).expect("Closeness can not be compared"))
+        .expect("Can't evaluate skeleton with no points")
 }
 
 fn branching_complexity(skeleton: &Skeleton) -> f32 {
