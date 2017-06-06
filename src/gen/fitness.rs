@@ -260,8 +260,8 @@ impl Fitness {
     }
 
     pub fn reward(&self) -> f32 {
-        let branching_reward = *na::partial_max(&self.branching, &0.0).unwrap();
-        let balance_reward = *na::partial_max(&self.balance, &0.0).unwrap();
+        let branching_reward = partial_max(self.branching, 0.0).expect("Brancing is NaN");
+        let balance_reward = partial_max(self.balance, 0.0).expect("Balance is NaN");
         (balance_reward + branching_reward) / 2.0
     }
 
@@ -270,8 +270,8 @@ impl Fitness {
     }
 
     pub fn punishment(&self) -> f32 {
-        let branching_punishment = *na::partial_max(&-self.branching, &0.0).unwrap();
-        let balance_punishment = *na::partial_max(&-self.balance, &0.0).unwrap();
+        let branching_punishment = partial_max(-self.branching, 0.0).expect("Branching is NaN");
+        let balance_punishment = partial_max(-self.balance, 0.0).expect("Balance is NaN");
         (balance_punishment + self.drop + branching_punishment + self.closeness) / 4.0 + self.nothing_punishment()
     }
 
@@ -356,8 +356,9 @@ fn evaluate_drop(skeleton: &Skeleton) -> (f32, f32) {
         .unwrap()
         .y;
 
-    let drop = (partial_clamp(drop, -1.0, 0.0) * PI / 2.0).sin();
-    (-drop, drop)
+    let clamped_drop = partial_clamp(drop, -1.0, 0.0).expect("Drop is NaN");
+    let interpolated_drop = (clamped_drop * PI / 2.0).sin();
+    (-interpolated_drop, interpolated_drop)
 }
 
 struct Balance {
@@ -425,7 +426,7 @@ fn evaluate_closeness(skeleton: &Skeleton) -> f32 {
                     for (b_i, b_s) in segments.iter().enumerate() {
                         if b_i != a_i {
                             let dot = na::dot(a_s, b_s);
-                            closest = *na::partial_max(&dot, &closest).unwrap();
+                            closest = partial_max(dot, closest).expect("Closeness can not be compared");
                         }
                     }
 

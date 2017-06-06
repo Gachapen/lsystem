@@ -2030,7 +2030,7 @@ fn run_learning(matches: &ArgMatches) {
         fn progress(&self) -> f32 {
             match *self {
                 Schedule::Iterations{ current, max } => {
-                    partial_clamp(current as f32 / max as f32, 0.0, 1.0)
+                    partial_clamp(current as f32 / max as f32, 0.0, 1.0).expect("Iteration progress is NaN")
                 }
                 Schedule::EndTime{ start, end } => {
                     let max = end
@@ -2045,7 +2045,7 @@ fn run_learning(matches: &ArgMatches) {
                     let max = max.as_secs();
                     let spent = spent.as_secs();
 
-                    partial_clamp(spent as f32 / max as f32, 0.0, 1.0)
+                    partial_clamp(spent as f32 / max as f32, 0.0, 1.0).expect("Time progress is NaN")
                 }
                 Schedule::Duration{ start, max } => {
                     let spent = Local::now()
@@ -2056,7 +2056,7 @@ fn run_learning(matches: &ArgMatches) {
                     let max = max.as_secs();
                     let spent = spent.as_secs();
 
-                    partial_clamp(spent as f32 / max as f32, 0.0, 1.0)
+                    partial_clamp(spent as f32 / max as f32, 0.0, 1.0).expect("Time progress is NaN")
                 }
             }
 

@@ -145,32 +145,46 @@ pub fn read_dir_all<P: AsRef<Path>>(path: P) -> io::Result<ReadDirAll> {
 }
 
 #[inline]
-pub fn partial_min<T>(a: T, b: T) -> T
+pub fn partial_min<T>(a: T, b: T) -> Option<T>
     where T: PartialOrd
 {
-    if a <= b {
-        a
+    if let Some(ordering) = a.partial_cmp(&b) {
+        match ordering {
+            Ordering::Equal | Ordering::Less => Some(a),
+            Ordering::Greater => Some(b),
+        }
     } else {
-        b
+        None
     }
 }
 
 #[inline]
-pub fn partial_max<T>(a: T, b: T) -> T
+pub fn partial_max<T>(a: T, b: T) -> Option<T>
     where T: PartialOrd
 {
-    if a >= b {
-        a
+    if let Some(ordering) = a.partial_cmp(&b) {
+        match ordering {
+            Ordering::Equal | Ordering::Greater => Some(a),
+            Ordering::Less => Some(b),
+        }
     } else {
-        b
+        None
     }
 }
 
 #[inline]
-pub fn partial_clamp<T>(v: T, min: T, max: T) -> T
+pub fn partial_clamp<T>(v: T, min: T, max: T) -> Option<T>
     where T: PartialOrd
 {
-    partial_min(partial_max(v, min), max)
+    if let Some(min_clamped) = partial_max(v, min) {
+        if let Some(max_clamped) = partial_min(min_clamped, max) {
+            Some(max_clamped)
+        } else {
+            None
+        }
+    } else {
+        None
+    }
 }
 
 pub fn parse_duration_hms(string: &str) -> Result<Duration, &str> {
@@ -367,10 +381,10 @@ mod test {
 
     #[test]
     fn test_partial_clamp() {
-        assert_eq!(partial_clamp(0.0, -1.0, 1.0), 0.0);
-        assert_eq!(partial_clamp(-1.0, -1.0, 1.0), -1.0);
-        assert_eq!(partial_clamp(-2.0, -1.0, 1.0), -1.0);
-        assert_eq!(partial_clamp(1.0, -1.0, 1.0), 1.0);
-        assert_eq!(partial_clamp(2.0, -1.0, 1.0), 1.0);
+        assert_eq!(partial_clamp(0.0, -1.0, 1.0), Some(0.0));
+        assert_eq!(partial_clamp(-1.0, -1.0, 1.0), Some(-1.0));
+        assert_eq!(partial_clamp(-2.0, -1.0, 1.0), Some(-1.0));
+        assert_eq!(partial_clamp(1.0, -1.0, 1.0), Some(1.0));
+        assert_eq!(partial_clamp(2.0, -1.0, 1.0), Some(1.0));
     }
 }
