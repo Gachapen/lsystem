@@ -878,7 +878,7 @@ fn mutate_distribution<R>(distribution: &mut Distribution, factor: f32, rng: &mu
 {
     for rules in &mut distribution.depths {
         for choices in rules.values_mut() {
-            for options in choices {
+            for mut options in choices {
                 let i = Range::new(0, options.len()).ind_sample(rng);
                 let change = Range::new(-factor, factor).ind_sample(rng);
                 options[i] = na::clamp(options[i] + change, 0.0, 1.0);
@@ -889,15 +889,27 @@ fn mutate_distribution<R>(distribution: &mut Distribution, factor: f32, rng: &mu
                     .take(i)
                     .chain(options.iter().skip(i + 1))
                     .sum();
-                // Based on: 1.0 / (remaining_sum * (1.0 / expected_remaining_sum))
-                let normalization_factor = expected_remaining_sum / remaining_sum;
 
-                // Can't chain mut iterators, so need to have two for loops.
-                for w in options.iter_mut().take(i) {
-                    *w *= normalization_factor;
+                fn modify_remaining<F>(weights: &mut [f32], changed_index: usize, mut f: F)
+                    where F: FnMut(&mut f32)
+                {
+                    // Can't chain mut iterators, so need to have two for loops.
+                    for w in weights.iter_mut().take(changed_index) {
+                        f(w);
+                    }
+                    for w in weights.iter_mut().skip(changed_index + 1) {
+                        f(w);
+                    }
                 }
-                for w in options.iter_mut().skip(i + 1) {
-                    *w *= normalization_factor;
+
+                if remaining_sum == 0.0 {
+                    // The expected remaining sum must be divided over the remaining weights.
+                    let new_value = expected_remaining_sum / (options.len() - 1) as f32;
+                    modify_remaining(&mut options, i, |w| *w = new_value);
+                } else {
+                    // Based on: 1.0 / (remaining_sum * (1.0 / expected_remaining_sum))
+                    let normalization_factor = expected_remaining_sum / remaining_sum;
+                    modify_remaining(&mut options, i, |w| *w *= normalization_factor);
                 }
             }
         }
