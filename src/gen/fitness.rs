@@ -271,7 +271,8 @@ impl Fitness {
     pub fn punishment(&self) -> f32 {
         let branching_punishment = partial_max(-self.branching, 0.0).expect("Branching is NaN");
         let balance_punishment = partial_max(-self.balance, 0.0).expect("Balance is NaN");
-        (balance_punishment + self.drop + branching_punishment + self.closeness) / 4.0 + self.nothing_punishment()
+        (balance_punishment + self.drop + branching_punishment + self.closeness) / 4.0 +
+        self.nothing_punishment()
     }
 
     pub fn score(&self) -> f32 {
@@ -314,7 +315,11 @@ pub fn evaluate(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (Fitness, O
         let reach = skeleton
             .points
             .iter()
-            .max_by(|a, b| a.y.partial_cmp(&b.y).expect("Points can not be compared"))
+            .max_by(|a, b| {
+                        a.y
+                            .partial_cmp(&b.y)
+                            .expect("Points can not be compared")
+                    })
             .expect("Can't evaluate skeleton with no points")
             .y;
 
@@ -351,7 +356,11 @@ fn evaluate_drop(skeleton: &Skeleton) -> (f32, f32) {
     let drop = skeleton
         .points
         .iter()
-        .min_by(|a, b| a.y.partial_cmp(&b.y).expect("Points can not be compared"))
+        .min_by(|a, b| {
+                    a.y
+                        .partial_cmp(&b.y)
+                        .expect("Points can not be compared")
+                })
         .expect("Can't evaluate skeleton with no points")
         .y;
 
@@ -364,7 +373,7 @@ struct Balance {
     center: Point3<f32>,
     fitness: f32,
     spread: f32,
-    center_spread: f32
+    center_spread: f32,
 }
 
 /// Evaluate the balance of the plant.
@@ -393,7 +402,10 @@ fn evaluate_balance(skeleton: &Skeleton) -> Balance {
         .iter()
         .map(|p| Vector2::new(p.x, p.y))
         .map(|p| project_onto(&p, &center_direction))
-        .max_by(|a, b| a.partial_cmp(b).expect("Projections can not be compared"))
+        .max_by(|a, b| {
+                    a.partial_cmp(b)
+                        .expect("Projections can not be compared")
+                })
         .expect("Can't evaluate skeleton with no points");
 
     Balance {
@@ -417,26 +429,29 @@ fn evaluate_closeness(skeleton: &Skeleton) -> f32 {
             let edges = skeleton.edges[i].iter().map(|e| skeleton.points[*e]);
 
             let segments: Vec<_> = edges.map(|e| (e - p).normalize()).collect();
-            let closeness = segments
-                .iter()
-                .enumerate()
-                .map(|(a_i, a_s)| {
-                    let mut closest = -1.0;
-                    for (b_i, b_s) in segments.iter().enumerate() {
-                        if b_i != a_i {
-                            let dot = na::dot(a_s, b_s);
-                            closest = partial_max(dot, closest).expect("Closeness can not be compared");
+            let closeness =
+                segments
+                    .iter()
+                    .enumerate()
+                    .map(|(a_i, a_s)| {
+                        let mut closest = -1.0;
+                        for (b_i, b_s) in segments.iter().enumerate() {
+                            if b_i != a_i {
+                                let dot = na::dot(a_s, b_s);
+                                closest =
+                                    partial_max(dot, closest)
+                                    .expect("Closeness can not be compared");
+                            }
                         }
-                    }
 
-                    const THRESHOLD: f32 = 0.9;
-                    if closest < THRESHOLD {
-                        0.0
-                    } else {
-                        (closest - THRESHOLD) * (1.0 / (1.0 - THRESHOLD))
-                    }
-                })
-                .max_by(|a, b| a.partial_cmp(b).expect("Closeness can not be compared"));
+                        const THRESHOLD: f32 = 0.9;
+                        if closest < THRESHOLD {
+                            0.0
+                        } else {
+                            (closest - THRESHOLD) * (1.0 / (1.0 - THRESHOLD))
+                        }
+                    })
+                    .max_by(|a, b| a.partial_cmp(b).expect("Closeness can not be compared"));
 
             if let Some(closeness) = closeness {
                 closeness
