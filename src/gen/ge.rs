@@ -2907,6 +2907,7 @@ mod test {
         }
     }
 
+    #[ignore]
     #[test]
     fn test_weight_divider_robustness() {
         let divider_set = [vec![0.5],
@@ -2944,6 +2945,7 @@ mod test {
         }
     }
 
+    #[ignore]
     #[test]
     fn test_weight_divider_effect() {
         let weight_set = [vec![0.5, 0.5],
