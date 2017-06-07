@@ -67,6 +67,13 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .default_value("64")
                 .help("Number of samples to generate before visualizing the best")
             )
+            .arg(Arg::with_name("grammar")
+                .short("g")
+                .long("grammar")
+                .takes_value(true)
+                .default_value("grammar/lsys2.abnf")
+                .help("Which ABNF grammar to use")
+            )
         )
         .subcommand(SubCommand::with_name("sampling")
             .about("Run random sampling program until you type 'quit'")
@@ -324,8 +331,9 @@ const GENOME_LENGTH: usize = 100;
 fn run_with_distribution(matches: &ArgMatches) {
     let (mut window, _) = setup_window();
 
+    let grammar_path = matches.value_of("grammar").unwrap();
     let grammar =
-        Arc::new(abnf::parse_file("grammar/lsys2.abnf").expect("Could not parse ABNF file"));
+        Arc::new(abnf::parse_file(grammar_path).expect("Could not parse ABNF file"));
 
     let distribution = match matches.value_of("distribution") {
         Some(filename) => {
