@@ -292,20 +292,19 @@ mod parse {
     );
 
     named!(pub duration<Duration>,
-        alt!(
-            map!(call!(num_u64), |seconds| Duration::new(seconds, 0)) |
+        alt_complete!(
             map!(
                 do_parse!(
                     hours: call!(num_u64) >>
                     tag!(&b":"[..]) >>
                     minutes: call!(num_u64) >>
-                    seconds: opt!(
+                    seconds: opt!(complete!(
                         do_parse!(
                             tag!(&b":"[..]) >>
                             seconds: call!(num_u64) >>
                             (seconds)
                         )
-                    ) >>
+                    )) >>
                     (hours, minutes, seconds)
                 ),
                 |(hours, minutes, seconds)| {
@@ -315,7 +314,8 @@ mod parse {
                     }
                     Duration::new(duration, 0)
                 }
-            )
+            ) |
+            map!(call!(num_u64), |seconds| Duration::new(seconds, 0))
         )
     );
 }
