@@ -323,6 +323,7 @@ mod parse {
 #[cfg(test)]
 mod test {
     use super::*;
+    use nom::IResult::Done;
 
     #[test]
     fn test_min_max() {
@@ -386,5 +387,45 @@ mod test {
         assert_eq!(partial_clamp(-2.0, -1.0, 1.0), Some(-1.0));
         assert_eq!(partial_clamp(1.0, -1.0, 1.0), Some(1.0));
         assert_eq!(partial_clamp(2.0, -1.0, 1.0), Some(1.0));
+    }
+
+    #[test]
+    fn test_parse_num_u64() {
+        assert_eq!(parse::num_u64(&b"1"[..]), Done(&b""[..], (1)));
+        assert_eq!(parse::num_u64(&b"12345"[..]), Done(&b""[..], (12345)));
+        assert_eq!(parse::num_u64(&b"18446744073709551615"[..]),
+                       Done(&b""[..], (18446744073709551615)));
+    }
+
+    #[test]
+    fn test_parse_duration_seconds() {
+        assert_eq!(parse::duration(&b"0"[..]), Done(&b""[..], (Duration::from_secs(0))));
+        assert_eq!(parse::duration(&b"01"[..]), Done(&b""[..], (Duration::from_secs(1))));
+        assert_eq!(parse::duration(&b"1"[..]), Done(&b""[..], (Duration::from_secs(1))));
+        assert_eq!(parse::duration(&b"100"[..]), Done(&b""[..], (Duration::from_secs(100))));
+    }
+
+    #[test]
+    fn test_parse_duration_hms_seconds() {
+        assert_eq!(parse::duration(&b"00:00:00"[..]), Done(&b""[..], (Duration::from_secs(0))));
+        assert_eq!(parse::duration(&b"00:00:01"[..]), Done(&b""[..], (Duration::from_secs(1))));
+        assert_eq!(parse::duration(&b"00:00:1"[..]), Done(&b""[..], (Duration::from_secs(1))));
+        assert_eq!(parse::duration(&b"00:00:100"[..]), Done(&b""[..], (Duration::from_secs(100))));
+    }
+
+    #[test]
+    fn test_parse_duration_hms_minutes() {
+        assert_eq!(parse::duration(&b"00:00"[..]), Done(&b""[..], (Duration::from_secs(0))));
+        assert_eq!(parse::duration(&b"00:01"[..]), Done(&b""[..], (Duration::from_secs(60))));
+        assert_eq!(parse::duration(&b"00:1"[..]), Done(&b""[..], (Duration::from_secs(60))));
+        assert_eq!(parse::duration(&b"00:100"[..]), Done(&b""[..], (Duration::from_secs(100 * 60))));
+    }
+
+    #[test]
+    fn test_parse_duration_hms_hours() {
+        assert_eq!(parse::duration(&b"00:00"[..]), Done(&b""[..], (Duration::from_secs(0))));
+        assert_eq!(parse::duration(&b"01:00"[..]), Done(&b""[..], (Duration::from_secs(60 * 60))));
+        assert_eq!(parse::duration(&b"1:00"[..]), Done(&b""[..], (Duration::from_secs(60 * 60))));
+        assert_eq!(parse::duration(&b"100:00"[..]), Done(&b""[..], (Duration::from_secs(100 * 60 * 60))));
     }
 }
