@@ -1,7 +1,7 @@
 use nom::{alphanumeric, digit, eol, space, hex_u32};
 use std::str;
 
-use syntax::{Repeat, Item, Content, Sequence, Ruleset, List};
+use syntax::{Repeat, Item, Content, Sequence, Ruleset, List, Rule};
 
 named!(pub string_literal<String>,
     delimited!(
@@ -114,9 +114,21 @@ named!(pub item<Item>,
 );
 
 named!(pub sequence<Sequence>,
-    separated_nonempty_list!(
-        call!(space),
-        call!(item)
+    map!(
+        complete!(do_parse!(
+            first: call!(item) >>
+            remaining: many0!(
+                preceded!(
+                    call!(space),
+                    complete!(call!(item))
+                )
+            ) >>
+            (first, remaining)
+        )),
+        |(first, mut items): (Item, Vec<Item>)| {
+            items.insert(0, first);
+            items
+        }
     )
 );
 
@@ -133,10 +145,10 @@ named!(pub alternatives<Sequence>,
         complete!(do_parse!(
             first: call!(item) >>
             remaining: many1!(
-                preceded!(
+                complete!(preceded!(
                     call!(alternatives_sep),
                     call!(item)
-                )
+                ))
             ) >>
             (first, remaining)
         )),
@@ -162,7 +174,7 @@ named!(pub group<List>,
     )
 );
 
-named!(pub rule<(String, List)>,
+named!(pub rule<Rule>,
     do_parse!(
         name: call!(symbol) >>
         delimited!(
@@ -177,12 +189,19 @@ named!(pub rule<(String, List)>,
 
 named!(pub ruleset<Ruleset>,
     map!(
-        separated_nonempty_list!(
-            call!(eol),
-            call!(rule)
+        do_parse!(
+            first: call!(rule) >>
+            remaining: many0!(
+                preceded!(
+                    call!(eol),
+                    complete!(call!(rule))
+                )
+            ) >>
+            (first, remaining)
         ),
-        |rules: Vec<_>| {
-            rules.into_iter().collect()
+        |(first, mut remaining): (Rule, Vec<Rule>)| {
+            remaining.insert(0, first);
+            remaining.into_iter().collect()
         }
     )
 );
@@ -266,7 +285,6 @@ mod tests {
     fn test_sequence_parser_single() {
         let result = vec![Item::new(Symbol("sym".to_string()))];
         assert_eq!(parse::sequence(&b"sym"[..]), Done(&b""[..], (result)));
-
     }
 
     #[test]
@@ -274,6 +292,12 @@ mod tests {
         let result = vec![Item::new(Symbol("sym".to_string())),
                           Item::new(Symbol("sym2".to_string()))];
         assert_eq!(parse::sequence(&b"sym sym2"[..]), Done(&b""[..], result));
+    }
+
+    #[test]
+    fn test_sequence_parser_trailing() {
+        let result = vec![Item::new(Symbol("sym".to_string()))];
+        assert_eq!(parse::sequence(&b"sym "[..]), Done(&b" "[..], (result)));
     }
 
     #[test]
@@ -289,6 +313,14 @@ mod tests {
                           Item::new(Symbol("sym2".to_string()))];
         assert_eq!(parse::alternatives(&b"sym / sym2"[..]),
                    Done(&b""[..], (result)));
+    }
+
+    #[test]
+    fn test_alternatives_parser_trailing() {
+        let result = vec![Item::new(Symbol("sym".to_string())),
+                          Item::new(Symbol("sym2".to_string()))];
+        assert_eq!(parse::alternatives(&b"sym / sym2 "[..]),
+                   Done(&b" "[..], (result)));
     }
 
     #[test]
@@ -380,6 +412,30 @@ mod tests {
         let input = b"def = \"value\"\nrule = def\nrule2 = def def\nrule3 = def / def";
 
         assert_eq!(parse::ruleset(&input[..]), Done(&b""[..], (result)));
+    }
+
+    #[test]
+    fn test_ruleset_parser_single() {
+        let result: Ruleset = vec![("rule".to_string(),
+                                    Sequence(vec![Item::new(Symbol("def".to_string()))]))]
+                .into_iter()
+                .collect();
+        let input = b"rule = def";
+        assert_eq!(parse::ruleset(&input[..]), Done(&b""[..], (result)));
+    }
+
+    #[test]
+    fn test_ruleset_parser_trailing() {
+        let result: Ruleset = vec![("rule".to_string(),
+                                    Sequence(vec![Item::new(Symbol("def".to_string()))]))]
+                .into_iter()
+                .collect();
+
+        let input = b"rule = def\n";
+        assert_eq!(parse::ruleset(&input[..]), Done(&b"\n"[..], (result.clone())));
+
+        let input = b"rule = def ";
+        assert_eq!(parse::ruleset(&input[..]), Done(&b" "[..], (result)));
     }
 
     #[test]

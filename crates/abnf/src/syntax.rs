@@ -73,4 +73,5 @@ impl Item {
 }
 
 pub type Sequence = Vec<Item>;
+pub type Rule = (String, List);
 pub type Ruleset = HashMap<String, List>;
