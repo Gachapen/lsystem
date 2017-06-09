@@ -280,7 +280,7 @@ mod parse {
     use std::time::Duration;
     use nom::{digit};
 
-    named!(number<u64>,
+    named!(pub num_u64<u64>,
         fold_many1!(
             call!(digit),
             0_u64,
@@ -293,16 +293,16 @@ mod parse {
 
     named!(pub duration<Duration>,
         alt!(
-            map!(call!(number), |seconds| Duration::new(seconds, 0)) |
+            map!(call!(num_u64), |seconds| Duration::new(seconds, 0)) |
             map!(
                 do_parse!(
-                    hours: call!(number) >>
+                    hours: call!(num_u64) >>
                     tag!(&b":"[..]) >>
-                    minutes: call!(number) >>
+                    minutes: call!(num_u64) >>
                     seconds: opt!(
                         do_parse!(
                             tag!(&b":"[..]) >>
-                            seconds: call!(number) >>
+                            seconds: call!(num_u64) >>
                             (seconds)
                         )
                     ) >>
