@@ -187,6 +187,13 @@ pub fn partial_clamp<T>(v: T, min: T, max: T) -> Option<T>
     }
 }
 
+/// Parse a `std::time::Duration` from various formats
+///
+/// # Format
+/// The parser supports various formats.
+/// A plain unsigned integer (u64) will be parsed as seconds.
+/// Alternatively an `hours:minutes:seconds` format is supported, where `:seconds` is optional.
+/// `hours`, `minutes` and `seconds` can each be any u64 integer.
 pub fn parse_duration_hms(string: &str) -> Result<Duration, &str> {
     use nom::IResult::{Done, Error, Incomplete};
 
