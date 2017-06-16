@@ -56,11 +56,12 @@ impl Skeleton {
     }
 }
 
-pub fn build_skeleton(instructions: ol::InstructionsIter,
-                      settings: &lsys::Settings,
-                      size_limit: usize,
-                      instruction_limit: usize)
-                      -> Option<Skeleton> {
+pub fn build_skeleton(
+    instructions: ol::InstructionsIter,
+    settings: &lsys::Settings,
+    size_limit: usize,
+    instruction_limit: usize,
+) -> Option<Skeleton> {
     let segment_length = settings.step;
 
     let mut skeleton = Skeleton::new();
@@ -223,10 +224,12 @@ pub fn is_crap(lsystem: &ol::LSystem, settings: &lsys::Settings) -> bool {
     }
 
     let instruction_iter = lsystem.instructions_iter(settings.iterations, &settings.command_map);
-    let skeleton = build_skeleton(instruction_iter,
-                                  settings,
-                                  SKELETON_LIMIT,
-                                  INSTRUCTION_LIMIT);
+    let skeleton = build_skeleton(
+        instruction_iter,
+        settings,
+        SKELETON_LIMIT,
+        INSTRUCTION_LIMIT,
+    );
     if let Some(skeleton) = skeleton {
         if skeleton.points.len() <= 1 {
             return true;
@@ -272,7 +275,7 @@ impl Fitness {
         let branching_punishment = partial_max(-self.branching, 0.0).expect("Branching is NaN");
         let balance_punishment = partial_max(-self.balance, 0.0).expect("Balance is NaN");
         (balance_punishment + self.drop + branching_punishment + self.closeness) / 4.0 +
-        self.nothing_punishment()
+            self.nothing_punishment()
     }
 
     pub fn score(&self) -> f32 {
@@ -287,12 +290,14 @@ impl fmt::Display for Fitness {
         if self.is_nothing {
             write!(f, " (nothing)")
         } else {
-            write!(f,
-                   " (bl: {}, br: {}, cl: {}, dr: {})",
-                   self.balance,
-                   self.branching,
-                   self.closeness,
-                   self.drop)
+            write!(
+                f,
+                " (bl: {}, br: {}, cl: {}, dr: {})",
+                self.balance,
+                self.branching,
+                self.closeness,
+                self.drop
+            )
         }
     }
 }
@@ -303,10 +308,12 @@ pub fn evaluate(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (Fitness, O
     }
 
     let instruction_iter = lsystem.instructions_iter(settings.iterations, &settings.command_map);
-    let skeleton = build_skeleton(instruction_iter,
-                                  settings,
-                                  SKELETON_LIMIT,
-                                  INSTRUCTION_LIMIT);
+    let skeleton = build_skeleton(
+        instruction_iter,
+        settings,
+        SKELETON_LIMIT,
+        INSTRUCTION_LIMIT,
+    );
     if let Some(skeleton) = skeleton {
         if skeleton.points.len() <= 1 {
             return (Fitness::nothing(), None);
@@ -316,10 +323,8 @@ pub fn evaluate(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (Fitness, O
             .points
             .iter()
             .max_by(|a, b| {
-                        a.y
-                            .partial_cmp(&b.y)
-                            .expect("Points can not be compared")
-                    })
+                a.y.partial_cmp(&b.y).expect("Points can not be compared")
+            })
             .expect("Can't evaluate skeleton with no points")
             .y;
 
@@ -357,10 +362,8 @@ fn evaluate_drop(skeleton: &Skeleton) -> (f32, f32) {
         .points
         .iter()
         .min_by(|a, b| {
-                    a.y
-                        .partial_cmp(&b.y)
-                        .expect("Points can not be compared")
-                })
+            a.y.partial_cmp(&b.y).expect("Points can not be compared")
+        })
         .expect("Can't evaluate skeleton with no points")
         .y;
 
@@ -390,7 +393,9 @@ fn evaluate_balance(skeleton: &Skeleton) -> Balance {
     let spread = floor_points
         .iter()
         .map(|p| na::norm(&Vector2::new(p.x, p.y)))
-        .max_by(|a, b| a.partial_cmp(b).expect("Lengths can not be compared"))
+        .max_by(|a, b| {
+            a.partial_cmp(b).expect("Lengths can not be compared")
+        })
         .expect("Can't evaluate skeleton with no points");
 
     let center = ncu::center(&skeleton.points);
@@ -403,9 +408,8 @@ fn evaluate_balance(skeleton: &Skeleton) -> Balance {
         .map(|p| Vector2::new(p.x, p.y))
         .map(|p| project_onto(&p, &center_direction))
         .max_by(|a, b| {
-                    a.partial_cmp(b)
-                        .expect("Projections can not be compared")
-                })
+            a.partial_cmp(b).expect("Projections can not be compared")
+        })
         .expect("Can't evaluate skeleton with no points");
 
     Balance {
@@ -429,29 +433,29 @@ fn evaluate_closeness(skeleton: &Skeleton) -> f32 {
             let edges = skeleton.edges[i].iter().map(|e| skeleton.points[*e]);
 
             let segments: Vec<_> = edges.map(|e| (e - p).normalize()).collect();
-            let closeness =
-                segments
-                    .iter()
-                    .enumerate()
-                    .map(|(a_i, a_s)| {
-                        let mut closest = -1.0;
-                        for (b_i, b_s) in segments.iter().enumerate() {
-                            if b_i != a_i {
-                                let dot = na::dot(a_s, b_s);
-                                closest =
-                                    partial_max(dot, closest)
-                                    .expect("Closeness can not be compared");
-                            }
+            let closeness = segments
+                .iter()
+                .enumerate()
+                .map(|(a_i, a_s)| {
+                    let mut closest = -1.0;
+                    for (b_i, b_s) in segments.iter().enumerate() {
+                        if b_i != a_i {
+                            let dot = na::dot(a_s, b_s);
+                            closest = partial_max(dot, closest)
+                                .expect("Closeness can not be compared");
                         }
+                    }
 
-                        const THRESHOLD: f32 = 0.9;
-                        if closest < THRESHOLD {
-                            0.0
-                        } else {
-                            (closest - THRESHOLD) * (1.0 / (1.0 - THRESHOLD))
-                        }
-                    })
-                    .max_by(|a, b| a.partial_cmp(b).expect("Closeness can not be compared"));
+                    const THRESHOLD: f32 = 0.9;
+                    if closest < THRESHOLD {
+                        0.0
+                    } else {
+                        (closest - THRESHOLD) * (1.0 / (1.0 - THRESHOLD))
+                    }
+                })
+                .max_by(|a, b| {
+                    a.partial_cmp(b).expect("Closeness can not be compared")
+                });
 
             if let Some(closeness) = closeness {
                 closeness
@@ -459,7 +463,9 @@ fn evaluate_closeness(skeleton: &Skeleton) -> f32 {
                 0.0
             }
         })
-        .max_by(|a, b| a.partial_cmp(b).expect("Closeness can not be compared"))
+        .max_by(|a, b| {
+            a.partial_cmp(b).expect("Closeness can not be compared")
+        })
         .expect("Can't evaluate skeleton with no points")
 }
 
@@ -524,9 +530,11 @@ pub fn add_properties_rendering(node: &mut SceneNode, properties: &Properties) {
     center.add_cube(LINE_WIDTH, LINE_LEN, LINE_WIDTH);
     center.add_cube(LINE_LEN, LINE_WIDTH, LINE_WIDTH);
     center.add_cube(LINE_WIDTH, LINE_WIDTH, LINE_LEN);
-    center.set_local_translation(Translation3::new(properties.center.x,
-                                                   properties.center.y,
-                                                   properties.center.z));
+    center.set_local_translation(Translation3::new(
+        properties.center.x,
+        properties.center.y,
+        properties.center.z,
+    ));
     node.add_child(center);
 
     let mut reach = SceneNode::new_empty();
@@ -557,18 +565,24 @@ pub fn add_properties_rendering(node: &mut SceneNode, properties: &Properties) {
     center_dist.set_color(0.1, 0.1, 0.8);
     center_dist.set_local_translation(Translation3::new(center_distance / 2.0, 0.0, 0.0));
 
-    let mut center_imbalance = balance.add_cube(properties.center_spread / 2.0,
-                                                LINE_WIDTH * 1.1,
-                                                LINE_WIDTH * 1.1);
+    let mut center_imbalance = balance.add_cube(
+        properties.center_spread / 2.0,
+        LINE_WIDTH * 1.1,
+        LINE_WIDTH * 1.1,
+    );
     center_imbalance.set_color(0.1, 0.8, 0.1);
-    center_imbalance.set_local_translation(Translation3::new(properties.center_spread / 4.0,
-                                                             0.0,
-                                                             0.0));
+    center_imbalance.set_local_translation(Translation3::new(
+        properties.center_spread / 4.0,
+        0.0,
+        0.0,
+    ));
 
     let mut center_spread = balance.add_cube(properties.center_spread, LINE_WIDTH, LINE_WIDTH);
-    center_spread.set_local_translation(Translation3::new(properties.center_spread / 2.0,
-                                                          0.0,
-                                                          0.0));
+    center_spread.set_local_translation(Translation3::new(
+        properties.center_spread / 2.0,
+        0.0,
+        0.0,
+    ));
 
     node.add_child(balance);
 }

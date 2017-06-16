@@ -155,11 +155,13 @@ fn parse_glp(root: &Item) -> Result<param::LSystem, ConvertGlpError> {
             ref rules,
         } => {
             Ok(param::LSystem {
-                   axiom: parse_glp_stack(axiom)?,
-                   productions: parse_glp_rules(rules)?,
-               })
+                axiom: parse_glp_stack(axiom)?,
+                productions: parse_glp_rules(rules)?,
+            })
         }
-        _ => Err(ConvertGlpError::from(format!("Expected LSystem, got {:?}", root))),
+        _ => Err(ConvertGlpError::from(
+            format!("Expected LSystem, got {:?}", root),
+        )),
     }
 }
 
@@ -186,7 +188,9 @@ fn parse_glp_stack(stack: &Item) -> Result<param::Word, ConvertGlpError> {
 
             Ok(word)
         }
-        _ => Err(ConvertGlpError::from(format!("Expected Stack, got {:?}", stack))),
+        _ => Err(ConvertGlpError::from(
+            format!("Expected Stack, got {:?}", stack),
+        )),
     }
 }
 
@@ -200,20 +204,26 @@ fn parse_glp_rules(rules: &Item) -> Result<Vec<param::Production>, ConvertGlpErr
 
             Ok(productions)
         }
-        _ => Err(ConvertGlpError::from(format!("Expected LRules, got {:?}", rules))),
+        _ => Err(ConvertGlpError::from(
+            format!("Expected LRules, got {:?}", rules),
+        )),
     }
 }
 
 fn parse_glp_rule(rule: &Item) -> Result<param::Production, ConvertGlpError> {
     match *rule {
         Item::LRule { ref pred, ref succ } => {
-            Ok(param::Production::new(parse_glp_letter(&*pred)?.character as char,
-                                      parse_glp_stack(&*succ)?
-                                          .iter()
-                                          .map(param::ProductionLetter::from)
-                                          .collect()))
+            Ok(param::Production::new(
+                parse_glp_letter(&*pred)?.character as char,
+                parse_glp_stack(&*succ)?
+                    .iter()
+                    .map(param::ProductionLetter::from)
+                    .collect(),
+            ))
         }
-        _ => Err(ConvertGlpError::from(format!("Expected LRule, got {:?}", rule))),
+        _ => Err(ConvertGlpError::from(
+            format!("Expected LRule, got {:?}", rule),
+        )),
     }
 }
 
@@ -224,15 +234,17 @@ fn parse_glp_letter(letter: &Item) -> Result<param::Letter, ConvertGlpError> {
             ref params,
         } => {
             Ok(param::Letter {
-                   character: *letter,
-                   params: parse_glp_params(params)?
-                       .iter()
-                       .filter_map(|p| *p)
-                       .map(Param::F)
-                       .collect(),
-               })
+                character: *letter,
+                params: parse_glp_params(params)?
+                    .iter()
+                    .filter_map(|p| *p)
+                    .map(Param::F)
+                    .collect(),
+            })
         }
-        _ => Err(ConvertGlpError::from(format!("Expected Letter, got {:?}", letter))),
+        _ => Err(ConvertGlpError::from(
+            format!("Expected Letter, got {:?}", letter),
+        )),
     }
 }
 
@@ -247,7 +259,9 @@ fn parse_glp_params(params: &[Item]) -> Result<Vec<Option<f32>>, ConvertGlpError
 fn parse_glp_param(param: &Item) -> Result<Option<f32>, ConvertGlpError> {
     match *param {
         Item::Parameter(p) => Ok(p),
-        _ => Err(ConvertGlpError::from(format!("Expected Parameter, got {:?}", param))),
+        _ => Err(ConvertGlpError::from(
+            format!("Expected Parameter, got {:?}", param),
+        )),
     }
 }
 

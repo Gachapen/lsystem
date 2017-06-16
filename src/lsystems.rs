@@ -102,16 +102,18 @@ pub fn make_hogeweg_b() -> (il::LSystem, lsys::Settings) {
 
     sys.axiom = "F1F1F1".to_string();
     sys.ignore_from_context("+-F");
-    sys.productions = vec![il::Production::with_context('0', '0', '0', "1"),
-                           il::Production::with_context('0', '0', '1', "1[-F1F1]"),
-                           il::Production::with_context('0', '1', '0', "1"),
-                           il::Production::with_context('0', '1', '1', "1"),
-                           il::Production::with_context('1', '0', '0', "0"),
-                           il::Production::with_context('1', '0', '1', "1F1"),
-                           il::Production::with_context('1', '1', '0', "1"),
-                           il::Production::with_context('1', '1', '1', "0"),
-                           il::Production::without_context('+', "-"),
-                           il::Production::without_context('-', "+")];
+    sys.productions = vec![
+        il::Production::with_context('0', '0', '0', "1"),
+        il::Production::with_context('0', '0', '1', "1[-F1F1]"),
+        il::Production::with_context('0', '1', '0', "1"),
+        il::Production::with_context('0', '1', '1', "1"),
+        il::Production::with_context('1', '0', '0', "0"),
+        il::Production::with_context('1', '0', '1', "1F1"),
+        il::Production::with_context('1', '1', '0', "1"),
+        il::Production::with_context('1', '1', '1', "0"),
+        il::Production::without_context('+', "-"),
+        il::Production::without_context('-', "+"),
+    ];
 
     let settings = lsys::Settings {
         angle: f32::to_radians(22.5),
@@ -129,16 +131,18 @@ pub fn make_hogeweg_a() -> (il::LSystem, lsys::Settings) {
 
     sys.axiom = "F1F1F1".to_string();
     sys.ignore_from_context("+-F");
-    sys.productions = vec![il::Production::with_context('0', '0', '0', "0"),
-                           il::Production::with_context('0', '0', '1', "1[+F1F1]"),
-                           il::Production::with_context('0', '1', '0', "1"),
-                           il::Production::with_context('0', '1', '1', "1"),
-                           il::Production::with_context('1', '0', '0', "0"),
-                           il::Production::with_context('1', '0', '1', "1F1"),
-                           il::Production::with_context('1', '1', '0', "0"),
-                           il::Production::with_context('1', '1', '1', "0"),
-                           il::Production::without_context('+', "-"),
-                           il::Production::without_context('-', "+")];
+    sys.productions = vec![
+        il::Production::with_context('0', '0', '0', "0"),
+        il::Production::with_context('0', '0', '1', "1[+F1F1]"),
+        il::Production::with_context('0', '1', '0', "1"),
+        il::Production::with_context('0', '1', '1', "1"),
+        il::Production::with_context('1', '0', '0', "0"),
+        il::Production::with_context('1', '0', '1', "1F1"),
+        il::Production::with_context('1', '1', '0', "0"),
+        il::Production::with_context('1', '1', '1', "0"),
+        il::Production::without_context('+', "-"),
+        il::Production::without_context('-', "+"),
+    ];
 
     let settings = lsys::Settings {
         angle: f32::to_radians(22.5),
@@ -156,16 +160,18 @@ pub fn make_hogeweg_c() -> (il::LSystem, lsys::Settings) {
 
     sys.axiom = "F1F1F1".to_string();
     sys.ignore_from_context("+-F");
-    sys.productions = vec![il::Production::with_context('0', '0', '0', "0"),
-                           il::Production::with_context('0', '0', '1', "1"),
-                           il::Production::with_context('0', '1', '0', "0"),
-                           il::Production::with_context('0', '1', '1', "1[+F1F1]"),
-                           il::Production::with_context('1', '0', '0', "0"),
-                           il::Production::with_context('1', '0', '1', "1F1"),
-                           il::Production::with_context('1', '1', '0', "0"),
-                           il::Production::with_context('1', '1', '1', "0"),
-                           il::Production::without_context('+', "-"),
-                           il::Production::without_context('-', "+")];
+    sys.productions = vec![
+        il::Production::with_context('0', '0', '0', "0"),
+        il::Production::with_context('0', '0', '1', "1"),
+        il::Production::with_context('0', '1', '0', "0"),
+        il::Production::with_context('0', '1', '1', "1[+F1F1]"),
+        il::Production::with_context('1', '0', '0', "0"),
+        il::Production::with_context('1', '0', '1', "1F1"),
+        il::Production::with_context('1', '1', '0', "0"),
+        il::Production::with_context('1', '1', '1', "0"),
+        il::Production::without_context('+', "-"),
+        il::Production::without_context('-', "+"),
+    ];
 
     let settings = lsys::Settings {
         angle: f32::to_radians(22.75),
@@ -183,16 +189,18 @@ pub fn make_hogeweg_d() -> (il::LSystem, lsys::Settings) {
 
     sys.axiom = "F0F1F1".to_string();
     sys.ignore_from_context("+-F");
-    sys.productions = vec![il::Production::with_context('0', '0', '0', "1"),
-                           il::Production::with_context('0', '0', '1', "0"),
-                           il::Production::with_context('0', '1', '0', "0"),
-                           il::Production::with_context('0', '1', '1', "1F1"),
-                           il::Production::with_context('1', '0', '0', "1"),
-                           il::Production::with_context('1', '0', '1', "1[+F1F1]"),
-                           il::Production::with_context('1', '1', '0', "1"),
-                           il::Production::with_context('1', '1', '1', "0"),
-                           il::Production::without_context('+', "-"),
-                           il::Production::without_context('-', "+")];
+    sys.productions = vec![
+        il::Production::with_context('0', '0', '0', "1"),
+        il::Production::with_context('0', '0', '1', "0"),
+        il::Production::with_context('0', '1', '0', "0"),
+        il::Production::with_context('0', '1', '1', "1F1"),
+        il::Production::with_context('1', '0', '0', "1"),
+        il::Production::with_context('1', '0', '1', "1[+F1F1]"),
+        il::Production::with_context('1', '1', '0', "1"),
+        il::Production::with_context('1', '1', '1', "0"),
+        il::Production::without_context('+', "-"),
+        il::Production::without_context('-', "+"),
+    ];
 
     let settings = lsys::Settings {
         angle: f32::to_radians(22.75),
@@ -210,16 +218,18 @@ pub fn make_hogeweg_e() -> (il::LSystem, lsys::Settings) {
 
     sys.axiom = "F1F1F1".to_string();
     sys.ignore_from_context("+-F");
-    sys.productions = vec![il::Production::with_context('0', '0', '0', "0"),
-                           il::Production::with_context('0', '0', '1', "1[-F1F1]"),
-                           il::Production::with_context('0', '1', '0', "1"),
-                           il::Production::with_context('0', '1', '1', "1"),
-                           il::Production::with_context('1', '0', '0', "0"),
-                           il::Production::with_context('1', '0', '1', "1F1"),
-                           il::Production::with_context('1', '1', '0', "1"),
-                           il::Production::with_context('1', '1', '1', "0"),
-                           il::Production::without_context('+', "-"),
-                           il::Production::without_context('-', "+")];
+    sys.productions = vec![
+        il::Production::with_context('0', '0', '0', "0"),
+        il::Production::with_context('0', '0', '1', "1[-F1F1]"),
+        il::Production::with_context('0', '1', '0', "1"),
+        il::Production::with_context('0', '1', '1', "1"),
+        il::Production::with_context('1', '0', '0', "0"),
+        il::Production::with_context('1', '0', '1', "1F1"),
+        il::Production::with_context('1', '1', '0', "1"),
+        il::Production::with_context('1', '1', '1', "0"),
+        il::Production::without_context('+', "-"),
+        il::Production::without_context('-', "+"),
+    ];
 
     let settings = lsys::Settings {
         angle: f32::to_radians(22.5),
@@ -246,8 +256,10 @@ pub fn make_bush() -> (ol::LSystem, lsys::Settings) {
         width: 0.1,
         shrink_rate: 1.5,
         iterations: 7,
-        colors: vec![(193.0 / 255.0, 154.0 / 255.0, 107.0 / 255.0),
-                     (0.3, 1.0, 0.2)],
+        colors: vec![
+            (193.0 / 255.0, 154.0 / 255.0, 107.0 / 255.0),
+            (0.3, 1.0, 0.2),
+        ],
         ..lsys::Settings::new()
     };
 
@@ -273,10 +285,12 @@ pub fn make_flower() -> (ol::LSystem, lsys::Settings) {
         angle: f32::to_radians(18.0),
         width: 0.015,
         iterations: 5,
-        colors: vec![(193.0 / 255.0, 154.0 / 255.0, 107.0 / 255.0),
-                     (0.3, 1.0, 0.2),
-                     (1.5, 1.5, 1.4),
-                     (1.5, 1.5, 0.5)],
+        colors: vec![
+            (193.0 / 255.0, 154.0 / 255.0, 107.0 / 255.0),
+            (0.3, 1.0, 0.2),
+            (1.5, 1.5, 1.4),
+            (1.5, 1.5, 0.5),
+        ],
         ..lsys::Settings::new()
     };
 
@@ -290,28 +304,29 @@ pub fn make_antenna() -> (param::LSystem, lsys::Settings) {
     sys.axiom = param::Word::from_str("A");
 
     let r = 1.456;
-    sys.productions = vec![
-        param::Production::new(
-            'A',
-            vec![
-                param::ProductionLetter::with_params('F', params_f![1.0]),
-                param::ProductionLetter::new('['),
-                param::ProductionLetter::new('+'),
-                param::ProductionLetter::new('A'),
-                param::ProductionLetter::new(']'),
-                param::ProductionLetter::new('['),
-                param::ProductionLetter::new('-'),
-                param::ProductionLetter::new('A'),
-                param::ProductionLetter::new(']'),
-            ]
-        ),
-        param::Production::new(
-            'F',
-            vec![
-                param::ProductionLetter::with_transform('F', move |p,_| params_f![p[0].f() * r]),
-            ]
-        ),
-    ];
+    sys.productions =
+        vec![
+            param::Production::new(
+                'A',
+                vec![
+                    param::ProductionLetter::with_params('F', params_f![1.0]),
+                    param::ProductionLetter::new('['),
+                    param::ProductionLetter::new('+'),
+                    param::ProductionLetter::new('A'),
+                    param::ProductionLetter::new(']'),
+                    param::ProductionLetter::new('['),
+                    param::ProductionLetter::new('-'),
+                    param::ProductionLetter::new('A'),
+                    param::ProductionLetter::new(']'),
+                ]
+            ),
+            param::Production::new(
+                'F',
+                vec![
+                    param::ProductionLetter::with_transform('F', move |p, _| params_f![p[0].f() * r]),
+                ]
+            ),
+        ];
 
     let settings = lsys::Settings {
         angle: f32::to_radians(85.0),
@@ -336,98 +351,110 @@ pub fn make_anim_tree() -> (param::LSystem, lsys::Settings) {
     let vr = 1.732 / 10.0;
     let ls = 0.1;
 
-    sys.productions = vec![
-        param::Production::with_condition(
-            'A',
-            |p| p[0].f() < 1.0,
-            vec![
-                param::ProductionLetter::with_transform('A', |p,dt| params_f![p[0].f() + dt]),
-            ]
-        ),
-        param::Production::with_condition(
-            'A',
-            |p| p[0].f() >= 1.0,
-            vec![
-                param::ProductionLetter::new('['),
-                param::ProductionLetter::new('L'),
-                param::ProductionLetter::with_params('>', params_f![f32::to_radians(90.0)]),
-                param::ProductionLetter::new('L'),
-                param::ProductionLetter::with_params('>', params_f![f32::to_radians(90.0)]),
-                param::ProductionLetter::new('L'),
-                param::ProductionLetter::with_params('>', params_f![f32::to_radians(90.0)]),
-                param::ProductionLetter::new('L'),
-                param::ProductionLetter::new(']'),
-                param::ProductionLetter::with_transform('#', move |_,_| params_f![vr]),
-                param::ProductionLetter::with_params('F', params_f![0.0]),
-                param::ProductionLetter::new('['),
-                param::ProductionLetter::with_transform('&', move |_,_| params_f![a]),
-                param::ProductionLetter::with_params('F', params_f![0.0]),
-                param::ProductionLetter::with_params('A', params_f![0.0]),
-                param::ProductionLetter::new(']'),
-                param::ProductionLetter::with_transform('>', move |_,_| params_f![d1]),
-                param::ProductionLetter::new('['),
-                param::ProductionLetter::with_transform('&', move |_,_| params_f![a]),
-                param::ProductionLetter::with_params('F', params_f![0.0]),
-                param::ProductionLetter::with_params('A', params_f![0.0]),
-                param::ProductionLetter::new(']'),
-                param::ProductionLetter::with_transform('>', move |_,_| params_f![d2]),
-                param::ProductionLetter::new('['),
-                param::ProductionLetter::with_transform('&', move |_,_| params_f![a]),
-                param::ProductionLetter::with_params('F', params_f![0.0]),
-                param::ProductionLetter::with_params('A', params_f![0.0]),
-                param::ProductionLetter::new(']'),
-            ]
-        ),
-        param::Production::new(
-            'L',
-            vec![
-                param::ProductionLetter::new('['),
-                param::ProductionLetter::with_params('&', params_f![f32::to_radians(45.0)]),
-                param::ProductionLetter::new('\''),
-                param::ProductionLetter::new('{'),
-                param::ProductionLetter::with_params('+', params_f![f32::to_radians(60.0)]),
-                param::ProductionLetter::with_params('f', params_f![0.01]),
-                param::ProductionLetter::with_params('-', params_f![f32::to_radians(60.0)]),
-                param::ProductionLetter::with_params('f', params_f![0.05]),
-                param::ProductionLetter::with_params('-', params_f![f32::to_radians(60.0)]),
-                param::ProductionLetter::with_params('f', params_f![0.01]),
-                param::ProductionLetter::with_params('+', params_f![f32::to_radians(60.0)]),
-                param::ProductionLetter::new('|'),
-                param::ProductionLetter::with_params('+', params_f![f32::to_radians(60.0)]),
-                param::ProductionLetter::with_params('f', params_f![0.01]),
-                param::ProductionLetter::with_params('-', params_f![f32::to_radians(60.0)]),
-                param::ProductionLetter::with_params('f', params_f![0.05]),
-                param::ProductionLetter::with_params('-', params_f![f32::to_radians(60.0)]),
-                param::ProductionLetter::with_params('f', params_f![0.01]),
-                param::ProductionLetter::new('}'),
-                param::ProductionLetter::new(']'),
-            ]
-        ),
-        param::Production::new(
-            'f',
-            vec![
-                param::ProductionLetter::with_transform('f', move |p,dt| params_f![p[0].f() + (dt * ls) / p[0].f()]),
-            ]
-        ),
-        param::Production::new(
-            'F',
-            vec![
-                param::ProductionLetter::with_transform('F', move |p,dt| params_f![p[0].f() + dt * lr]),
-            ]
-        ),
-        param::Production::new(
-            '#',
-            vec![
-                param::ProductionLetter::with_transform('#', move |p,dt| params_f![p[0].f() + dt * vr]),
-            ]
-        ),
-    ];
+    sys.productions =
+        vec![
+            param::Production::with_condition(
+                'A',
+                |p| p[0].f() < 1.0,
+                vec![
+                    param::ProductionLetter::with_transform('A', |p, dt| params_f![p[0].f() + dt]),
+                ]
+            ),
+            param::Production::with_condition(
+                'A',
+                |p| p[0].f() >= 1.0,
+                vec![
+                    param::ProductionLetter::new('['),
+                    param::ProductionLetter::new('L'),
+                    param::ProductionLetter::with_params('>', params_f![f32::to_radians(90.0)]),
+                    param::ProductionLetter::new('L'),
+                    param::ProductionLetter::with_params('>', params_f![f32::to_radians(90.0)]),
+                    param::ProductionLetter::new('L'),
+                    param::ProductionLetter::with_params('>', params_f![f32::to_radians(90.0)]),
+                    param::ProductionLetter::new('L'),
+                    param::ProductionLetter::new(']'),
+                    param::ProductionLetter::with_transform('#', move |_, _| params_f![vr]),
+                    param::ProductionLetter::with_params('F', params_f![0.0]),
+                    param::ProductionLetter::new('['),
+                    param::ProductionLetter::with_transform('&', move |_, _| params_f![a]),
+                    param::ProductionLetter::with_params('F', params_f![0.0]),
+                    param::ProductionLetter::with_params('A', params_f![0.0]),
+                    param::ProductionLetter::new(']'),
+                    param::ProductionLetter::with_transform('>', move |_, _| params_f![d1]),
+                    param::ProductionLetter::new('['),
+                    param::ProductionLetter::with_transform('&', move |_, _| params_f![a]),
+                    param::ProductionLetter::with_params('F', params_f![0.0]),
+                    param::ProductionLetter::with_params('A', params_f![0.0]),
+                    param::ProductionLetter::new(']'),
+                    param::ProductionLetter::with_transform('>', move |_, _| params_f![d2]),
+                    param::ProductionLetter::new('['),
+                    param::ProductionLetter::with_transform('&', move |_, _| params_f![a]),
+                    param::ProductionLetter::with_params('F', params_f![0.0]),
+                    param::ProductionLetter::with_params('A', params_f![0.0]),
+                    param::ProductionLetter::new(']'),
+                ]
+            ),
+            param::Production::new(
+                'L',
+                vec![
+                    param::ProductionLetter::new('['),
+                    param::ProductionLetter::with_params('&', params_f![f32::to_radians(45.0)]),
+                    param::ProductionLetter::new('\''),
+                    param::ProductionLetter::new('{'),
+                    param::ProductionLetter::with_params('+', params_f![f32::to_radians(60.0)]),
+                    param::ProductionLetter::with_params('f', params_f![0.01]),
+                    param::ProductionLetter::with_params('-', params_f![f32::to_radians(60.0)]),
+                    param::ProductionLetter::with_params('f', params_f![0.05]),
+                    param::ProductionLetter::with_params('-', params_f![f32::to_radians(60.0)]),
+                    param::ProductionLetter::with_params('f', params_f![0.01]),
+                    param::ProductionLetter::with_params('+', params_f![f32::to_radians(60.0)]),
+                    param::ProductionLetter::new('|'),
+                    param::ProductionLetter::with_params('+', params_f![f32::to_radians(60.0)]),
+                    param::ProductionLetter::with_params('f', params_f![0.01]),
+                    param::ProductionLetter::with_params('-', params_f![f32::to_radians(60.0)]),
+                    param::ProductionLetter::with_params('f', params_f![0.05]),
+                    param::ProductionLetter::with_params('-', params_f![f32::to_radians(60.0)]),
+                    param::ProductionLetter::with_params('f', params_f![0.01]),
+                    param::ProductionLetter::new('}'),
+                    param::ProductionLetter::new(']'),
+                ]
+            ),
+            param::Production::new(
+                'f',
+                vec![
+                    param::ProductionLetter::with_transform(
+                        'f',
+                        move |p, dt| params_f![p[0].f() + (dt * ls) / p[0].f()]
+                    ),
+                ]
+            ),
+            param::Production::new(
+                'F',
+                vec![
+                    param::ProductionLetter::with_transform(
+                        'F',
+                        move |p, dt| params_f![p[0].f() + dt * lr]
+                    ),
+                ]
+            ),
+            param::Production::new(
+                '#',
+                vec![
+                    param::ProductionLetter::with_transform(
+                        '#',
+                        move |p, dt| params_f![p[0].f() + dt * vr]
+                    ),
+                ]
+            ),
+        ];
 
     let mut settings = lsys::Settings {
         width: 0.05,
         iterations: 7,
-        colors: vec![(193.0 / 255.0, 154.0 / 255.0, 107.0 / 255.0),
-                     (0.3, 1.0, 0.2)],
+        colors: vec![
+            (193.0 / 255.0, 154.0 / 255.0, 107.0 / 255.0),
+            (0.3, 1.0, 0.2),
+        ],
         ..lsys::Settings::new()
     };
 
@@ -566,10 +593,12 @@ pub fn make_open_raceme() -> (ol::LSystem, lsys::Settings) {
         step: 0.1,
         iterations: 10,
         width: 0.03,
-        colors: vec![(193.0 / 255.0, 154.0 / 255.0, 107.0 / 255.0),
-                     (0.3, 1.0, 0.2),
-                     (1.5, 1.5, 1.4),
-                     (1.5, 1.5, 0.5)],
+        colors: vec![
+            (193.0 / 255.0, 154.0 / 255.0, 107.0 / 255.0),
+            (0.3, 1.0, 0.2),
+            (1.5, 1.5, 1.4),
+            (1.5, 1.5, 0.5),
+        ],
         ..lsys::Settings::new()
     };
 

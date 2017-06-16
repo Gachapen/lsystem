@@ -207,7 +207,8 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .short("e")
                 .takes_value(true)
                 .default_value("0.002")
-                .help("The required maximum standard error threshold for a distribution score to be accepted")
+                .help("The required maximum standard error threshold for a distribution score \
+                       to be accepted")
             )
             .arg(Arg::with_name("min-samples")
                 .long("min-samples")
@@ -220,7 +221,8 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .short("s")
                 .takes_value(true)
                 .default_value("1")
-                .help("A factor multiplied with the fitness when calculating the acceptance probability")
+                .help("A factor multiplied with the fitness when calculating the acceptance \
+                       probability")
             )
         )
         .subcommand(SubCommand::with_name("dist-csv-to-bin")
@@ -307,7 +309,8 @@ fn generate_genome<R: Rng>(rng: &mut R, len: usize) -> Vec<GenePrimitive> {
 }
 
 fn generate_system<G>(grammar: &abnf::Ruleset, genotype: &mut G) -> ol::LSystem
-    where G: SelectionStrategy
+where
+    G: SelectionStrategy,
 {
     let mut system = ol::LSystem {
         axiom: expand_grammar(grammar, "axiom", genotype),
@@ -320,10 +323,12 @@ fn generate_system<G>(grammar: &abnf::Ruleset, genotype: &mut G) -> ol::LSystem
 }
 
 fn random_seed() -> [u32; 4] {
-    [rand::thread_rng().gen::<u32>(),
-     rand::thread_rng().gen::<u32>(),
-     rand::thread_rng().gen::<u32>(),
-     rand::thread_rng().gen::<u32>()]
+    [
+        rand::thread_rng().gen::<u32>(),
+        rand::thread_rng().gen::<u32>(),
+        rand::thread_rng().gen::<u32>(),
+        rand::thread_rng().gen::<u32>(),
+    ]
 }
 
 const GENOME_LENGTH: usize = 100;
@@ -332,8 +337,9 @@ fn run_with_distribution(matches: &ArgMatches) {
     let (mut window, _) = setup_window();
 
     let grammar_path = matches.value_of("grammar").unwrap();
-    let grammar =
-        Arc::new(abnf::parse_file(grammar_path).expect("Could not parse ABNF file"));
+    let grammar = Arc::new(
+        abnf::parse_file(grammar_path).expect("Could not parse ABNF file"),
+    );
 
     let distribution = match matches.value_of("distribution") {
         Some(filename) => {
@@ -377,11 +383,11 @@ fn run_with_distribution(matches: &ArgMatches) {
     let num_samples = usize::from_str_radix(matches.value_of("num-samples").unwrap(), 10).unwrap();
 
     let settings = Arc::new(lsys::Settings {
-                                width: 0.05,
-                                angle: PI / 8.0,
-                                iterations: 5,
-                                ..lsys::Settings::new()
-                            });
+        width: 0.05,
+        angle: PI / 8.0,
+        iterations: 5,
+        ..lsys::Settings::new()
+    });
 
     let mut system = ol::LSystem::new();
     let mut model = SceneNode::new_empty();
@@ -418,16 +424,18 @@ fn run_with_distribution(matches: &ArgMatches) {
                         score: f32,
                     }
 
-                    fn generate_sample(grammar: &abnf::Ruleset,
-                                       distribution: &Distribution,
-                                       settings: &lsys::Settings)
-                                       -> Sample {
+                    fn generate_sample(
+                        grammar: &abnf::Ruleset,
+                        distribution: &Distribution,
+                        settings: &lsys::Settings,
+                    ) -> Sample {
                         let seed = random_seed();
-                        let genes = generate_genome(&mut XorShiftRng::from_seed(seed),
-                                                    GENOME_LENGTH);
-                        let system = generate_system(grammar,
-                                                     &mut WeightedGenotype::new(genes,
-                                                                                distribution));
+                        let genes =
+                            generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
+                        let system = generate_system(
+                            grammar,
+                            &mut WeightedGenotype::new(genes, distribution),
+                        );
                         let (fit, _) = fitness::evaluate(&system, settings);
                         Sample {
                             seed: seed,
@@ -455,12 +463,10 @@ fn run_with_distribution(matches: &ArgMatches) {
                                 let settings = settings.clone();
 
                                 tasks.push(pool.spawn_fn(move || {
-                                                             let sample =
-                                                                 generate_sample(&grammar,
-                                                                                 &distribution,
-                                                                                 &settings);
-                                                             future::ok::<Sample, ()>(sample)
-                                                         }));
+                                    let sample =
+                                        generate_sample(&grammar, &distribution, &settings);
+                                    future::ok::<Sample, ()>(sample)
+                                }));
                             }
 
                             future::join_all(tasks).wait().unwrap()
@@ -469,9 +475,11 @@ fn run_with_distribution(matches: &ArgMatches) {
 
                     let end_time = Instant::now();
                     let duration = end_time - start_time;
-                    println!("Duration: {}.{}",
-                             duration.as_secs(),
-                             duration.subsec_nanos());
+                    println!(
+                        "Duration: {}.{}",
+                        duration.as_secs(),
+                        duration.subsec_nanos()
+                    );
 
                     samples.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
 
@@ -482,10 +490,10 @@ fn run_with_distribution(matches: &ArgMatches) {
 
                     window.remove(&mut model);
 
-                    let genes = generate_genome(&mut XorShiftRng::from_seed(sample.seed),
-                                                GENOME_LENGTH);
-                    system = generate_system(&grammar,
-                                             &mut WeightedGenotype::new(genes, &distribution));
+                    let genes =
+                        generate_genome(&mut XorShiftRng::from_seed(sample.seed), GENOME_LENGTH);
+                    system =
+                        generate_system(&grammar, &mut WeightedGenotype::new(genes, &distribution));
                     let (fit, properties) = fitness::evaluate(&system, &settings);
 
                     if let Some(properties) = properties {
@@ -591,9 +599,10 @@ fn get_sample_setup() -> (abnf::Ruleset, Distribution) {
 }
 
 fn run_random_sampling(matches: &ArgMatches) {
-    fn generate_sample(grammar: &abnf::Ruleset,
-                       distribution: &Distribution)
-                       -> ([u32; 4], ol::LSystem) {
+    fn generate_sample(
+        grammar: &abnf::Ruleset,
+        distribution: &Distribution,
+    ) -> ([u32; 4], ol::LSystem) {
         let seed = random_seed();
         let genes = generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
         let system = generate_system(grammar, &mut WeightedGenotype::new(genes, distribution));
@@ -636,11 +645,11 @@ fn run_random_sampling(matches: &ArgMatches) {
     };
 
     let settings = Arc::new(lsys::Settings {
-                                width: 0.05,
-                                angle: PI / 8.0,
-                                iterations: 5,
-                                ..lsys::Settings::new()
-                            });
+        width: 0.05,
+        angle: PI / 8.0,
+        iterations: 5,
+        ..lsys::Settings::new()
+    });
 
     let batch_size = usize::from_str_radix(matches.value_of("batch-size").unwrap(), 10).unwrap();
     println!("Using batch size {}.", batch_size);
@@ -714,8 +723,10 @@ fn run_random_sampling(matches: &ArgMatches) {
 
                 dump_samples(&accepted_samples, batch_num_samples, batch);
                 num_samples.fetch_add(batch_num_samples, Ordering::Relaxed);
-                num_good_samples.fetch_add(batch * batch_size + accepted_samples.len(),
-                                           Ordering::Relaxed);
+                num_good_samples.fetch_add(
+                    batch * batch_size + accepted_samples.len(),
+                    Ordering::Relaxed,
+                );
             });
         }
 
@@ -739,19 +750,23 @@ fn run_random_sampling(matches: &ArgMatches) {
     let seconds = duration.as_secs();
     let hours = seconds / (60 * 60);
     let minutes = seconds % (60 * 60) / 60;
-    println!("Duration: {}:{}:{}.{}",
-             hours,
-             minutes,
-             seconds,
-             duration.subsec_nanos());
+    println!(
+        "Duration: {}:{}:{}.{}",
+        hours,
+        minutes,
+        seconds,
+        duration.subsec_nanos()
+    );
 
     let num_samples = Arc::try_unwrap(num_samples).unwrap().into_inner();
     let num_good_samples = Arc::try_unwrap(num_good_samples).unwrap().into_inner();
-    println!("Good samples: {}/{} ({:.*}%)",
-             num_good_samples,
-             num_samples,
-             1,
-             num_good_samples as f32 / num_samples as f32 * 100.0);
+    println!(
+        "Good samples: {}/{} ({:.*}%)",
+        num_good_samples,
+        num_samples,
+        1,
+        num_good_samples as f32 / num_samples as f32 * 100.0
+    );
 }
 
 fn run_sampling_distribution(matches: &ArgMatches) {
@@ -761,24 +776,22 @@ fn run_sampling_distribution(matches: &ArgMatches) {
 
     println!("Reading samples from {}.", samples_path.to_str().unwrap());
 
-    let sample_paths = read_dir_all(samples_path)
-        .unwrap()
-        .filter_map(|e| {
-            let path = e.unwrap().path();
-            if path.is_dir() {
+    let sample_paths = read_dir_all(samples_path).unwrap().filter_map(|e| {
+        let path = e.unwrap().path();
+        if path.is_dir() {
+            return None;
+        }
+
+        if let Some(extension) = path.extension() {
+            if extension != "sample" {
                 return None;
             }
+        } else {
+            return None;
+        }
 
-            if let Some(extension) = path.extension() {
-                if extension != "sample" {
-                    return None;
-                }
-            } else {
-                return None;
-            }
-
-            Some(path)
-        });
+        Some(path)
+    });
 
     let mut sample_count = 0;
     let mut accepted_samples = Vec::new();
@@ -795,9 +808,11 @@ fn run_sampling_distribution(matches: &ArgMatches) {
         sample_count += batch.sample_count;
     }
 
-    println!("Read {} accepted samples from a total of {} samples.",
-             accepted_samples.len(),
-             sample_count);
+    println!(
+        "Read {} accepted samples from a total of {} samples.",
+        accepted_samples.len(),
+        sample_count
+    );
 
     let (grammar, distribution) = get_sample_setup();
     let grammar = Arc::new(grammar);
@@ -831,9 +846,10 @@ fn run_sampling_distribution(matches: &ArgMatches) {
     }
 
     let stats_collection = future::join_all(tasks).wait().unwrap();
-    let stats = stats_collection
-        .iter()
-        .fold(SelectionStats::new(), |sum, stats| sum + stats);
+    let stats = stats_collection.iter().fold(
+        SelectionStats::new(),
+        |sum, stats| sum + stats,
+    );
 
     let mut csv_file = File::create(csv_path).unwrap();
     csv_file
@@ -844,13 +860,17 @@ fn run_sampling_distribution(matches: &ArgMatches) {
     distribution.set_default_weights("string", 1, &[1.0, 0.0]);
 
     // Remove the default weights from the depth weights.
-    distribution.depths[DEPTHS - 1].get_mut("string").unwrap().pop();
+    distribution.depths[DEPTHS - 1]
+        .get_mut("string")
+        .unwrap()
+        .pop();
 
     let dist_file = File::create(bin_path).unwrap();
-    bincode::serialize_into(&mut BufWriter::new(dist_file),
-                            &distribution,
-                            bincode::Infinite)
-            .unwrap();
+    bincode::serialize_into(
+        &mut BufWriter::new(dist_file),
+        &distribution,
+        bincode::Infinite,
+    ).unwrap();
 }
 
 #[allow(dead_code)]
@@ -860,9 +880,11 @@ fn adjust_distribution(distribution: &mut Distribution, stats: &SelectionStats, 
             for (choice, options) in choices.iter().enumerate() {
                 let weights = distribution.get_weights_mut(depth, rule, choice as u32);
                 if let Some(weights) = weights {
-                    assert_eq!(weights.len(),
-                               options.len(),
-                               "Stats has different number of weights than distribution");
+                    assert_eq!(
+                        weights.len(),
+                        options.len(),
+                        "Stats has different number of weights than distribution"
+                    );
                     let total_count = options.iter().sum::<usize>() as f32;
                     for (option, count) in options.iter().enumerate() {
                         if *count > 0 {
@@ -882,7 +904,8 @@ fn adjust_distribution(distribution: &mut Distribution, stats: &SelectionStats, 
 }
 
 fn mutate_distribution<R>(distribution: &mut Distribution, factor: f32, rng: &mut R)
-    where R: Rng
+where
+    R: Rng,
 {
     for rules in &mut distribution.depths {
         for choices in rules.values_mut() {
@@ -899,7 +922,8 @@ fn mutate_distribution<R>(distribution: &mut Distribution, factor: f32, rng: &mu
                     .sum();
 
                 fn modify_remaining<F>(weights: &mut [f32], changed_index: usize, mut f: F)
-                    where F: FnMut(&mut f32)
+                where
+                    F: FnMut(&mut f32),
                 {
                     // Can't chain mut iterators, so need to have two for loops.
                     for w in weights.iter_mut().take(changed_index) {
@@ -958,22 +982,34 @@ impl SelectionStats {
     }
 
     fn add_selection(&mut self, selection: usize, depth: usize, rule: &str, choice: u32) {
-        assert!(depth < self.data.len(),
-                format!("Depth {} is not available. Use make_room to make it.",
-                        depth));
+        assert!(
+            depth < self.data.len(),
+            format!(
+                "Depth {} is not available. Use make_room to make it.",
+                depth
+            )
+        );
         let rules = &mut self.data[depth];
 
         let choices = &mut rules.entry(rule.to_string()).or_insert_with(Vec::new);
 
         let choice = choice as usize;
-        assert!(choice < choices.len(),
-                format!("Choice {} is not available. Use make_room to make it.",
-                        choice));
+        assert!(
+            choice < choices.len(),
+            format!(
+                "Choice {} is not available. Use make_room to make it.",
+                choice
+            )
+        );
         let alternatives = &mut choices[choice];
 
-        assert!(selection < alternatives.len(),
-                format!("Alternative {} is not available. Use make_room to make it.",
-                        selection));
+        assert!(
+            selection < alternatives.len(),
+            format!(
+                "Alternative {} is not available. Use make_room to make it.",
+                selection
+            )
+        );
         alternatives[selection] += 1;
     }
 
@@ -1070,7 +1106,8 @@ impl<'a> Add<&'a SelectionStats> for SelectionStats {
 
 impl iter::Sum for SelectionStats {
     fn sum<I>(mut iter: I) -> Self
-        where I: Iterator<Item=Self>
+    where
+        I: Iterator<Item = Self>,
     {
         let mut sum = match iter.next() {
             Some(stats) => stats,
@@ -1087,7 +1124,8 @@ impl iter::Sum for SelectionStats {
 
 impl<'a> iter::Sum<&'a Self> for SelectionStats {
     fn sum<I>(mut iter: I) -> Self
-        where I: Iterator<Item=&'a Self>
+    where
+        I: Iterator<Item = &'a Self>,
     {
         let mut sum = match iter.next() {
             Some(stats) => stats.clone(),
@@ -1122,13 +1160,21 @@ impl<'a, G: Gene> WeightedGenotypeStats<'a, G> {
 
 impl<'a, G: Gene> SelectionStrategy for WeightedGenotypeStats<'a, G> {
     fn select_alternative(&mut self, num: usize, rulechain: &[&str], choice: u32) -> usize {
-        let selection = self.weighted_genotype
-            .select_alternative(num, rulechain, choice);
+        let selection = self.weighted_genotype.select_alternative(
+            num,
+            rulechain,
+            choice,
+        );
 
         let depth = WeightedGenotype::<'a, G>::find_depth(rulechain);
         let rule = rulechain.last().unwrap();
 
-        if self.weighted_genotype.distribution.has_weights(depth, rule, choice) {
+        if self.weighted_genotype.distribution.has_weights(
+            depth,
+            rule,
+            choice,
+        )
+        {
             self.stats.make_room(depth, rule, choice, num);
             self.stats.add_selection(selection, depth, rule, choice);
         }
@@ -1137,16 +1183,30 @@ impl<'a, G: Gene> SelectionStrategy for WeightedGenotypeStats<'a, G> {
     }
 
     fn select_repetition(&mut self, min: u32, max: u32, rulechain: &[&str], choice: u32) -> u32 {
-        let selection = self.weighted_genotype
-            .select_repetition(min, max, rulechain, choice);
+        let selection = self.weighted_genotype.select_repetition(
+            min,
+            max,
+            rulechain,
+            choice,
+        );
 
         let depth = WeightedGenotype::<'a, G>::find_depth(rulechain);
         let rule = rulechain.last().unwrap();
         let num = (max - min + 1) as usize;
 
-        if self.weighted_genotype.distribution.has_weights(depth, rule, choice) {
+        if self.weighted_genotype.distribution.has_weights(
+            depth,
+            rule,
+            choice,
+        )
+        {
             self.stats.make_room(depth, rule, choice, num);
-            self.stats.add_selection((selection - min) as usize, depth, rule, choice);
+            self.stats.add_selection(
+                (selection - min) as usize,
+                depth,
+                rule,
+                choice,
+            );
         }
 
         selection
@@ -1302,8 +1362,10 @@ impl<G: Gene> Genotype<G> {
     }
 
     fn use_next_gene(&mut self) -> G {
-        assert!(self.index < self.genes.len(),
-                "Genotype index overflows gene list");
+        assert!(
+            self.index < self.genes.len(),
+            "Genotype index overflows gene list"
+        );
 
         let gene = self.genes[self.index];
         self.index = (self.index + 1) % self.genes.len();
@@ -1425,13 +1487,14 @@ impl Distribution {
         None
     }
 
-    fn set_weight(&mut self,
-                  depth: usize,
-                  rule: &str,
-                  choice: u32,
-                  alternative: usize,
-                  weight: f32)
-    {
+    fn set_weight(
+        &mut self,
+        depth: usize,
+        rule: &str,
+        choice: u32,
+        alternative: usize,
+        weight: f32,
+    ) {
         while self.depths.len() < depth + 1 {
             self.depths.push(HashMap::new());
         }
@@ -1527,8 +1590,13 @@ impl Distribution {
         let mut dist = Distribution::new();
 
         for row in reader.decode() {
-            let (depth, rule, choice, alternative, weight): (usize, String, u32, usize, f32)
-                = row.unwrap();
+            let (depth, rule, choice, alternative, weight): (
+                usize,
+                String,
+                u32,
+                usize,
+                f32,
+            ) = row.unwrap();
             dist.set_weight(depth, &rule, choice, alternative, weight);
         }
 
@@ -1594,9 +1662,11 @@ impl<'a, G: Gene> WeightedGenotype<'a, G> {
     }
 
     fn find_depth(rulechain: &[&str]) -> usize {
-        rulechain
-            .iter()
-            .fold(0, |acc, r| if *r == "stack" { acc + 1 } else { acc })
+        rulechain.iter().fold(0, |acc, r| if *r == "stack" {
+            acc + 1
+        } else {
+            acc
+        })
     }
 }
 
@@ -1607,13 +1677,15 @@ impl<'a, G: Gene> SelectionStrategy for WeightedGenotype<'a, G> {
         let depth = Self::find_depth(rulechain);
         let rule = rulechain.last().unwrap();
         let gene_frac = num::cast::<_, f32>(gene).unwrap() /
-                        num::cast::<_, f32>(G::max_value()).unwrap();
+            num::cast::<_, f32>(G::max_value()).unwrap();
         let weights = self.distribution.get_weights(depth, rule, choice);
 
         if let Some(weights) = weights {
-            assert_eq!(weights.len(),
-                       num,
-                       "Number of weights does not match number of alternatives");
+            assert_eq!(
+                weights.len(),
+                num,
+                "Number of weights does not match number of alternatives"
+            );
             weighted_selection(weights, gene_frac)
         } else {
             let weights = (0..num).map(|_| 1.0).collect::<Vec<_>>();
@@ -1629,13 +1701,15 @@ impl<'a, G: Gene> SelectionStrategy for WeightedGenotype<'a, G> {
         let depth = Self::find_depth(rulechain);
         let rule = rulechain.last().unwrap();
         let gene_frac = num::cast::<_, f32>(gene).unwrap() /
-                        num::cast::<_, f32>(G::max_value()).unwrap();
+            num::cast::<_, f32>(G::max_value()).unwrap();
         let weights = self.distribution.get_weights(depth, rule, choice);
 
         if let Some(weights) = weights {
-            assert_eq!(weights.len(),
-                       num as usize,
-                       "Number of weights does not match number of repetition alternatives");
+            assert_eq!(
+                weights.len(),
+                num as usize,
+                "Number of weights does not match number of repetition alternatives"
+            );
             min + weighted_selection(weights, gene_frac) as u32
         } else {
             let weights = (0..num).map(|_| 1.0).collect::<Vec<_>>();
@@ -1647,7 +1721,8 @@ impl<'a, G: Gene> SelectionStrategy for WeightedGenotype<'a, G> {
 // Somehow make the below expansion functions a generic part of abnf::expand?
 
 fn expand_productions<T>(grammar: &abnf::Ruleset, strategy: &mut T) -> ol::RuleMap
-    where T: SelectionStrategy
+where
+    T: SelectionStrategy,
 {
     let mut rules = ol::RuleMap::new();
     let list = &grammar["productions"];
@@ -1673,7 +1748,8 @@ fn expand_productions<T>(grammar: &abnf::Ruleset, strategy: &mut T) -> ol::RuleM
 }
 
 fn expand_production<T>(grammar: &abnf::Ruleset, strategy: &mut T) -> (char, String)
-    where T: SelectionStrategy
+where
+    T: SelectionStrategy,
 {
     let list = &grammar["production"];
 
@@ -1701,7 +1777,8 @@ fn expand_production<T>(grammar: &abnf::Ruleset, strategy: &mut T) -> (char, Str
 }
 
 fn expand_predecessor<T>(grammar: &abnf::Ruleset, strategy: &mut T) -> char
-    where T: SelectionStrategy
+where
+    T: SelectionStrategy,
 {
     let value = expand_grammar(grammar, "predecessor", strategy);
     assert_eq!(value.len(), 1);
@@ -1709,15 +1786,17 @@ fn expand_predecessor<T>(grammar: &abnf::Ruleset, strategy: &mut T) -> char
 }
 
 fn expand_successor<T>(grammar: &abnf::Ruleset, strategy: &mut T) -> String
-    where T: SelectionStrategy
+where
+    T: SelectionStrategy,
 {
     expand_grammar(grammar, "successor", strategy)
 }
 
-fn infer_selections(expanded: &str,
-                    grammar: &abnf::Ruleset,
-                    root: &str)
-                    -> Result<Vec<usize>, String> {
+fn infer_selections(
+    expanded: &str,
+    grammar: &abnf::Ruleset,
+    root: &str,
+) -> Result<Vec<usize>, String> {
     let selection = infer_list_selections(&grammar[root], 0, expanded, grammar);
 
     match selection {
@@ -1725,9 +1804,11 @@ fn infer_selections(expanded: &str,
             if index == expanded.len() {
                 Ok(list)
             } else {
-                Err(format!("Expanded string does not fully match grammar. \
+                Err(format!(
+                    "Expanded string does not fully match grammar. \
                              The first {} characters matched",
-                            index))
+                    index
+                ))
             }
         }
         Err(_) => Err("Expanded string does not match grammar".to_string()),
@@ -1736,11 +1817,12 @@ fn infer_selections(expanded: &str,
 
 // TODO: Need to be able to try new non-tested alternatives/repetitions if a previously matched
 // alternative/repetition results in a mismatch later.
-fn infer_list_selections(list: &abnf::List,
-                         mut index: usize,
-                         expanded: &str,
-                         grammar: &abnf::Ruleset)
-                         -> Result<(Vec<usize>, usize), ()> {
+fn infer_list_selections(
+    list: &abnf::List,
+    mut index: usize,
+    expanded: &str,
+    grammar: &abnf::Ruleset,
+) -> Result<(Vec<usize>, usize), ()> {
     use abnf::List;
 
     match *list {
@@ -1761,7 +1843,8 @@ fn infer_list_selections(list: &abnf::List,
 
             for (alternative, item) in alternatives.iter().enumerate() {
                 if let Ok((item_selections, updated_index)) =
-                    infer_item_selections(item, index, expanded, grammar) {
+                    infer_item_selections(item, index, expanded, grammar)
+                {
                     selections.push(alternative);
                     selections.extend(item_selections);
                     index = updated_index;
@@ -1781,11 +1864,12 @@ fn infer_list_selections(list: &abnf::List,
 
 // TODO: Need to be able to try new non-tested alternatives/repetitions if a previously matched
 // alternative/repetition results in a mismatch later.
-fn infer_item_selections(item: &abnf::Item,
-                         mut index: usize,
-                         expanded: &str,
-                         grammar: &abnf::Ruleset)
-                         -> Result<(Vec<usize>, usize), ()> {
+fn infer_item_selections(
+    item: &abnf::Item,
+    mut index: usize,
+    expanded: &str,
+    grammar: &abnf::Ruleset,
+) -> Result<(Vec<usize>, usize), ()> {
     use abnf::Content;
 
     let repeat = match item.repeat {
@@ -1865,8 +1949,9 @@ fn infer_item_selections(item: &abnf::Item,
 }
 
 fn run_stats(matches: &ArgMatches) {
-    let grammar =
-        Arc::new(abnf::parse_file("grammar/lsys2.abnf").expect("Could not parse ABNF file"));
+    let grammar = Arc::new(
+        abnf::parse_file("grammar/lsys2.abnf").expect("Could not parse ABNF file"),
+    );
 
     let distributions: Vec<Arc<Distribution>> = {
         let paths = matches
@@ -1877,12 +1962,12 @@ fn run_stats(matches: &ArgMatches) {
 
         paths
             .map(|p| {
-                     let file = File::open(p).unwrap();
-                     let distribution = bincode::deserialize_from(&mut BufReader::new(file),
-                                                                  bincode::Infinite)
-                             .unwrap();
-                     Arc::new(distribution)
-                 })
+                let file = File::open(p).unwrap();
+                let distribution =
+                    bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite)
+                        .unwrap();
+                Arc::new(distribution)
+            })
             .collect()
     };
 
@@ -1890,16 +1975,17 @@ fn run_stats(matches: &ArgMatches) {
     let csv_path = Path::new(matches.value_of("csv").unwrap());
 
     let settings = Arc::new(lsys::Settings {
-                                width: 0.05,
-                                angle: PI / 8.0,
-                                iterations: 5,
-                                ..lsys::Settings::new()
-                            });
+        width: 0.05,
+        angle: PI / 8.0,
+        iterations: 5,
+        ..lsys::Settings::new()
+    });
 
-    fn generate_sample(grammar: &abnf::Ruleset,
-                       distribution: &Distribution,
-                       settings: &lsys::Settings)
-                       -> Fitness {
+    fn generate_sample(
+        grammar: &abnf::Ruleset,
+        distribution: &Distribution,
+        settings: &lsys::Settings,
+    ) -> Fitness {
         let seed = random_seed();
         let genes = generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
         let system = generate_system(grammar, &mut WeightedGenotype::new(genes, distribution));
@@ -1907,8 +1993,10 @@ fn run_stats(matches: &ArgMatches) {
         fit
     }
 
-    println!("Generating {} samples...",
-             num_samples * distributions.len());
+    println!(
+        "Generating {} samples...",
+        num_samples * distributions.len()
+    );
     let start_time = Instant::now();
 
     let samples = {
@@ -1924,11 +2012,9 @@ fn run_stats(matches: &ArgMatches) {
                 let settings = settings.clone();
 
                 tasks.push(pool.spawn_fn(move || {
-                                             let sample = generate_sample(&grammar,
-                                                                          &distribution,
-                                                                          &settings);
-                                             future::ok::<(usize, Fitness), ()>((d, sample))
-                                         }));
+                    let sample = generate_sample(&grammar, &distribution, &settings);
+                    future::ok::<(usize, Fitness), ()>((d, sample))
+                }));
             }
         }
 
@@ -1937,9 +2023,11 @@ fn run_stats(matches: &ArgMatches) {
 
     let end_time = Instant::now();
     let duration = end_time - start_time;
-    println!("Duration: {}.{}",
-             duration.as_secs(),
-             duration.subsec_nanos());
+    println!(
+        "Duration: {}.{}",
+        duration.as_secs(),
+        duration.subsec_nanos()
+    );
 
     print!("Append to existing file? (Y/n): ");
     io::stdout().flush().unwrap();
@@ -1970,81 +2058,92 @@ fn run_stats(matches: &ArgMatches) {
         }
     };
 
-    let csv = samples
-        .iter()
-        .fold(csv, |csv, &(d, ref f)| if f.is_nothing {
-            csv +
-            &format!("{},{},,,,,{}\n",
-                     d,
-                     f.score(),
-                     f.nothing_punishment())
+    let csv = samples.iter().fold(
+        csv,
+        |csv, &(d, ref f)| if f.is_nothing {
+            csv + &format!("{},{},,,,,{}\n", d, f.score(), f.nothing_punishment())
         } else {
             csv +
-            &format!("{},{},{},{},{},{},{}\n",
-                     d,
-                     f.score(),
-                     f.balance,
-                     f.branching,
-                     f.closeness,
-                     f.drop,
-                     f.nothing_punishment())
-        });
+                &format!(
+                    "{},{},{},{},{},{},{}\n",
+                    d,
+                    f.score(),
+                    f.balance,
+                    f.branching,
+                    f.closeness,
+                    f.drop,
+                    f.nothing_punishment()
+                )
+        },
+    );
 
     csv_file.write_all(csv.as_bytes()).unwrap();
 }
 
 fn run_learning(matches: &ArgMatches) {
     enum Schedule {
-        Iterations{ current: usize, max: usize },
-        EndTime{ start: NaiveDateTime, end: NaiveDateTime },
-        Duration{ start: NaiveDateTime, max: Duration },
+        Iterations { current: usize, max: usize },
+        EndTime {
+            start: NaiveDateTime,
+            end: NaiveDateTime,
+        },
+        Duration { start: NaiveDateTime, max: Duration },
     }
 
     impl Schedule {
         fn new_iterations(max: usize) -> Schedule {
-            Schedule::Iterations{ current: 0, max }
+            Schedule::Iterations { current: 0, max }
         }
 
         fn new_end_time(end_time: NaiveDateTime) -> Schedule {
-            Schedule::EndTime{ start: Local::now().naive_local(), end: end_time }
+            Schedule::EndTime {
+                start: Local::now().naive_local(),
+                end: end_time,
+            }
         }
 
         fn new_duration(max: Duration) -> Schedule {
-            Schedule::Duration{ start: Local::now().naive_local(), max }
+            Schedule::Duration {
+                start: Local::now().naive_local(),
+                max,
+            }
         }
 
         fn start(&mut self) {
-            if let Schedule::Duration{ ref mut start, .. } = *self {
+            if let Schedule::Duration { ref mut start, .. } = *self {
                 *start = Local::now().naive_local()
             }
         }
 
         fn keep_going(&mut self) -> bool {
             match *self {
-                Schedule::Iterations{ ref mut current, max } => {
+                Schedule::Iterations {
+                    ref mut current,
+                    max,
+                } => {
                     let keep_going = *current < max;
                     *current += 1;
                     keep_going
                 }
-                Schedule::EndTime{ end, .. } => {
-                    Local::now().naive_local() < end
-                }
-                Schedule::Duration{ start, max } => {
-                    Local::now().naive_local().signed_duration_since(start).to_std().unwrap() < max
+                Schedule::EndTime { end, .. } => Local::now().naive_local() < end,
+                Schedule::Duration { start, max } => {
+                    Local::now()
+                        .naive_local()
+                        .signed_duration_since(start)
+                        .to_std()
+                        .unwrap() < max
                 }
             }
         }
 
         fn progress(&self) -> f32 {
             match *self {
-                Schedule::Iterations{ current, max } => {
-                    partial_clamp(current as f32 / max as f32, 0.0, 1.0).expect("Iteration progress is NaN")
+                Schedule::Iterations { current, max } => {
+                    partial_clamp(current as f32 / max as f32, 0.0, 1.0)
+                        .expect("Iteration progress is NaN")
                 }
-                Schedule::EndTime{ start, end } => {
-                    let max = end
-                        .signed_duration_since(start)
-                        .to_std()
-                        .unwrap();
+                Schedule::EndTime { start, end } => {
+                    let max = end.signed_duration_since(start).to_std().unwrap();
                     let spent = Local::now()
                         .naive_local()
                         .signed_duration_since(start)
@@ -2053,9 +2152,10 @@ fn run_learning(matches: &ArgMatches) {
                     let max = max.as_secs();
                     let spent = spent.as_secs();
 
-                    partial_clamp(spent as f32 / max as f32, 0.0, 1.0).expect("Time progress is NaN")
+                    partial_clamp(spent as f32 / max as f32, 0.0, 1.0)
+                        .expect("Time progress is NaN")
                 }
-                Schedule::Duration{ start, max } => {
+                Schedule::Duration { start, max } => {
                     let spent = Local::now()
                         .naive_local()
                         .signed_duration_since(start)
@@ -2064,7 +2164,8 @@ fn run_learning(matches: &ArgMatches) {
                     let max = max.as_secs();
                     let spent = spent.as_secs();
 
-                    partial_clamp(spent as f32 / max as f32, 0.0, 1.0).expect("Time progress is NaN")
+                    partial_clamp(spent as f32 / max as f32, 0.0, 1.0)
+                        .expect("Time progress is NaN")
                 }
             }
 
@@ -2074,22 +2175,25 @@ fn run_learning(matches: &ArgMatches) {
     impl fmt::Display for Schedule {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             match *self {
-                Schedule::Iterations{ current, max } => {
+                Schedule::Iterations { current, max } => {
                     write!(f, "iteration {} of {}", current, max)
                 }
-                Schedule::EndTime{ end, .. } => {
+                Schedule::EndTime { end, .. } => {
                     let now = Local::now().naive_local();
                     let remaining = match end.signed_duration_since(now).to_std() {
                         Ok(duration) => duration.as_secs(),
                         Err(_) => 0,
                     };
-                    write!(f, "{}h {}m {}s remaining until {}",
-                           remaining / 60 / 60,
-                           remaining % (60 * 60) / 60,
-                           remaining % 60,
-                           end)
+                    write!(
+                        f,
+                        "{}h {}m {}s remaining until {}",
+                        remaining / 60 / 60,
+                        remaining % (60 * 60) / 60,
+                        remaining % 60,
+                        end
+                    )
                 }
-                Schedule::Duration{ start, max } => {
+                Schedule::Duration { start, max } => {
                     let spent = Local::now()
                         .naive_local()
                         .signed_duration_since(start)
@@ -2099,24 +2203,25 @@ fn run_learning(matches: &ArgMatches) {
                     let max = max.as_secs();
                     let spent = spent.as_secs();
 
-                    write!(f, "{}h {}m {}s remaining of {}h {}m {}s (spent {}h {}m {}s)",
-                           remaining / 60 / 60,
-                           remaining % (60 * 60) / 60,
-                           remaining % 60,
-                           max / 60 / 60,
-                           max % (60 * 60) / 60,
-                           max % 60,
-                           spent / 60 / 60,
-                           spent % (60 * 60) / 60,
-                           spent % 60)
+                    write!(
+                        f,
+                        "{}h {}m {}s remaining of {}h {}m {}s (spent {}h {}m {}s)",
+                        remaining / 60 / 60,
+                        remaining % (60 * 60) / 60,
+                        remaining % 60,
+                        max / 60 / 60,
+                        max % (60 * 60) / 60,
+                        max % 60,
+                        spent / 60 / 60,
+                        spent % (60 * 60) / 60,
+                        spent % 60
+                    )
                 }
             }
         }
     }
 
-    fn generate_sample(grammar: &abnf::Ruleset,
-                       distribution: &Distribution)
-                       -> ol::LSystem {
+    fn generate_sample(grammar: &abnf::Ruleset, distribution: &Distribution) -> ol::LSystem {
         let seed = random_seed();
         let genes = generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
         let mut genotype = WeightedGenotype::new(genes, distribution);
@@ -2142,19 +2247,19 @@ fn run_learning(matches: &ArgMatches) {
             // This can probably be done in a nicer way...
             let mut parsed = Parsed::new();
             if parse(&mut parsed, time, StrftimeItems::new("%F %T")).is_err() &&
-               parse(&mut parsed, time, StrftimeItems::new("%F %R")).is_err() &&
-               parse(&mut parsed, time, StrftimeItems::new("%T")).is_err() &&
-               parse(&mut parsed, time, StrftimeItems::new("%R")).is_err()
+                parse(&mut parsed, time, StrftimeItems::new("%F %R")).is_err() &&
+                parse(&mut parsed, time, StrftimeItems::new("%T")).is_err() &&
+                parse(&mut parsed, time, StrftimeItems::new("%R")).is_err()
             {
                 println!("Could not parse --until argument.");
                 return;
             }
 
-            let end_date = parsed.to_naive_date().unwrap_or_else(|_| Local::today().naive_local());
+            let end_date = parsed
+                .to_naive_date()
+                .unwrap_or_else(|_| Local::today().naive_local());
             let end_time = parsed.to_naive_time().unwrap();
-            let end_datetime = NaiveDateTime::new(
-                end_date,
-                end_time);
+            let end_datetime = NaiveDateTime::new(end_date, end_time);
 
             println!("Running learning until {}.", end_datetime);
             Schedule::new_end_time(end_datetime)
@@ -2167,14 +2272,19 @@ fn run_learning(matches: &ArgMatches) {
                 }
             };
 
-            println!("Running learning for {}h {}m {}s.",
-                     duration.as_secs() / 60 / 60,
-                     duration.as_secs() % (60 * 60) / 60,
-                     duration.as_secs() % (60 * 60 * 60));
+            println!(
+                "Running learning for {}h {}m {}s.",
+                duration.as_secs() / 60 / 60,
+                duration.as_secs() % (60 * 60) / 60,
+                duration.as_secs() % (60 * 60 * 60)
+            );
             Schedule::new_duration(duration)
         } else {
             let default = 128;
-            println!("Schedule not specified. Using default of {} iterations.", default);
+            println!(
+                "Schedule not specified. Using default of {} iterations.",
+                default
+            );
             Schedule::new_iterations(default)
         }
     };
@@ -2197,7 +2307,11 @@ fn run_learning(matches: &ArgMatches) {
             match bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite) {
                 Ok(dist) => dist,
                 Err(err) => {
-                    println!("Failed deserializing distribution file \"{}\": {}", filename, err);
+                    println!(
+                        "Failed deserializing distribution file \"{}\": {}",
+                        filename,
+                        err
+                    );
                     return;
                 }
             }
@@ -2217,28 +2331,36 @@ fn run_learning(matches: &ArgMatches) {
     println!("Saving distribution to \"{}\".", stats_csv_path);
 
     let settings = Arc::new(lsys::Settings {
-                                width: 0.05,
-                                angle: PI / 8.0,
-                                iterations: 5,
-                                ..lsys::Settings::new()
-                            });
+        width: 0.05,
+        angle: PI / 8.0,
+        iterations: 5,
+        ..lsys::Settings::new()
+    });
 
-    let num_workers = matches.value_of("workers").map_or(num_cpus::get() + 1, |w| w.parse().unwrap());
+    let num_workers = matches.value_of("workers").map_or(
+        num_cpus::get() + 1,
+        |w| w.parse().unwrap(),
+    );
 
     let dist_dump_path = Path::new("dist");
     match fs::create_dir_all(dist_dump_path) {
         Ok(_) => {}
         Err(err) => {
-            println!("Failed creating distribution dump directory \"{}\": {}",
-                     dist_dump_path.to_str().unwrap(),
-                     err);
+            println!(
+                "Failed creating distribution dump directory \"{}\": {}",
+                dist_dump_path.to_str().unwrap(),
+                err
+            );
             return;
         }
     }
 
     let mut dist_files = fs::read_dir(dist_dump_path).unwrap().peekable();
     if dist_files.peek().is_some() {
-        println!("There are files in \"{}\", remove these?", dist_dump_path.to_str().unwrap());
+        println!(
+            "There are files in \"{}\", remove these?",
+            dist_dump_path.to_str().unwrap()
+        );
         print!("[y/C]: ");
         io::stdout().flush().unwrap();
 
@@ -2257,9 +2379,17 @@ fn run_learning(matches: &ArgMatches) {
         }
     }
 
-    let error_threshold = matches.value_of("error-threshold").unwrap().parse().unwrap();
+    let error_threshold = matches
+        .value_of("error-threshold")
+        .unwrap()
+        .parse()
+        .unwrap();
     let min_samples = matches.value_of("min-samples").unwrap().parse().unwrap();
-    let mutation_factor = matches.value_of("mutation-factor").unwrap().parse().unwrap();
+    let mutation_factor = matches
+        .value_of("mutation-factor")
+        .unwrap()
+        .parse()
+        .unwrap();
     let fitness_scale: f32 = matches.value_of("fitness-scale").unwrap().parse().unwrap();
 
     println!("Using error error threshold {}.", error_threshold);
@@ -2306,10 +2436,8 @@ fn run_learning(matches: &ArgMatches) {
             let score_sum: f32 = step_scores.iter().sum();
             let size = step_scores.len();
             let mean = score_sum / size as f32;
-            let unbiased_sample_variance = step_scores
-                .iter()
-                .map(|s| (s - mean).powi(2))
-                .sum::<f32>() / (size - 1) as f32;
+            let unbiased_sample_variance =
+                step_scores.iter().map(|s| (s - mean).powi(2)).sum::<f32>() / (size - 1) as f32;
             let sample_standard_deviation = unbiased_sample_variance.sqrt();
 
             error = sample_standard_deviation / size as f32;
@@ -2330,11 +2458,12 @@ fn run_learning(matches: &ArgMatches) {
     println!("Generated {} samples.", num_samples);
     println!("Initial distribution has score {}.", current_score);
 
-    let mut distribution_save_future = {
-        let distribution = distribution.clone();
-        let stats_csv_path = stats_csv_path.clone();
+    let mut distribution_save_future =
+        {
+            let distribution = distribution.clone();
+            let stats_csv_path = stats_csv_path.clone();
 
-        pool.spawn_fn(move || -> FutureResult<(), ()> {
+            pool.spawn_fn(move || -> FutureResult<(), ()> {
             let first_dist_filename = format!("{}.csv", 0);
             let first_dist_file_path = dist_dump_path.join(first_dist_filename);
             let mut csv_file = File::create(first_dist_file_path).unwrap();
@@ -2342,7 +2471,8 @@ fn run_learning(matches: &ArgMatches) {
                 .write_all(distribution.to_csv().as_bytes())
                 .unwrap();
 
-            let stats_csv = "iteration,samples,measure samples,score,accepted,temperature,type\n".to_string() +
+            let stats_csv = "iteration,samples,measure samples,score,accepted,temperature,type\n"
+                .to_string() +
                 &format!("{},{},{},{},,,{}\n", 0, num_samples, num_samples, current_score, "init");
             let mut stats_csv_file = File::create(&*stats_csv_path).unwrap();
             stats_csv_file
@@ -2351,7 +2481,7 @@ fn run_learning(matches: &ArgMatches) {
 
             future::ok(())
         })
-    };
+        };
 
     let mut iteration = 0_usize;
 
@@ -2369,8 +2499,16 @@ fn run_learning(matches: &ArgMatches) {
         let (new_score, new_num_samples) = measure_distribution(new_distribution.clone());
         num_samples += new_num_samples;
 
-        println!("Generated {} of total {} samples.", new_num_samples, num_samples);
-        println!("Neighbour score was {} with a difference of {}.", new_score, new_score - current_score);
+        println!(
+            "Generated {} of total {} samples.",
+            new_num_samples,
+            num_samples
+        );
+        println!(
+            "Neighbour score was {} with a difference of {}.",
+            new_score,
+            new_score - current_score
+        );
 
         let calc_probability = |score_diff, temp| -> f32 {
             if temp > 0.0 {
@@ -2423,14 +2561,16 @@ fn run_learning(matches: &ArgMatches) {
                     "improve"
                 };
 
-                let stats_csv = &format!("{},{},{},{},{},{},{}\n",
-                                         iteration + 1,
-                                         num_samples,
-                                         new_num_samples,
-                                         new_score,
-                                         accepted,
-                                         temperature,
-                                         iteration_type);
+                let stats_csv = &format!(
+                    "{},{},{},{},{},{},{}\n",
+                    iteration + 1,
+                    num_samples,
+                    new_num_samples,
+                    new_score,
+                    accepted,
+                    temperature,
+                    iteration_type
+                );
                 let mut stats_csv_file = OpenOptions::new()
                     .append(true)
                     .open(&*stats_csv_path)
@@ -2453,25 +2593,28 @@ fn run_learning(matches: &ArgMatches) {
     let seconds = duration.as_secs();
     let hours = seconds / (60 * 60);
     let minutes = seconds % (60 * 60) / 60;
-    println!("Duration: {}:{}:{}.{}",
-             hours,
-             minutes,
-             seconds,
-             duration.subsec_nanos());
+    println!(
+        "Duration: {}:{}:{}.{}",
+        hours,
+        minutes,
+        seconds,
+        duration.subsec_nanos()
+    );
 
     match Arc::try_unwrap(distribution) {
         Ok(distribution) => {
             let dist_file = File::create(bin_path).unwrap();
-            bincode::serialize_into(&mut BufWriter::new(dist_file),
-                                    &distribution,
-                                    bincode::Infinite)
-                .expect("Failed writing distribution bin file");
+            bincode::serialize_into(
+                &mut BufWriter::new(dist_file),
+                &distribution,
+                bincode::Infinite,
+            ).expect("Failed writing distribution bin file");
 
             let mut dist_file = File::create(csv_path).unwrap();
             dist_file
                 .write_all(distribution.to_csv().as_bytes())
                 .expect("Failed writing distribution csv file");
-        },
+        }
         Err(_) => {
             println!("Error: Could not save distribution: Failed unwrapping distribution Arc.");
         }
@@ -2485,18 +2628,20 @@ fn run_distribution_csv_to_bin(matches: &ArgMatches) {
         None => input_path.with_extension("bin"),
     };
 
-    let mut input_file = File::open(input_path)
-        .expect("Could not open input file");
+    let mut input_file = File::open(input_path).expect("Could not open input file");
     let mut csv = String::new();
-    input_file.read_to_string(&mut csv).expect("Could not read input file");
+    input_file
+        .read_to_string(&mut csv)
+        .expect("Could not read input file");
 
     let distribution = Distribution::from_csv(&csv);
 
     let output_file = File::create(&output_path).unwrap();
-    bincode::serialize_into(&mut BufWriter::new(output_file),
-                            &distribution,
-                            bincode::Infinite)
-        .expect("Could not write output file");
+    bincode::serialize_into(
+        &mut BufWriter::new(output_file),
+        &distribution,
+        bincode::Infinite,
+    ).expect("Could not write output file");
 
     println!("Wrote \"{}\"", output_path.to_str().unwrap());
 }
@@ -2551,9 +2696,11 @@ fn run_sample_weight_space(matches: &ArgMatches) {
         }
     };
 
-    println!("Sampling {} samples in {}-dimensinal weight space.",
-             num_samples,
-             dimensions);
+    println!(
+        "Sampling {} samples in {}-dimensinal weight space.",
+        num_samples,
+        dimensions
+    );
 
     let output_path = Path::new(matches.value_of("output").unwrap());
     println!("Saving samples to \"{}\".", output_path.to_str().unwrap());
@@ -2582,16 +2729,14 @@ fn run_sample_weight_space(matches: &ArgMatches) {
     };
 
     let tasks: Vec<_> = (0..num_samples)
-        .map(|_| {
-            if dividers {
-                pool.spawn_fn(move || -> FutureResult<Vec<f32>, ()> {
-                    future::ok(dividers_from_weights(&generate_weight(dimensions)))
-                })
-            } else {
-                pool.spawn_fn(move || -> FutureResult<Vec<f32>, ()> {
-                    future::ok(generate_weight(dimensions))
-                })
-            }
+        .map(|_| if dividers {
+            pool.spawn_fn(move || -> FutureResult<Vec<f32>, ()> {
+                future::ok(dividers_from_weights(&generate_weight(dimensions)))
+            })
+        } else {
+            pool.spawn_fn(
+                move || -> FutureResult<Vec<f32>, ()> { future::ok(generate_weight(dimensions)) },
+            )
         })
         .collect();
 
@@ -2629,33 +2774,43 @@ mod test {
         let mut grammar = Ruleset::new();
         grammar.insert("symbol".to_string(), List::Sequence(vec![item.clone()]));
 
-        assert_eq!(infer_item_selections(&item, 0, "value", &grammar),
-                   Ok((vec![], 5)));
+        assert_eq!(
+            infer_item_selections(&item, 0, "value", &grammar),
+            Ok((vec![], 5))
+        );
     }
 
     #[test]
     fn test_infer_selections_repeat_limits() {
-        let item = Item::repeated(Content::Value("value".to_string()),
-                                  Repeat::with_limits(2, 4));
+        let item = Item::repeated(
+            Content::Value("value".to_string()),
+            Repeat::with_limits(2, 4),
+        );
 
         let mut grammar = Ruleset::new();
         grammar.insert("symbol".to_string(), List::Sequence(vec![item.clone()]));
 
-        assert_eq!(infer_item_selections(&item, 0, "valuevaluevalue", &grammar),
-                   Ok((vec![1], 15)));
+        assert_eq!(
+            infer_item_selections(&item, 0, "valuevaluevalue", &grammar),
+            Ok((vec![1], 15))
+        );
     }
 
     #[test]
     fn test_infer_selections_alternatives() {
-        let list = List::Alternatives(vec![Item::new(Content::Value("1".to_string())),
-                                           Item::new(Content::Value("2".to_string())),
-                                           Item::new(Content::Value("3".to_string()))]);
+        let list = List::Alternatives(vec![
+            Item::new(Content::Value("1".to_string())),
+            Item::new(Content::Value("2".to_string())),
+            Item::new(Content::Value("3".to_string())),
+        ]);
 
         let mut grammar = Ruleset::new();
         grammar.insert("symbol".to_string(), list.clone());
 
-        assert_eq!(infer_list_selections(&list, 0, "2", &grammar),
-                   Ok((vec![1], 1)));
+        assert_eq!(
+            infer_list_selections(&list, 0, "2", &grammar),
+            Ok((vec![1], 1))
+        );
     }
 
     #[test]
@@ -2670,9 +2825,11 @@ mod test {
 
     #[test]
     fn test_infer_selections_match_alternatives() {
-        let list = List::Alternatives(vec![Item::new(Content::Value("1".to_string())),
-                                           Item::new(Content::Value("2".to_string())),
-                                           Item::new(Content::Value("3".to_string()))]);
+        let list = List::Alternatives(vec![
+            Item::new(Content::Value("1".to_string())),
+            Item::new(Content::Value("2".to_string())),
+            Item::new(Content::Value("3".to_string())),
+        ]);
 
         let mut grammar = Ruleset::new();
         grammar.insert("symbol".to_string(), list.clone());
@@ -2687,8 +2844,10 @@ mod test {
         let mut grammar = Ruleset::new();
         grammar.insert("symbol".to_string(), List::Sequence(vec![item.clone()]));
 
-        assert_eq!(infer_selections("notvalue", &grammar, "symbol"),
-                   Err("Expanded string does not match grammar".to_string()));
+        assert_eq!(
+            infer_selections("notvalue", &grammar, "symbol"),
+            Err("Expanded string does not match grammar".to_string())
+        );
     }
 
     #[test]
@@ -2698,10 +2857,14 @@ mod test {
         let mut grammar = Ruleset::new();
         grammar.insert("symbol".to_string(), List::Sequence(vec![item.clone()]));
 
-        assert_eq!(infer_selections("valueextra", &grammar, "symbol"),
-                   Err("Expanded string does not fully match grammar. \
+        assert_eq!(
+            infer_selections("valueextra", &grammar, "symbol"),
+            Err(
+                "Expanded string does not fully match grammar. \
                  The first 5 characters matched"
-                               .to_string()));
+                    .to_string(),
+            )
+        );
     }
 
     #[test]
@@ -2755,17 +2918,23 @@ mod test {
 
     #[test]
     fn test_dividers_from_weights() {
-        assert_slice_approx_eq!(&dividers_from_weights(&[1.0]),
-                                &Vec::<f32>::new(),
-                                f32::EPSILON);
+        assert_slice_approx_eq!(
+            &dividers_from_weights(&[1.0]),
+            &Vec::<f32>::new(),
+            f32::EPSILON
+        );
         assert_slice_approx_eq!(&dividers_from_weights(&[0.5, 0.5]), &[0.5], f32::EPSILON);
         assert_slice_approx_eq!(&dividers_from_weights(&[0.75, 0.25]), &[0.75], f32::EPSILON);
-        assert_slice_approx_eq!(&dividers_from_weights(&[0.5, 0.25, 0.25]),
-                                &[2.0 / 3.0, 0.75],
-                                f32::EPSILON);
-        assert_slice_approx_eq!(&dividers_from_weights(&[0.25, 0.25, 0.25, 0.25]),
-                                &[0.5, 2.0 / 3.0, 0.75],
-                                f32::EPSILON);
+        assert_slice_approx_eq!(
+            &dividers_from_weights(&[0.5, 0.25, 0.25]),
+            &[2.0 / 3.0, 0.75],
+            f32::EPSILON
+        );
+        assert_slice_approx_eq!(
+            &dividers_from_weights(&[0.25, 0.25, 0.25, 0.25]),
+            &[0.5, 2.0 / 3.0, 0.75],
+            f32::EPSILON
+        );
         assert_slice_approx_eq!(&dividers_from_weights(&[0.0, 1.0]), &[0.0], f32::EPSILON);
         assert_slice_approx_eq!(&dividers_from_weights(&[1.0, 0.0]), &[1.0], f32::EPSILON);
         assert_slice_approx_eq!(&dividers_from_weights(&[0.0, 0.0]), &[0.0], f32::EPSILON);
@@ -2774,24 +2943,36 @@ mod test {
 
     #[test]
     fn test_dividers_from_weights_zero() {
-        assert_slice_approx_eq!(&dividers_from_weights(&[0.0, 1.0, 0.0]),
-                                &[0.0, 1.0],
-                                f32::EPSILON);
-        assert_slice_approx_eq!(&dividers_from_weights(&[0.0, 0.5, 0.5]),
-                                &[0.0, 0.5],
-                                f32::EPSILON);
-        assert_slice_approx_eq!(&dividers_from_weights(&[0.5, 0.5, 0.0]),
-                                &[0.5, 1.0],
-                                f32::EPSILON);
-        assert_slice_approx_eq!(&dividers_from_weights(&[0.0, 0.0, 1.0]),
-                                &[0.0, 0.0],
-                                f32::EPSILON);
-        assert_slice_approx_eq!(&dividers_from_weights(&[1.0, 0.0, 0.0]),
-                                &[1.0, 1.0],
-                                f32::EPSILON);
-        assert_slice_approx_eq!(&dividers_from_weights(&[0.5, 0.0, 0.5]),
-                                &[1.0, 0.5],
-                                f32::EPSILON);
+        assert_slice_approx_eq!(
+            &dividers_from_weights(&[0.0, 1.0, 0.0]),
+            &[0.0, 1.0],
+            f32::EPSILON
+        );
+        assert_slice_approx_eq!(
+            &dividers_from_weights(&[0.0, 0.5, 0.5]),
+            &[0.0, 0.5],
+            f32::EPSILON
+        );
+        assert_slice_approx_eq!(
+            &dividers_from_weights(&[0.5, 0.5, 0.0]),
+            &[0.5, 1.0],
+            f32::EPSILON
+        );
+        assert_slice_approx_eq!(
+            &dividers_from_weights(&[0.0, 0.0, 1.0]),
+            &[0.0, 0.0],
+            f32::EPSILON
+        );
+        assert_slice_approx_eq!(
+            &dividers_from_weights(&[1.0, 0.0, 0.0]),
+            &[1.0, 1.0],
+            f32::EPSILON
+        );
+        assert_slice_approx_eq!(
+            &dividers_from_weights(&[0.5, 0.0, 0.5]),
+            &[1.0, 0.5],
+            f32::EPSILON
+        );
     }
 
     #[test]
@@ -2811,84 +2992,100 @@ mod test {
 
     #[test]
     fn test_weights_from_dividers_multiple() {
-        assert_slice_approx_eq!(&weights_from_dividers(&[2.0 / 3.0, 0.75]),
-                                &[0.5, 0.25, 0.25],
-                                f32::EPSILON);
-        assert_slice_approx_eq!(&weights_from_dividers(&[0.5, 2.0 / 3.0, 0.75]),
-                                &[0.25, 0.25, 0.25, 0.25],
-                                f32::EPSILON);
+        assert_slice_approx_eq!(
+            &weights_from_dividers(&[2.0 / 3.0, 0.75]),
+            &[0.5, 0.25, 0.25],
+            f32::EPSILON
+        );
+        assert_slice_approx_eq!(
+            &weights_from_dividers(&[0.5, 2.0 / 3.0, 0.75]),
+            &[0.25, 0.25, 0.25, 0.25],
+            f32::EPSILON
+        );
     }
 
     #[test]
     fn test_weights_from_dividers_full_single() {
-        assert_slice_approx_eq!(&weights_from_dividers(&[0.0]),
-                                &[0.0, 1.0],
-                                f32::EPSILON);
-        assert_slice_approx_eq!(&weights_from_dividers(&[1.0]),
-                                &[1.0, 0.0],
-                                f32::EPSILON);
+        assert_slice_approx_eq!(&weights_from_dividers(&[0.0]), &[0.0, 1.0], f32::EPSILON);
+        assert_slice_approx_eq!(&weights_from_dividers(&[1.0]), &[1.0, 0.0], f32::EPSILON);
     }
 
     #[test]
     fn test_weights_from_dividers_zero_sides() {
-        assert_slice_approx_eq!(&weights_from_dividers(&[0.0, 1.0]),
-                                &[0.0, 1.0, 0.0],
-                                f32::EPSILON * 2.0);
+        assert_slice_approx_eq!(
+            &weights_from_dividers(&[0.0, 1.0]),
+            &[0.0, 1.0, 0.0],
+            f32::EPSILON * 2.0
+        );
     }
 
     #[test]
     fn test_weights_from_dividers_zero_right() {
-        assert_slice_approx_eq!(&weights_from_dividers(&[1.0, 1.0]),
-                                &[1.0, 0.0, 0.0],
-                                f32::EPSILON * 2.0);
+        assert_slice_approx_eq!(
+            &weights_from_dividers(&[1.0, 1.0]),
+            &[1.0, 0.0, 0.0],
+            f32::EPSILON * 2.0
+        );
     }
 
     #[test]
     fn test_weights_from_dividers_zero_left() {
-        assert_slice_approx_eq!(&weights_from_dividers(&[0.0, 0.0]),
-                                &[0.0, 0.0, 1.0],
-                                f32::EPSILON);
+        assert_slice_approx_eq!(
+            &weights_from_dividers(&[0.0, 0.0]),
+            &[0.0, 0.0, 1.0],
+            f32::EPSILON
+        );
     }
 
     #[test]
     fn test_weights_from_dividers_zero_between() {
-        assert_slice_approx_eq!(&weights_from_dividers(&[0.0, 0.5]),
-                                &[0.0, 0.5, 0.5],
-                                f32::EPSILON);
-        assert_slice_approx_eq!(&weights_from_dividers(&[0.5, 1.0]),
-                                &[0.5, 0.5, 0.0],
-                                f32::EPSILON);
-        assert_slice_approx_eq!(&weights_from_dividers(&[1.0, 0.5]),
-                                &[0.5, 0.0, 0.5],
-                                f32::EPSILON);
+        assert_slice_approx_eq!(
+            &weights_from_dividers(&[0.0, 0.5]),
+            &[0.0, 0.5, 0.5],
+            f32::EPSILON
+        );
+        assert_slice_approx_eq!(
+            &weights_from_dividers(&[0.5, 1.0]),
+            &[0.5, 0.5, 0.0],
+            f32::EPSILON
+        );
+        assert_slice_approx_eq!(
+            &weights_from_dividers(&[1.0, 0.5]),
+            &[0.5, 0.0, 0.5],
+            f32::EPSILON
+        );
     }
 
     #[test]
     fn test_weight_divider_consistency() {
-        let weight_set = [vec![1.0],
-                          vec![0.5, 0.5],
-                          vec![0.75, 0.25],
-                          vec![0.9, 0.1],
-                          vec![0.9999, 0.0001],
-                          vec![0.0001, 0.9999],
-                          vec![1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0],
-                          vec![0.25, 0.25, 0.25, 0.25],
-                          vec![1.0, 0.0],
-                          vec![0.0, 1.0],
-                          vec![0.0, 0.0, 1.0],
-                          vec![0.0, 1.0, 0.0],
-                          vec![1.0, 0.0, 0.0],
-                          vec![0.0, 0.5, 0.5],
-                          vec![0.5, 0.0, 0.5],
-                          vec![0.5, 0.5, 0.0],
-                          vec![0.8, 0.0, 0.2],
-                          vec![0.2, 0.0, 0.8],
-                          vec![0.5, 0.0, 0.0, 0.5]];
+        let weight_set = [
+            vec![1.0],
+            vec![0.5, 0.5],
+            vec![0.75, 0.25],
+            vec![0.9, 0.1],
+            vec![0.9999, 0.0001],
+            vec![0.0001, 0.9999],
+            vec![1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0],
+            vec![0.25, 0.25, 0.25, 0.25],
+            vec![1.0, 0.0],
+            vec![0.0, 1.0],
+            vec![0.0, 0.0, 1.0],
+            vec![0.0, 1.0, 0.0],
+            vec![1.0, 0.0, 0.0],
+            vec![0.0, 0.5, 0.5],
+            vec![0.5, 0.0, 0.5],
+            vec![0.5, 0.5, 0.0],
+            vec![0.8, 0.0, 0.2],
+            vec![0.2, 0.0, 0.8],
+            vec![0.5, 0.0, 0.0, 0.5],
+        ];
 
         for weights in weight_set.iter() {
-            assert_slice_approx_eq!(&weights,
-                                    &weights_from_dividers(&dividers_from_weights(&weights)),
-                                    f32::EPSILON);
+            assert_slice_approx_eq!(
+                &weights,
+                &weights_from_dividers(&dividers_from_weights(&weights)),
+                f32::EPSILON
+            );
         }
     }
 
@@ -2907,9 +3104,11 @@ mod test {
                 let sum: f32 = weights.iter().sum();
                 if sum > 0.0 {
                     let weights: Vec<f32> = weights.iter().map(|w| w / sum).collect();
-                    assert_slice_approx_eq!(&weights,
-                                            &weights_from_dividers(&dividers_from_weights(&weights)),
-                                            0.000001);
+                    assert_slice_approx_eq!(
+                        &weights,
+                        &weights_from_dividers(&dividers_from_weights(&weights)),
+                        0.000001
+                    );
                 }
             }
         }
@@ -2918,19 +3117,22 @@ mod test {
     #[ignore]
     #[test]
     fn test_weight_divider_robustness() {
-        let divider_set = [vec![0.5],
-                           vec![1.0],
-                           vec![0.0],
-                           vec![0.5, 0.5],
-                           vec![2.0 / 3.0, 0.75],
-                           vec![0.5, 0.0],
-                           vec![1.0, 0.5],
-                          ];
+        let divider_set = [
+            vec![0.5],
+            vec![1.0],
+            vec![0.0],
+            vec![0.5, 0.5],
+            vec![2.0 / 3.0, 0.75],
+            vec![0.5, 0.0],
+            vec![1.0, 0.5],
+        ];
 
         for dividers in divider_set.iter() {
-            assert_slice_approx_eq!(&dividers,
-                                    &dividers_from_weights(&weights_from_dividers(&dividers)),
-                                    f32::EPSILON);
+            assert_slice_approx_eq!(
+                &dividers,
+                &dividers_from_weights(&weights_from_dividers(&dividers)),
+                f32::EPSILON
+            );
         }
     }
 
@@ -2946,9 +3148,11 @@ mod test {
                 let dividers: Vec<f32> = (0..length)
                     .map(|_| Range::new(0.0, 1.0).ind_sample(&mut rng))
                     .collect();
-                assert_slice_approx_eq!(&dividers,
-                                        &dividers_from_weights(&weights_from_dividers(&dividers)),
-                                        0.000001);
+                assert_slice_approx_eq!(
+                    &dividers,
+                    &dividers_from_weights(&weights_from_dividers(&dividers)),
+                    0.000001
+                );
             }
         }
     }
@@ -2956,21 +3160,23 @@ mod test {
     #[ignore]
     #[test]
     fn test_weight_divider_effect() {
-        let weight_set = [vec![0.5, 0.5],
-                          vec![0.75, 0.25],
-                          vec![0.9999, 0.0001],
-                          vec![0.0001, 0.9999],
-                          vec![1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0],
-                          vec![0.25, 0.25, 0.25, 0.25],
-                          vec![1.0, 0.0],
-                          vec![0.0, 1.0],
-                          vec![0.0, 0.0, 1.0],
-                          vec![0.0, 1.0, 0.0],
-                          vec![1.0, 0.0, 0.0],
-                          vec![0.0, 0.5, 0.5],
-                          vec![0.5, 0.0, 0.5],
-                          vec![0.5, 0.5, 0.0],
-                          vec![0.5, 0.0, 0.0, 0.5]];
+        let weight_set = [
+            vec![0.5, 0.5],
+            vec![0.75, 0.25],
+            vec![0.9999, 0.0001],
+            vec![0.0001, 0.9999],
+            vec![1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0],
+            vec![0.25, 0.25, 0.25, 0.25],
+            vec![1.0, 0.0],
+            vec![0.0, 1.0],
+            vec![0.0, 0.0, 1.0],
+            vec![0.0, 1.0, 0.0],
+            vec![1.0, 0.0, 0.0],
+            vec![0.0, 0.5, 0.5],
+            vec![0.5, 0.0, 0.5],
+            vec![0.5, 0.5, 0.0],
+            vec![0.5, 0.0, 0.0, 0.5],
+        ];
 
         for weights in weight_set.iter() {
             let dividers = dividers_from_weights(&weights);
@@ -2980,9 +3186,11 @@ mod test {
                     let changed = dividers[i] + sign * 0.1;
                     if changed != dividers[i] {
                         dividers[i] = changed;
-                        assert_slice_approx_ne!(&weights,
-                                                &weights_from_dividers(&dividers),
-                                                f32::EPSILON);
+                        assert_slice_approx_ne!(
+                            &weights,
+                            &weights_from_dividers(&dividers),
+                            f32::EPSILON
+                        );
                     }
                 }
             }
