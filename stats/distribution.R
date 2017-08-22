@@ -55,7 +55,7 @@ variable <- function(distribution) {
     ggtitle("variable distribution")
 }
 
-plot_all <- function(file) {
+plot_dist <- function(file) {
   distribution <- read.csv(file = file, header = TRUE)
 
   grid.arrange(
