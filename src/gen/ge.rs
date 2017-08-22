@@ -2661,6 +2661,7 @@ fn dividers_from_weights(weights: &[f32]) -> Vec<f32> {
         .collect()
 }
 
+#[allow(dead_code)]
 fn weights_from_dividers(dividers: &[f32]) -> Vec<f32> {
     if dividers.is_empty() {
         return vec![1.0];
