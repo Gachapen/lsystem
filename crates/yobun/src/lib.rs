@@ -331,6 +331,7 @@ mod parse {
 mod test {
     use super::*;
     use nom::IResult::Done;
+    use std::f32;
 
     #[test]
     fn test_min_max() {
@@ -349,6 +350,32 @@ mod test {
         let a = Vector2::new(10.0, 5.0);
         let b = Unit::new_unchecked(Vector2::new(1.0, 0.0));
         assert_eq!(project_onto(&a, &b), 10.0);
+    }
+
+    #[test]
+    fn test_project_nan() {
+        use na::Vector2;
+
+        assert!(
+            project_onto(
+                &Vector2::new(f32::NAN, 1.0),
+                &Unit::new_unchecked(Vector2::new(1.0, 0.0))
+            ).is_nan()
+        );
+
+        assert!(
+            project_onto(
+                &Vector2::new(f32::INFINITY, 0.0),
+                &Unit::new_unchecked(Vector2::new(0.0, 0.0))
+            ).is_nan()
+        );
+
+        assert!(
+            !project_onto(
+                &Vector2::new(0.0, 0.0),
+                &Unit::new_unchecked(Vector2::new(0.0, 0.0))
+            ).is_nan()
+        );
     }
 
     #[test]
