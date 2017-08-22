@@ -331,7 +331,7 @@ fn random_seed() -> [u32; 4] {
     ]
 }
 
-const GENOME_LENGTH: usize = 100;
+const GENOME_LENGTH: usize = 1024;
 
 fn run_with_distribution(matches: &ArgMatches) {
     let (mut window, _) = setup_window();
