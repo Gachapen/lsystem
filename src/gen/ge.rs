@@ -2241,7 +2241,7 @@ fn run_learning(matches: &ArgMatches) {
             println!("Running learning for {} iterations.", iterations);
             Schedule::new_iterations(iterations)
         } else if let Some(time) = matches.value_of("until") {
-            use chrono::format::parsed::Parsed;
+            use chrono::format::Parsed;
             use chrono::format::parse;
 
             // This can probably be done in a nicer way...

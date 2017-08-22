@@ -6,6 +6,6 @@ description = "Extra ('yobun') utilities not provided by the std library"
 
 [dependencies]
 alga = "0.5"
-nalgebra = "0.12"
+nalgebra = "0.13"
 nom = "^3.0.0"
 num = "^0.1.37"
