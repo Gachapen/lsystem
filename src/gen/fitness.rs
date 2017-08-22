@@ -399,24 +399,35 @@ fn evaluate_balance(skeleton: &Skeleton) -> Balance {
         .expect("Can't evaluate skeleton with no points");
 
     let center = ncu::center(&skeleton.points);
-    let floor_center = Point2::new(center.x, center.z);
+    let floor_center = Vector2::new(center.x, center.z);
     let center_distance = na::norm(&Vector2::new(floor_center.x, floor_center.y));
 
-    let center_direction = Unit::new_normalize(Vector2::new(center.x, center.z));
-    let center_spread = floor_points
-        .iter()
-        .map(|p| Vector2::new(p.x, p.y))
-        .map(|p| project_onto(&p, &center_direction))
-        .max_by(|a, b| {
-            a.partial_cmp(b).expect("Projections can not be compared")
-        })
-        .expect("Can't evaluate skeleton with no points");
+    // TODO: Give good score to plants with center of gravity close to root.
+    if center_distance > 0.0 {
+        let center_direction = Unit::new_unchecked(floor_center / center_distance);
+        let center_spread = floor_points
+            .iter()
+            .map(|p| Vector2::new(p.x, p.y))
+            .map(|p| project_onto(&p, &center_direction))
+            .max_by(|a, b| {
+                a.partial_cmp(b).expect("Projections can not be compared")
+            })
+            .expect("Can't evaluate skeleton with no points");
 
-    Balance {
-        fitness: (0.5 - (center_distance / center_spread)) * 2.0,
-        spread: spread,
-        center: center,
-        center_spread: center_spread,
+        Balance {
+            fitness: (0.5 - (center_distance / center_spread)) * 2.0,
+            spread: spread,
+            center: center,
+            center_spread: center_spread,
+        }
+    } else {
+        // Distance of 0 will result in NaN, so handle as special case.
+        Balance {
+            fitness: 0.0,
+            spread: 0.0,
+            center: center,
+            center_spread: 0.0,
+        }
     }
 }
 
