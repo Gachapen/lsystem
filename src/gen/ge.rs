@@ -486,6 +486,7 @@ fn run_with_distribution(matches: &ArgMatches) {
                     let sample = samples.pop().unwrap();
 
                     println!("Found sample with score {}.", sample.score);
+                    println!("Seed: {:?}", sample.seed);
                     println!("Building model...");
 
                     window.remove(&mut model);
