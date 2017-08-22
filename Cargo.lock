@@ -1,29 +1,11 @@
 [root]
-name = "lsystem"
-version = "0.0.1"
+name = "yobun"
+version = "0.1.0"
 dependencies = [
- "abnf 0.1.0",
- "bincode 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "chrono 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "clap 2.26.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "crossbeam 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "csv 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.14 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures-cpupool 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "glfw 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "kiss3d 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "lsys 0.1.0",
- "lsys_kiss3d 0.1.0",
+ "alga 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "nalgebra 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "ncollide_utils 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nom 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "num 0.1.40 (registry+https://github.com/rust-lang/crates.io-index)",
- "num_cpus 1.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.3.16 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.11 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.11 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_yaml 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "yobun 0.1.0",
 ]
 
 [[package]]
@@ -384,6 +366,34 @@ dependencies = [
  "ncollide_transformation 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.1.40 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.38 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "lsystem"
+version = "0.0.1"
+dependencies = [
+ "abnf 0.1.0",
+ "bincode 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clap 2.26.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "crossbeam 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "csv 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.14 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures-cpupool 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "glfw 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "kiss3d 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lsys 0.1.0",
+ "lsys_kiss3d 0.1.0",
+ "nalgebra 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ncollide_utils 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num 0.1.40 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num_cpus 1.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.3.16 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.11 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.11 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_yaml 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "yobun 0.1.0",
 ]
 
 [[package]]
@@ -853,16 +863,6 @@ version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "linked-hash-map 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "yobun"
-version = "0.1.0"
-dependencies = [
- "alga 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "nalgebra 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "nom 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "num 0.1.40 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [metadata]

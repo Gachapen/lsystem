@@ -32,4 +32,4 @@ lsys = { path = "crates/lsys" }
 lsys_kiss3d = { path = "crates/lsys_kiss3d" }
 abnf = { path = "crates/abnf" }
 
-# [workspace]
+[workspace]
