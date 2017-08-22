@@ -1,5 +1,5 @@
-require(ggplot2)
-require(gridExtra)
+library(ggplot2)
+library(gridExtra)
 
 stats <- read.csv(file = "learning-stats.csv", header = TRUE)
 
