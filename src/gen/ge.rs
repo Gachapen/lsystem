@@ -297,15 +297,15 @@ pub fn run_ge(matches: &ArgMatches) {
 
 type GenePrimitive = u32;
 
-fn generate_genome<R: Rng>(rng: &mut R, len: usize) -> Vec<GenePrimitive> {
+fn generate_chromosome<R: Rng>(rng: &mut R, len: usize) -> Vec<GenePrimitive> {
     let gene_range = Range::new(GenePrimitive::min_value(), GenePrimitive::max_value());
 
-    let mut genes = Vec::with_capacity(len);
+    let mut chromosome = Vec::with_capacity(len);
     for _ in 0..len {
-        genes.push(gene_range.ind_sample(rng));
+        chromosome.push(gene_range.ind_sample(rng));
     }
 
-    genes
+    chromosome
 }
 
 fn generate_system<G>(grammar: &abnf::Ruleset, genotype: &mut G) -> ol::LSystem
@@ -331,7 +331,7 @@ fn random_seed() -> [u32; 4] {
     ]
 }
 
-const GENOME_LENGTH: usize = 1024;
+const CHROMOSOME_LEN: usize = 1024;
 
 fn run_with_distribution(matches: &ArgMatches) {
     let (mut window, _) = setup_window();
@@ -430,11 +430,11 @@ fn run_with_distribution(matches: &ArgMatches) {
                         settings: &lsys::Settings,
                     ) -> Sample {
                         let seed = random_seed();
-                        let genes =
-                            generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
+                        let chromosome =
+                            generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
                         let system = generate_system(
                             grammar,
-                            &mut WeightedGenotype::new(genes, distribution),
+                            &mut WeightedGenotype::new(chromosome, distribution),
                         );
                         let (fit, _) = fitness::evaluate(&system, settings);
                         Sample {
@@ -491,10 +491,10 @@ fn run_with_distribution(matches: &ArgMatches) {
 
                     window.remove(&mut model);
 
-                    let genes =
-                        generate_genome(&mut XorShiftRng::from_seed(sample.seed), GENOME_LENGTH);
+                    let chromosome =
+                        generate_chromosome(&mut XorShiftRng::from_seed(sample.seed), CHROMOSOME_LEN);
                     system =
-                        generate_system(&grammar, &mut WeightedGenotype::new(genes, &distribution));
+                        generate_system(&grammar, &mut WeightedGenotype::new(chromosome, &distribution));
                     let (fit, properties) = fitness::evaluate(&system, &settings);
 
                     if let Some(properties) = properties {
@@ -605,8 +605,8 @@ fn run_random_sampling(matches: &ArgMatches) {
         distribution: &Distribution,
     ) -> ([u32; 4], ol::LSystem) {
         let seed = random_seed();
-        let genes = generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
-        let system = generate_system(grammar, &mut WeightedGenotype::new(genes, distribution));
+        let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
+        let system = generate_system(grammar, &mut WeightedGenotype::new(chromosome, distribution));
         (seed, system)
     }
 
@@ -837,8 +837,8 @@ fn run_sampling_distribution(matches: &ArgMatches) {
         let grammar = grammar.clone();
 
         tasks.push(pool.spawn_fn(move || {
-            let genes = generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
-            let mut stats_genotype = WeightedGenotypeStats::new(genes, &distribution);
+            let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
+            let mut stats_genotype = WeightedGenotypeStats::new(chromosome, &distribution);
             expand_grammar(&grammar, "axiom", &mut stats_genotype);
             expand_productions(&grammar, &mut stats_genotype);
 
@@ -1147,9 +1147,9 @@ struct WeightedGenotypeStats<'a, G> {
 }
 
 impl<'a, G: Gene> WeightedGenotypeStats<'a, G> {
-    fn new(genes: Vec<G>, distribution: &'a Distribution) -> WeightedGenotypeStats<G> {
+    fn new(chromosome: Vec<G>, distribution: &'a Distribution) -> WeightedGenotypeStats<G> {
         WeightedGenotypeStats {
-            weighted_genotype: WeightedGenotype::new(genes, distribution),
+            weighted_genotype: WeightedGenotype::new(chromosome, distribution),
             stats: SelectionStats::new(),
         }
     }
@@ -1225,11 +1225,11 @@ fn run_random_genes() {
     let lsys_abnf = abnf::parse_file("grammar/lsys.abnf").expect("Could not parse ABNF file");
 
     let mut genotype = {
-        let genome = generate_genome(&mut rand::thread_rng(), 100);
-        Genotype::new(genome)
+        let chromosome = generate_chromosome(&mut rand::thread_rng(), 100);
+        Genotype::new(chromosome)
     };
 
-    println!("Genes: {:?}", genotype.genes);
+    println!("Genes: {:?}", genotype.chromosome);
     println!("");
 
     let settings = lsys::Settings {
@@ -1350,26 +1350,26 @@ impl Gene for usize {}
 
 #[derive(Clone)]
 struct Genotype<G> {
-    genes: Vec<G>,
+    chromosome: Vec<G>,
     index: usize,
 }
 
 impl<G: Gene> Genotype<G> {
-    fn new(genes: Vec<G>) -> Genotype<G> {
+    fn new(chromosome: Vec<G>) -> Genotype<G> {
         Genotype {
-            genes: genes,
+            chromosome: chromosome,
             index: 0,
         }
     }
 
     fn use_next_gene(&mut self) -> G {
         assert!(
-            self.index < self.genes.len(),
+            self.index < self.chromosome.len(),
             "Genotype index overflows gene list"
         );
 
-        let gene = self.genes[self.index];
-        self.index = (self.index + 1) % self.genes.len();
+        let gene = self.chromosome[self.index];
+        self.index = (self.index + 1) % self.chromosome.len();
 
         gene
     }
@@ -1655,9 +1655,9 @@ struct WeightedGenotype<'a, G> {
 }
 
 impl<'a, G: Gene> WeightedGenotype<'a, G> {
-    fn new(genes: Vec<G>, distribution: &'a Distribution) -> WeightedGenotype<G> {
+    fn new(chromosome: Vec<G>, distribution: &'a Distribution) -> WeightedGenotype<G> {
         WeightedGenotype {
-            genotype: Genotype::new(genes),
+            genotype: Genotype::new(chromosome),
             distribution: distribution,
         }
     }
@@ -1988,8 +1988,8 @@ fn run_stats(matches: &ArgMatches) {
         settings: &lsys::Settings,
     ) -> Fitness {
         let seed = random_seed();
-        let genes = generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
-        let system = generate_system(grammar, &mut WeightedGenotype::new(genes, distribution));
+        let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
+        let system = generate_system(grammar, &mut WeightedGenotype::new(chromosome, distribution));
         let (fit, _) = fitness::evaluate(&system, settings);
         fit
     }
@@ -2224,8 +2224,8 @@ fn run_learning(matches: &ArgMatches) {
 
     fn generate_sample(grammar: &abnf::Ruleset, distribution: &Distribution) -> ol::LSystem {
         let seed = random_seed();
-        let genes = generate_genome(&mut XorShiftRng::from_seed(seed), GENOME_LENGTH);
-        let mut genotype = WeightedGenotype::new(genes, distribution);
+        let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
+        let mut genotype = WeightedGenotype::new(chromosome, distribution);
         generate_system(grammar, &mut genotype)
     }
 
@@ -2872,7 +2872,7 @@ mod test {
     #[test]
     fn test_lsystem_ge_expansion() {
         let grammar = abnf::parse_file("grammar/lsys.abnf").expect("Could not parse ABNF file");
-        let genes = vec![
+        let chromosome = vec![
            2u8, // repeat 3 - "F[FX]X"
            0, // symbol - "F"
            0, // variable - "F"
@@ -2889,7 +2889,7 @@ mod test {
            0, // variable - "X"
            1, // "X"
         ];
-        let mut genotype = Genotype::new(genes);
+        let mut genotype = Genotype::new(chromosome);
 
         assert_eq!(expand_grammar(&grammar, "axiom", &mut genotype), "F[FX]X");
     }
@@ -2897,7 +2897,7 @@ mod test {
     #[test]
     fn test_lsystem_ge_inference() {
         let grammar = abnf::parse_file("grammar/lsys.abnf").expect("Could not parse ABNF file");
-        let genes = vec![
+        let chromosome = vec![
            2, // repeat - "F[FX]X"
            0, // symbol - "F"
            0, // variable - "F"
@@ -2915,7 +2915,7 @@ mod test {
            1, // "X"
         ];
 
-        assert_eq!(infer_selections("F[FX]X", &grammar, "axiom"), Ok(genes));
+        assert_eq!(infer_selections("F[FX]X", &grammar, "axiom"), Ok(chromosome));
     }
 
     #[test]
