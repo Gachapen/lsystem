@@ -41,8 +41,8 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
         match command {
             Command::Forward => {
                 let segment_length = {
-                    if !instruction.args.is_empty() {
-                        instruction.args[0]
+                    if let Some(ref args) = instruction.args {
+                        args[0]
                     } else {
                         segment_length
                     }
@@ -78,8 +78,8 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
             }
             Command::YawRight => {
                 let angle = {
-                    if !instruction.args.is_empty() {
-                        instruction.args[0]
+                    if let Some(ref args) = instruction.args {
+                        args[0]
                     } else {
                         settings.angle
                     }
@@ -88,8 +88,8 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
             }
             Command::YawLeft => {
                 let angle = {
-                    if !instruction.args.is_empty() {
-                        instruction.args[0]
+                    if let Some(ref args) = instruction.args {
+                        args[0]
                     } else {
                         settings.angle
                     }
@@ -102,8 +102,8 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
             }
             Command::PitchUp => {
                 let angle = {
-                    if !instruction.args.is_empty() {
-                        instruction.args[0]
+                    if let Some(ref args) = instruction.args {
+                        args[0]
                     } else {
                         settings.angle
                     }
@@ -112,8 +112,8 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
             }
             Command::PitchDown => {
                 let angle = {
-                    if !instruction.args.is_empty() {
-                        instruction.args[0]
+                    if let Some(ref args) = instruction.args {
+                        args[0]
                     } else {
                         settings.angle
                     }
@@ -122,8 +122,8 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
             }
             Command::RollRight => {
                 let angle = {
-                    if !instruction.args.is_empty() {
-                        instruction.args[0]
+                    if let Some(ref args) = instruction.args {
+                        args[0]
                     } else {
                         settings.angle
                     }
@@ -132,8 +132,8 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
             }
             Command::RollLeft => {
                 let angle = {
-                    if !instruction.args.is_empty() {
-                        instruction.args[0]
+                    if let Some(ref args) = instruction.args {
+                        args[0]
                     } else {
                         settings.angle
                     }
@@ -142,8 +142,8 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
             }
             Command::Shrink => {
                 let rate = {
-                    if !instruction.args.is_empty() {
-                        instruction.args[0]
+                    if let Some(ref args) = instruction.args {
+                        args[0]
                     } else {
                         settings.shrink_rate
                     }
@@ -152,8 +152,8 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
             }
             Command::Grow => {
                 let rate = {
-                    if !instruction.args.is_empty() {
-                        instruction.args[0]
+                    if let Some(ref args) = instruction.args {
+                        args[0]
                     } else {
                         settings.shrink_rate
                     }
@@ -161,7 +161,7 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
                 width *= rate;
             }
             Command::Width => {
-                width = instruction.args[0];
+                width = instruction.args.as_ref().unwrap()[0];
             }
             Command::Push => {
                 states.push((position, rotation, width, color_index));

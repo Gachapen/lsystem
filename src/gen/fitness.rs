@@ -83,8 +83,8 @@ pub fn build_skeleton(
         match command {
             Command::Forward => {
                 let segment_length = {
-                    if !instruction.args.is_empty() {
-                        instruction.args[0]
+                    if let Some(ref args) = instruction.args {
+                        args[0]
                     } else {
                         segment_length
                     }
@@ -104,8 +104,8 @@ pub fn build_skeleton(
             }
             Command::YawRight => {
                 let angle = {
-                    if !instruction.args.is_empty() {
-                        instruction.args[0]
+                    if let Some(ref args) = instruction.args {
+                        args[0]
                     } else {
                         settings.angle
                     }
@@ -114,8 +114,8 @@ pub fn build_skeleton(
             }
             Command::YawLeft => {
                 let angle = {
-                    if !instruction.args.is_empty() {
-                        instruction.args[0]
+                    if let Some(ref args) = instruction.args {
+                        args[0]
                     } else {
                         settings.angle
                     }
@@ -124,12 +124,12 @@ pub fn build_skeleton(
             }
             Command::UTurn => {
                 let angle = PI;
-                rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * -angle);
+                rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * angle);
             }
             Command::PitchUp => {
                 let angle = {
-                    if !instruction.args.is_empty() {
-                        instruction.args[0]
+                    if let Some(ref args) = instruction.args {
+                        args[0]
                     } else {
                         settings.angle
                     }
@@ -138,8 +138,8 @@ pub fn build_skeleton(
             }
             Command::PitchDown => {
                 let angle = {
-                    if !instruction.args.is_empty() {
-                        instruction.args[0]
+                    if let Some(ref args) = instruction.args {
+                        args[0]
                     } else {
                         settings.angle
                     }
@@ -148,8 +148,8 @@ pub fn build_skeleton(
             }
             Command::RollRight => {
                 let angle = {
-                    if !instruction.args.is_empty() {
-                        instruction.args[0]
+                    if let Some(ref args) = instruction.args {
+                        args[0]
                     } else {
                         settings.angle
                     }
@@ -158,8 +158,8 @@ pub fn build_skeleton(
             }
             Command::RollLeft => {
                 let angle = {
-                    if !instruction.args.is_empty() {
-                        instruction.args[0]
+                    if let Some(ref args) = instruction.args {
+                        args[0]
                     } else {
                         settings.angle
                     }

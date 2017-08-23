@@ -22,14 +22,14 @@ pub enum Command {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Instruction {
     pub command: Command,
-    pub args: Vec<f32>,
+    pub args: Option<Vec<f32>>,
 }
 
 impl Instruction {
     pub fn new(command: Command) -> Instruction {
         Instruction {
             command: command,
-            args: vec![],
+            args: None,
         }
     }
 }

@@ -309,7 +309,7 @@ pub fn map_word_to_instructions(word: &WordSlice, command_map: &CommandMap) -> V
         if command != Command::Noop {
             instructions.push(Instruction {
                                   command: command,
-                                  args: params_to_args(&letter.params),
+                                  args: Some(params_to_args(&letter.params)),
                               });
         }
     }
