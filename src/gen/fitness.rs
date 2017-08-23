@@ -215,8 +215,8 @@ pub struct Properties {
     pub complexity: f32,
 }
 
-const SKELETON_LIMIT: usize = 20000;
-const INSTRUCTION_LIMIT: usize = 10000000;
+const SKELETON_LIMIT: usize = 10000;
+const INSTRUCTION_LIMIT: usize = SKELETON_LIMIT * 50;
 
 pub fn is_crap(lsystem: &ol::LSystem, settings: &lsys::Settings) -> bool {
     if is_nothing(lsystem) {
@@ -314,6 +314,7 @@ pub fn evaluate(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (Fitness, O
         SKELETON_LIMIT,
         INSTRUCTION_LIMIT,
     );
+
     if let Some(skeleton) = skeleton {
         if skeleton.points.len() <= 1 {
             return (Fitness::nothing(), None);
