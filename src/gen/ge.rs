@@ -1,7 +1,6 @@
 use std::f32::consts::{PI, E};
 use std::f32;
 use std::{cmp, fmt, iter};
-use std::collections::HashMap;
 use std::io::{self, BufWriter, BufReader, Write, Read};
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
@@ -28,6 +27,7 @@ use clap::{App, SubCommand, Arg, ArgMatches};
 use csv;
 use chrono::prelude::*;
 use chrono::format::strftime::StrftimeItems;
+use fnv::FnvHashMap;
 
 use abnf;
 use abnf::expand::{SelectionStrategy, expand_grammar};
@@ -958,7 +958,7 @@ where
 
 type SelectionChoice = Vec<usize>;
 type SelectionRule = Vec<SelectionChoice>;
-type SelectionDepth = HashMap<String, SelectionRule>;
+type SelectionDepth = FnvHashMap<String, SelectionRule>;
 
 #[derive(Clone)]
 struct SelectionStats {
@@ -972,7 +972,7 @@ impl SelectionStats {
 
     fn make_room(&mut self, depth: usize, rule: &str, choice: u32, num: usize) {
         while self.data.len() <= depth {
-            self.data.push(HashMap::new());
+            self.data.push(FnvHashMap::default());
         }
 
         let choices = self.data[depth].entry(rule.to_string()).or_insert_with(
@@ -1083,7 +1083,7 @@ impl<'a> Add<&'a SelectionStats> for SelectionStats {
 
     fn add(mut self, other: &SelectionStats) -> SelectionStats {
         while self.data.len() < other.data.len() {
-            self.data.push(HashMap::new());
+            self.data.push(FnvHashMap::default());
         }
 
         for (depth, other_rules) in other.data.iter().enumerate() {
@@ -1426,15 +1426,15 @@ fn weighted_selection(weights: &[f32], selector: f32) -> usize {
 
 #[derive(Clone, Serialize, Deserialize)]
 struct Distribution {
-    depths: Vec<HashMap<String, Vec<Vec<f32>>>>,
-    defaults: HashMap<String, Vec<Vec<f32>>>,
+    depths: Vec<FnvHashMap<String, Vec<Vec<f32>>>>,
+    defaults: FnvHashMap<String, Vec<Vec<f32>>>,
 }
 
 impl Distribution {
     fn new() -> Distribution {
         Distribution {
             depths: vec![],
-            defaults: HashMap::new(),
+            defaults: FnvHashMap::default(),
         }
     }
 
@@ -1504,7 +1504,7 @@ impl Distribution {
         weight: f32,
     ) {
         while self.depths.len() < depth + 1 {
-            self.depths.push(HashMap::new());
+            self.depths.push(FnvHashMap::default());
         }
 
         let choices = self.depths[depth].entry(rule.to_string()).or_insert_with(
@@ -1525,7 +1525,7 @@ impl Distribution {
 
     fn set_weights(&mut self, depth: usize, rule: &str, choice: u32, weights: &[f32]) {
         while self.depths.len() < depth + 1 {
-            self.depths.push(HashMap::new());
+            self.depths.push(FnvHashMap::default());
         }
 
         let choices = self.depths[depth].entry(rule.to_string()).or_insert_with(

@@ -1,7 +1,7 @@
 use syntax::{Ruleset, List, Item, Content};
 
 pub fn rules() -> Ruleset {
-    let mut ruleset = Ruleset::new();
+    let mut ruleset = Ruleset::default();
 
     ruleset.insert("ALPHA".to_string(), alpha());
 

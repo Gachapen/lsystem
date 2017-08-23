@@ -17,6 +17,8 @@ extern crate clap;
 extern crate parking_lot;
 extern crate csv;
 extern crate chrono;
+extern crate cpuprofiler;
+extern crate fnv;
 
 #[macro_use]
 extern crate lsys;
