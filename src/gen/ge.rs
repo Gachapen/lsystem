@@ -337,9 +337,9 @@ fn run_with_distribution(matches: &ArgMatches) {
     let (mut window, _) = setup_window();
 
     let grammar_path = matches.value_of("grammar").unwrap();
-    let grammar = Arc::new(
-        abnf::parse_file(grammar_path).expect("Could not parse ABNF file"),
-    );
+    let grammar = Arc::new(abnf::parse_file(grammar_path).expect(
+        "Could not parse ABNF file",
+    ));
 
     let distribution = match matches.value_of("distribution") {
         Some(filename) => {
@@ -491,10 +491,14 @@ fn run_with_distribution(matches: &ArgMatches) {
 
                     window.remove(&mut model);
 
-                    let chromosome =
-                        generate_chromosome(&mut XorShiftRng::from_seed(sample.seed), CHROMOSOME_LEN);
-                    system =
-                        generate_system(&grammar, &mut WeightedGenotype::new(chromosome, &distribution));
+                    let chromosome = generate_chromosome(
+                        &mut XorShiftRng::from_seed(sample.seed),
+                        CHROMOSOME_LEN,
+                    );
+                    system = generate_system(
+                        &grammar,
+                        &mut WeightedGenotype::new(chromosome, &distribution),
+                    );
                     let (fit, properties) = fitness::evaluate(&system, &settings);
 
                     if let Some(properties) = properties {
@@ -606,7 +610,10 @@ fn run_random_sampling(matches: &ArgMatches) {
     ) -> ([u32; 4], ol::LSystem) {
         let seed = random_seed();
         let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
-        let system = generate_system(grammar, &mut WeightedGenotype::new(chromosome, distribution));
+        let system = generate_system(
+            grammar,
+            &mut WeightedGenotype::new(chromosome, distribution),
+        );
         (seed, system)
     }
 
@@ -968,9 +975,9 @@ impl SelectionStats {
             self.data.push(HashMap::new());
         }
 
-        let choices = self.data[depth]
-            .entry(rule.to_string())
-            .or_insert_with(Vec::new);
+        let choices = self.data[depth].entry(rule.to_string()).or_insert_with(
+            Vec::new,
+        );
         let choice = choice as usize;
         while choices.len() <= choice {
             choices.push(Vec::new());
@@ -1081,9 +1088,9 @@ impl<'a> Add<&'a SelectionStats> for SelectionStats {
 
         for (depth, other_rules) in other.data.iter().enumerate() {
             for (rule, other_choices) in other_rules {
-                let choices = self.data[depth]
-                    .entry(rule.to_string())
-                    .or_insert_with(Vec::new);
+                let choices = self.data[depth].entry(rule.to_string()).or_insert_with(
+                    Vec::new,
+                );
                 while choices.len() < other_choices.len() {
                     choices.push(Vec::new());
                 }
@@ -1500,9 +1507,9 @@ impl Distribution {
             self.depths.push(HashMap::new());
         }
 
-        let choices = self.depths[depth]
-            .entry(rule.to_string())
-            .or_insert_with(Vec::new);
+        let choices = self.depths[depth].entry(rule.to_string()).or_insert_with(
+            Vec::new,
+        );
         let choice = choice as usize;
         while choices.len() < choice + 1 {
             choices.push(Vec::new());
@@ -1521,9 +1528,9 @@ impl Distribution {
             self.depths.push(HashMap::new());
         }
 
-        let choices = self.depths[depth]
-            .entry(rule.to_string())
-            .or_insert_with(Vec::new);
+        let choices = self.depths[depth].entry(rule.to_string()).or_insert_with(
+            Vec::new,
+        );
         let choice = choice as usize;
         while choices.len() < choice + 1 {
             choices.push(Vec::new());
@@ -1533,9 +1540,9 @@ impl Distribution {
     }
 
     fn set_default_weights(&mut self, rule: &str, choice: u32, weights: &[f32]) {
-        let choices = self.defaults
-            .entry(rule.to_string())
-            .or_insert_with(Vec::new);
+        let choices = self.defaults.entry(rule.to_string()).or_insert_with(
+            Vec::new,
+        );
         let choice = choice as usize;
         while choices.len() < choice + 1 {
             choices.push(Vec::new());
@@ -1591,13 +1598,11 @@ impl Distribution {
         let mut dist = Distribution::new();
 
         for row in reader.decode() {
-            let (depth, rule, choice, alternative, weight): (
-                usize,
-                String,
-                u32,
-                usize,
-                f32,
-            ) = row.unwrap();
+            let (depth, rule, choice, alternative, weight): (usize,
+                                                             String,
+                                                             u32,
+                                                             usize,
+                                                             f32) = row.unwrap();
             dist.set_weight(depth, &rule, choice, alternative, weight);
         }
 
@@ -1950,14 +1955,14 @@ fn infer_item_selections(
 }
 
 fn run_stats(matches: &ArgMatches) {
-    let grammar = Arc::new(
-        abnf::parse_file("grammar/lsys2.abnf").expect("Could not parse ABNF file"),
-    );
+    let grammar = Arc::new(abnf::parse_file("grammar/lsys2.abnf").expect(
+        "Could not parse ABNF file",
+    ));
 
     let distributions: Vec<Arc<Distribution>> = {
-        let paths = matches
-            .values_of("DISTRIBUTIONS")
-            .expect("No distributions specified");
+        let paths = matches.values_of("DISTRIBUTIONS").expect(
+            "No distributions specified",
+        );
 
         println!("Distributions: {:?}", paths.clone().collect::<Vec<_>>());
 
@@ -1989,7 +1994,10 @@ fn run_stats(matches: &ArgMatches) {
     ) -> Fitness {
         let seed = random_seed();
         let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
-        let system = generate_system(grammar, &mut WeightedGenotype::new(chromosome, distribution));
+        let system = generate_system(
+            grammar,
+            &mut WeightedGenotype::new(chromosome, distribution),
+        );
         let (fit, _) = fitness::evaluate(&system, settings);
         fit
     }
@@ -2153,8 +2161,9 @@ fn run_learning(matches: &ArgMatches) {
                     let max = max.as_secs();
                     let spent = spent.as_secs();
 
-                    partial_clamp(spent as f32 / max as f32, 0.0, 1.0)
-                        .expect("Time progress is NaN")
+                    partial_clamp(spent as f32 / max as f32, 0.0, 1.0).expect(
+                        "Time progress is NaN",
+                    )
                 }
                 Schedule::Duration { start, max } => {
                     let spent = Local::now()
@@ -2165,8 +2174,9 @@ fn run_learning(matches: &ArgMatches) {
                     let max = max.as_secs();
                     let spent = spent.as_secs();
 
-                    partial_clamp(spent as f32 / max as f32, 0.0, 1.0)
-                        .expect("Time progress is NaN")
+                    partial_clamp(spent as f32 / max as f32, 0.0, 1.0).expect(
+                        "Time progress is NaN",
+                    )
                 }
             }
 
@@ -2256,9 +2266,9 @@ fn run_learning(matches: &ArgMatches) {
                 return;
             }
 
-            let end_date = parsed
-                .to_naive_date()
-                .unwrap_or_else(|_| Local::today().naive_local());
+            let end_date = parsed.to_naive_date().unwrap_or_else(
+                |_| Local::today().naive_local(),
+            );
             let end_time = parsed.to_naive_time().unwrap();
             let end_datetime = NaiveDateTime::new(end_date, end_time);
 
@@ -2631,9 +2641,9 @@ fn run_distribution_csv_to_bin(matches: &ArgMatches) {
 
     let mut input_file = File::open(input_path).expect("Could not open input file");
     let mut csv = String::new();
-    input_file
-        .read_to_string(&mut csv)
-        .expect("Could not read input file");
+    input_file.read_to_string(&mut csv).expect(
+        "Could not read input file",
+    );
 
     let distribution = Distribution::from_csv(&csv);
 
@@ -2736,9 +2746,9 @@ fn run_sample_weight_space(matches: &ArgMatches) {
                 future::ok(dividers_from_weights(&generate_weight(dimensions)))
             })
         } else {
-            pool.spawn_fn(
-                move || -> FutureResult<Vec<f32>, ()> { future::ok(generate_weight(dimensions)) },
-            )
+            pool.spawn_fn(move || -> FutureResult<Vec<f32>, ()> {
+                future::ok(generate_weight(dimensions))
+            })
         })
         .collect();
 
@@ -2759,9 +2769,9 @@ fn run_sample_weight_space(matches: &ArgMatches) {
     }
 
     let mut csv_file = File::create(output_path).unwrap();
-    csv_file
-        .write_all(csv.as_bytes())
-        .expect("Failed writing sample csv file");
+    csv_file.write_all(csv.as_bytes()).expect(
+        "Failed writing sample csv file",
+    );
 }
 
 #[cfg(test)]
@@ -2915,7 +2925,10 @@ mod test {
            1, // "X"
         ];
 
-        assert_eq!(infer_selections("F[FX]X", &grammar, "axiom"), Ok(chromosome));
+        assert_eq!(
+            infer_selections("F[FX]X", &grammar, "axiom"),
+            Ok(chromosome)
+        );
     }
 
     #[test]

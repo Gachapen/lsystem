@@ -452,8 +452,8 @@ fn evaluate_closeness(skeleton: &Skeleton) -> f32 {
                     for (b_i, b_s) in segments.iter().enumerate() {
                         if b_i != a_i {
                             let dot = na::dot(a_s, b_s);
-                            closest = partial_max(dot, closest)
-                                .expect("Closeness can not be compared");
+                            closest =
+                                partial_max(dot, closest).expect("Closeness can not be compared");
                         }
                     }
 
