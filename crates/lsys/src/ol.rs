@@ -251,7 +251,7 @@ impl<'a, 'b> InstructionsIter<'a, 'b> {
             lsystem: lsystem,
             command_map: command_map,
             num_iterations: iterations,
-            visit_stack: vec![],
+            visit_stack: Vec::with_capacity(lsystem.axiom.len()),
         };
 
         for symbol in iter.lsystem.axiom.as_bytes().iter().rev() {
@@ -273,11 +273,14 @@ impl<'a, 'b> Iterator for InstructionsIter<'a, 'b> {
 
             let successor = &self.lsystem.productions[sym];
             let next_lvl = lvl + 1;
-            for symbol in successor.as_bytes().iter().rev() {
-                self.visit_stack.push((next_lvl, *symbol));
-            }
 
-            top = self.visit_stack.pop();
+            let mut succ_iter = successor.as_bytes().iter();
+            top = Some((next_lvl, *succ_iter.next().unwrap()));
+
+            self.visit_stack.reserve(successor.len() - 1);
+            self.visit_stack.extend(
+                succ_iter.rev().map(|sym| (next_lvl, *sym)),
+            );
         }
 
         if let Some((_, sym)) = top {
