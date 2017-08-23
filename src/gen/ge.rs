@@ -1407,7 +1407,7 @@ impl<G: Gene> SelectionStrategy for Genotype<G> {
 }
 
 fn weighted_selection(weights: &[f32], selector: f32) -> usize {
-    let total_weight = weights.iter().fold(0.0, |acc, weight| acc + weight);
+    let total_weight: f32 = weights.iter().sum();
     let selector = selector * total_weight;
 
     let mut weight_acc = 0.0;
