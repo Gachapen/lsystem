@@ -267,6 +267,9 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .help("Sample the dividers instead of the weights")
             )
         )
+        .subcommand(SubCommand::with_name("bench")
+            .about("Run benchmarks")
+        )
 }
 
 pub fn run_ge(matches: &ArgMatches) {
@@ -290,12 +293,15 @@ pub fn run_ge(matches: &ArgMatches) {
         run_distribution_csv_to_bin(matches);
     } else if let Some(matches) = matches.subcommand_matches("sample-weight-space") {
         run_sample_weight_space(matches);
+    } else if let Some(matches) = matches.subcommand_matches("bench") {
+        run_benchmark(matches);
     } else {
         println!("A subcommand must be specified. See help by passing -h.");
     }
 }
 
 type GenePrimitive = u32;
+const CHROMOSOME_LEN: usize = 1024;
 
 fn generate_chromosome<R: Rng>(rng: &mut R, len: usize) -> Vec<GenePrimitive> {
     let gene_range = Range::new(GenePrimitive::min_value(), GenePrimitive::max_value());
@@ -330,8 +336,6 @@ fn random_seed() -> [u32; 4] {
         rand::thread_rng().gen::<u32>(),
     ]
 }
-
-const CHROMOSOME_LEN: usize = 1024;
 
 fn run_with_distribution(matches: &ArgMatches) {
     let (mut window, _) = setup_window();
@@ -2772,6 +2776,34 @@ fn run_sample_weight_space(matches: &ArgMatches) {
     csv_file.write_all(csv.as_bytes()).expect(
         "Failed writing sample csv file",
     );
+}
+
+fn run_benchmark(_: &ArgMatches) {
+    use cpuprofiler::PROFILER;
+
+    fn generate_sample(grammar: &abnf::Ruleset, distribution: &Distribution) -> ol::LSystem {
+        let seed = random_seed();
+        let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
+        let mut genotype = WeightedGenotype::new(chromosome, distribution);
+        generate_system(grammar, &mut genotype)
+    }
+
+    let (grammar, distribution) = get_sample_setup();
+    let settings = Arc::new(lsys::Settings {
+        width: 0.05,
+        angle: PI / 8.0,
+        iterations: 5,
+        ..lsys::Settings::new()
+    });
+
+    PROFILER.lock().unwrap().start("./bench.profile").unwrap();
+
+    for _ in 0..50 {
+        let lsystem = generate_sample(&grammar, &distribution);
+        fitness::evaluate(&lsystem, &settings);
+    }
+
+    PROFILER.lock().unwrap().stop().unwrap();
 }
 
 #[cfg(test)]
