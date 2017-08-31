@@ -92,7 +92,7 @@ pub fn build_skeleton(
 
                 if !filling {
                     let direction = rotation * Vector3::new(0.0, 0.0, -1.0);
-                    position = position + (direction * segment_length);
+                    position += direction * segment_length;
 
                     let index = skeleton.points.len();
                     skeleton.points.push(position);
@@ -110,7 +110,7 @@ pub fn build_skeleton(
                         settings.angle
                     }
                 };
-                rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * -angle);
+                rotation *= Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * -angle);
             }
             Command::YawLeft => {
                 let angle = {
@@ -120,11 +120,11 @@ pub fn build_skeleton(
                         settings.angle
                     }
                 };
-                rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * angle);
+                rotation *= Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * angle);
             }
             Command::UTurn => {
                 let angle = PI;
-                rotation = rotation * Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * angle);
+                rotation *= Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * angle);
             }
             Command::PitchUp => {
                 let angle = {
@@ -134,7 +134,7 @@ pub fn build_skeleton(
                         settings.angle
                     }
                 };
-                rotation = rotation * Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * angle);
+                rotation *= Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * angle);
             }
             Command::PitchDown => {
                 let angle = {
@@ -144,7 +144,7 @@ pub fn build_skeleton(
                         settings.angle
                     }
                 };
-                rotation = rotation * Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * -angle);
+                rotation *= Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * -angle);
             }
             Command::RollRight => {
                 let angle = {
@@ -154,7 +154,7 @@ pub fn build_skeleton(
                         settings.angle
                     }
                 };
-                rotation = rotation * Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * -angle);
+                rotation *= Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * -angle);
             }
             Command::RollLeft => {
                 let angle = {
@@ -164,11 +164,10 @@ pub fn build_skeleton(
                         settings.angle
                     }
                 };
-                rotation = rotation * Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * angle);
+                rotation *= Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * angle);
             }
-            Command::Shrink => {}
-            Command::Grow => {}
-            Command::Width => {}
+            Command::Shrink | Command::Grow | Command::Width | Command::NextColor |
+            Command::Noop => {}
             Command::Push => {
                 states.push((position, rotation, parent));
             }
@@ -196,8 +195,6 @@ pub fn build_skeleton(
 
                 filling = false;
             }
-            Command::NextColor => {}
-            Command::Noop => {}
         };
     }
 
@@ -215,7 +212,7 @@ pub struct Properties {
     pub complexity: f32,
 }
 
-const SKELETON_LIMIT: usize = 10000;
+const SKELETON_LIMIT: usize = 10_000;
 const INSTRUCTION_LIMIT: usize = SKELETON_LIMIT * 50;
 
 pub fn is_crap(lsystem: &ol::LSystem, settings: &lsys::Settings) -> bool {
