@@ -1,11 +1,14 @@
-use syntax::{Ruleset, List, Item, Content};
+use syntax::{Grammar, Symbol, List, Item, Content};
 
-pub fn rules() -> Ruleset {
-    let mut ruleset = Ruleset::default();
+// TODO: Make this constant somehow so that the grammar doesn't have to be constructed each time.
+// This is one solution, but requires an atomic check each time it is used:
+// http://rust-lang-nursery.github.io/lazy-static.rs/lazy_static/index.html
+pub fn rules() -> Grammar {
+    let rules = vec![
+        (Symbol::from("ALPHA"), alpha()),
+    ];
 
-    ruleset.insert("ALPHA".to_string(), alpha());
-
-    ruleset
+    Grammar::from_rules(rules)
 }
 
 pub fn alpha() -> List {

@@ -19,7 +19,7 @@ pub enum Error {
     Io(io::Error),
 }
 
-pub fn parse_file(filename: &str) -> Result<Ruleset, Error> {
+pub fn parse_file(filename: &str) -> Result<Grammar, Error> {
     let mut f = match File::open(filename) {
         Ok(file) => file,
         Err(err) => return Err(Error::Io(err)),
@@ -33,13 +33,13 @@ pub fn parse_file(filename: &str) -> Result<Ruleset, Error> {
     }
 }
 
-pub fn parse_string(content: &str) -> Result<Ruleset, Error> {
+pub fn parse_string(content: &str) -> Result<Grammar, Error> {
     parse_bytes(content.as_bytes())
 }
 
-pub fn parse_bytes(content: &[u8]) -> Result<Ruleset, Error> {
-    match parse::ruleset(content) {
-        nom::IResult::Done(_, item) => Ok(item),
+pub fn parse_bytes(content: &[u8]) -> Result<Grammar, Error> {
+    match parse::rules(content) {
+        nom::IResult::Done(_, item) => Ok(Grammar::from_rules(item)),
         nom::IResult::Error(_) => Err(Error::Parse("Internal parse module failed".to_string())),
         nom::IResult::Incomplete(_) => {
             Err(Error::Parse("Internal parse module failed".to_string()))
@@ -78,11 +78,11 @@ mod tests {
 
     #[test]
     fn test_parse_bytes() {
-        assert!(parse_bytes(b"rule = definition").is_ok());
+        assert!(parse_bytes(b"rule = \"hello\"").is_ok());
     }
 
     #[test]
     fn test_parse_string() {
-        assert!(parse_string("rule = definition").is_ok());
+        assert!(parse_string("rule = \"hello\"").is_ok());
     }
 }

@@ -1,7 +1,7 @@
 use nom::{alphanumeric, digit, eol, space, hex_u32};
 use std::str;
 
-use syntax::{Repeat, Item, Content, Sequence, Ruleset, List, Rule};
+use syntax::{Repeat, Item, Content, Sequence, Symbol, List, Rule};
 
 named!(pub string_literal<String>,
     delimited!(
@@ -77,13 +77,13 @@ named!(pub repeat<Repeat>,
     )
 );
 
-named!(pub symbol<String>,
+named!(pub symbol<Symbol>,
     map!(
         map_res!(
             call!(alphanumeric),
             str::from_utf8
         ),
-        String::from
+        |name| Symbol::from(name)
     )
 );
 
@@ -187,7 +187,7 @@ named!(pub rule<Rule>,
     )
 );
 
-named!(pub ruleset<Ruleset>,
+named!(pub rules<Vec<Rule>>,
     map!(
         do_parse!(
             first: call!(rule) >>
@@ -201,7 +201,7 @@ named!(pub ruleset<Ruleset>,
         ),
         |(first, mut remaining): (Rule, Vec<Rule>)| {
             remaining.insert(0, first);
-            remaining.into_iter().collect()
+            remaining
         }
     )
 );
@@ -213,12 +213,14 @@ mod tests {
     use parse;
     use super::*;
     use syntax::List::{Sequence, Alternatives};
-    use syntax::Content::{Value, Symbol};
+    use syntax::{Content, Symbol};
 
     #[test]
     fn test_string_literal_parser() {
-        assert_eq!(parse::string_literal(&b"\"hello world\""[..]),
-                   Done(&b""[..], ("hello world".to_string())));
+        assert_eq!(
+            parse::string_literal(&b"\"hello world\""[..]),
+            Done(&b""[..], ("hello world".to_string()))
+        );
     }
 
     #[test]
@@ -230,97 +232,130 @@ mod tests {
 
     #[test]
     fn test_repeat_parser_any() {
-        assert_eq!(parse::repeat(&b"*"[..]),
-                   Done(&b""[..],
-                        (Repeat {
-                             min: None,
-                             max: None,
-                         })));
+        assert_eq!(
+            parse::repeat(&b"*"[..]),
+            Done(
+                &b""[..],
+                (Repeat {
+                     min: None,
+                     max: None,
+                 }),
+            )
+        );
     }
 
     #[test]
     fn test_repeat_parser_min() {
-        assert_eq!(parse::repeat(&b"4*"[..]),
-                   Done(&b""[..],
-                        (Repeat {
-                             min: Some(4),
-                             max: None,
-                         })));
+        assert_eq!(
+            parse::repeat(&b"4*"[..]),
+            Done(
+                &b""[..],
+                (Repeat {
+                     min: Some(4),
+                     max: None,
+                 }),
+            )
+        );
     }
 
     #[test]
     fn test_repeat_parser_max() {
-        assert_eq!(parse::repeat(&b"*8"[..]),
-                   Done(&b""[..],
-                        (Repeat {
-                             min: None,
-                             max: Some(8),
-                         })));
+        assert_eq!(
+            parse::repeat(&b"*8"[..]),
+            Done(
+                &b""[..],
+                (Repeat {
+                     min: None,
+                     max: Some(8),
+                 }),
+            )
+        );
     }
 
     #[test]
     fn test_repeat_parser_minmax() {
-        assert_eq!(parse::repeat(&b"4*8"[..]),
-                   Done(&b""[..],
-                        (Repeat {
-                             min: Some(4),
-                             max: Some(8),
-                         })));
+        assert_eq!(
+            parse::repeat(&b"4*8"[..]),
+            Done(
+                &b""[..],
+                (Repeat {
+                     min: Some(4),
+                     max: Some(8),
+                 }),
+            )
+        );
     }
 
     #[test]
     fn test_symbol_parser() {
-        assert_eq!(parse::symbol(&b"somesymbol123"[..]),
-                   Done(&b""[..], ("somesymbol123".to_string())));
+        assert_eq!(
+            parse::symbol(&b"somesymbol123"[..]),
+            Done(&b""[..], (Symbol::from("somesymbol123")))
+        );
     }
 
     #[test]
     fn test_item_parser() {
-        let result = Item::repeated(Symbol("abc".to_string()), Repeat::with_limits(1, 2));
+        let result = Item::repeated(
+            Content::Symbol(Symbol::from("abc")),
+            Repeat::with_limits(1, 2),
+        );
 
         assert_eq!(parse::item(&b"1*2abc"[..]), Done(&b""[..], (result)));
     }
 
     #[test]
     fn test_sequence_parser_single() {
-        let result = vec![Item::new(Symbol("sym".to_string()))];
+        let result = vec![Item::new(Content::Symbol(Symbol::from("sym")))];
         assert_eq!(parse::sequence(&b"sym"[..]), Done(&b""[..], (result)));
     }
 
     #[test]
     fn test_sequence_parser_multi() {
-        let result = vec![Item::new(Symbol("sym".to_string())),
-                          Item::new(Symbol("sym2".to_string()))];
+        let result = vec![
+            Item::new(Content::Symbol(Symbol::from("sym"))),
+            Item::new(Content::Symbol(Symbol::from("sym2"))),
+        ];
         assert_eq!(parse::sequence(&b"sym sym2"[..]), Done(&b""[..], result));
     }
 
     #[test]
     fn test_sequence_parser_trailing() {
-        let result = vec![Item::new(Symbol("sym".to_string()))];
+        let result = vec![Item::new(Content::Symbol(Symbol::from("sym")))];
         assert_eq!(parse::sequence(&b"sym "[..]), Done(&b" "[..], (result)));
     }
 
     #[test]
     fn test_sequence_parser_alternatives() {
-        let result = vec![Item::new(Symbol("sym".to_string()))];
-        assert_eq!(parse::sequence(&b"sym / sym2"[..]),
-                   Done(&b" / sym2"[..], result));
+        let result = vec![Item::new(Content::Symbol(Symbol::from("sym")))];
+        assert_eq!(
+            parse::sequence(&b"sym / sym2"[..]),
+            Done(&b" / sym2"[..], result)
+        );
     }
 
     #[test]
     fn test_alternatives_parser() {
-        let result = vec![Item::new(Symbol("sym".to_string())),
-                          Item::new(Symbol("sym2".to_string()))];
-        assert_eq!(parse::alternatives(&b"sym / sym2"[..]),
-                   Done(&b""[..], (result)));
+        let result = vec![
+            Item::new(Content::Symbol(Symbol::from("sym"))),
+            Item::new(Content::Symbol(Symbol::from("sym2"))),
+        ];
+        assert_eq!(
+            parse::alternatives(&b"sym / sym2"[..]),
+            Done(&b""[..], (result))
+        );
     }
 
     #[test]
     fn test_alternatives_parser_trailing() {
-        let result = vec![Item::new(Symbol("sym".to_string())),
-                          Item::new(Symbol("sym2".to_string()))];
-        assert_eq!(parse::alternatives(&b"sym / sym2 "[..]),
-                   Done(&b" "[..], (result)));
+        let result = vec![
+            Item::new(Content::Symbol(Symbol::from("sym"))),
+            Item::new(Content::Symbol(Symbol::from("sym2"))),
+        ];
+        assert_eq!(
+            parse::alternatives(&b"sym / sym2 "[..]),
+            Done(&b" "[..], (result))
+        );
     }
 
     #[test]
@@ -330,112 +365,160 @@ mod tests {
 
     #[test]
     fn test_list_parser_sequence() {
-        let result = Sequence(vec![Item::new(Symbol("sym".to_string())),
-                                   Item::new(Symbol("sym2".to_string()))]);
+        let result = Sequence(vec![
+            Item::new(Content::Symbol(Symbol::from("sym"))),
+            Item::new(Content::Symbol(Symbol::from("sym2"))),
+        ]);
         assert_eq!(parse::list(&b"sym sym2"[..]), Done(&b""[..], (result)));
     }
 
     #[test]
     fn test_list_parser_alternatives() {
-        let result = Alternatives(vec![Item::new(Symbol("sym".to_string())),
-                                       Item::new(Symbol("sym2".to_string()))]);
+        let result = Alternatives(vec![
+            Item::new(Content::Symbol(Symbol::from("sym"))),
+            Item::new(Content::Symbol(Symbol::from("sym2"))),
+        ]);
         assert_eq!(parse::list(&b"sym / sym2"[..]), Done(&b""[..], (result)));
     }
 
     #[test]
     fn test_group_parser_single() {
-        let result = Sequence(vec![Item::new(Symbol("sym".to_string()))]);
+        let result = Sequence(vec![Item::new(Content::Symbol(Symbol::from("sym")))]);
         assert_eq!(parse::group(&b"(sym)"[..]), Done(&b""[..], (result)));
     }
 
     #[test]
     fn test_group_parser_multi() {
-        let result = Sequence(vec![Item::new(Symbol("sym".to_string())),
-                                   Item::new(Symbol("sym2".to_string()))]);
+        let result = Sequence(vec![
+            Item::new(Content::Symbol(Symbol::from("sym"))),
+            Item::new(Content::Symbol(Symbol::from("sym2"))),
+        ]);
         assert_eq!(parse::group(&b"(sym sym2)"[..]), Done(&b""[..], (result)));
     }
 
     #[test]
     fn test_rule_parser() {
-        let result = ("rule".to_string(), Sequence(vec![Item::new(Symbol("def".to_string()))]));
+        let result = (
+            Symbol::from("rule"),
+            Sequence(vec![Item::new(Content::Symbol(Symbol::from("def")))]),
+        );
         assert_eq!(parse::rule(&b"rule = def"[..]), Done(&b""[..], (result)));
     }
 
     #[test]
     fn test_rule_parser_sequence() {
-        let result = ("rule".to_string(),
-                      Sequence(vec![Item::new(Symbol("def".to_string())),
-                                    Item::new(Symbol("def".to_string()))]));
-        assert_eq!(parse::rule(&b"rule = def def"[..]),
-                   Done(&b""[..], (result)));
+        let result = (
+            Symbol::from("rule"),
+            Sequence(vec![
+                Item::new(Content::Symbol(Symbol::from("def"))),
+                Item::new(Content::Symbol(Symbol::from("def"))),
+            ]),
+        );
+        assert_eq!(
+            parse::rule(&b"rule = def def"[..]),
+            Done(&b""[..], (result))
+        );
     }
 
     #[test]
     fn test_rule_parser_alternatives() {
-        let result = ("rule".to_string(),
-                      Alternatives(vec![Item::new(Symbol("def".to_string())),
-                                        Item::new(Symbol("def".to_string()))]));
-        assert_eq!(parse::rule(&b"rule = def / def"[..]),
-                   Done(&b""[..], (result)));
+        let result = (
+            Symbol::from("rule"),
+            Alternatives(vec![
+                Item::new(Content::Symbol(Symbol::from("def"))),
+                Item::new(Content::Symbol(Symbol::from("def"))),
+            ]),
+        );
+        assert_eq!(
+            parse::rule(&b"rule = def / def"[..]),
+            Done(&b""[..], (result))
+        );
     }
 
     #[test]
-    fn test_ruleset_parser_eol() {
+    fn test_rules_parser_eol() {
         let make_result = || {
-            vec![("def".to_string(), Sequence(vec![Item::new(Value("value".to_string()))])),
-                 ("def2".to_string(), Sequence(vec![Item::new(Symbol("def".to_string()))]))]
-                    .into_iter()
-                    .collect::<Ruleset>()
+            vec![
+                (
+                    Symbol::from("def"),
+                    Sequence(vec![Item::new(Content::Value("value".to_string()))])
+                ),
+                (
+                    Symbol::from("def2"),
+                    Sequence(vec![Item::new(Content::Symbol(Symbol::from("def")))])
+                ),
+            ]
         };
 
-        assert_eq!(parse::ruleset(&b"def = \"value\"\ndef2 = def"[..]),
-                   Done(&b""[..], (make_result())));
+        assert_eq!(
+            parse::rules(&b"def = \"value\"\ndef2 = def"[..]),
+            Done(&b""[..], (make_result()))
+        );
 
-        assert_eq!(parse::ruleset(&b"def = \"value\"\r\ndef2 = def"[..]),
-                   Done(&b""[..], (make_result())));
+        assert_eq!(
+            parse::rules(&b"def = \"value\"\r\ndef2 = def"[..]),
+            Done(&b""[..], (make_result()))
+        );
     }
 
     #[test]
-    fn test_ruleset_parser() {
-        let result: Ruleset =
-            vec![("def".to_string(), Sequence(vec![Item::new(Value("value".to_string()))])),
-                 ("rule".to_string(), Sequence(vec![Item::new(Symbol("def".to_string()))])),
-                 ("rule2".to_string(),
-                  Sequence(vec![Item::new(Symbol("def".to_string())),
-                                Item::new(Symbol("def".to_string()))])),
-                 ("rule3".to_string(),
-                  Alternatives(vec![Item::new(Symbol("def".to_string())),
-                                    Item::new(Symbol("def".to_string()))]))]
-                    .into_iter()
-                    .collect();
+    fn test_rules_parser() {
+        let result = vec![
+            (
+                Symbol::from("def"),
+                Sequence(vec![Item::new(Content::Value("value".to_string()))])
+            ),
+            (
+                Symbol::from("rule"),
+                Sequence(vec![Item::new(Content::Symbol(Symbol::from("def")))])
+            ),
+            (
+                Symbol::from("rule2"),
+                Sequence(vec![
+                    Item::new(Content::Symbol(Symbol::from("def"))),
+                    Item::new(Content::Symbol(Symbol::from("def"))),
+                ])
+            ),
+            (
+                Symbol::from("rule3"),
+                Alternatives(vec![
+                    Item::new(Content::Symbol(Symbol::from("def"))),
+                    Item::new(Content::Symbol(Symbol::from("def"))),
+                ])
+            ),
+        ];
 
         let input = b"def = \"value\"\nrule = def\nrule2 = def def\nrule3 = def / def";
 
-        assert_eq!(parse::ruleset(&input[..]), Done(&b""[..], (result)));
+        assert_eq!(parse::rules(&input[..]), Done(&b""[..], (result)));
     }
 
     #[test]
-    fn test_ruleset_parser_single() {
-        let result: Ruleset = vec![("rule".to_string(),
-                                    Sequence(vec![Item::new(Symbol("def".to_string()))]))]
-                .into_iter()
-                .collect();
+    fn test_rules_parser_single() {
+        let result = vec![
+            (
+                Symbol::from("rule"),
+                Sequence(vec![Item::new(Content::Symbol(Symbol::from("def")))])
+            ),
+        ];
         let input = b"rule = def";
-        assert_eq!(parse::ruleset(&input[..]), Done(&b""[..], (result)));
+        assert_eq!(parse::rules(&input[..]), Done(&b""[..], (result)));
     }
 
     #[test]
-    fn test_ruleset_parser_trailing() {
-        let result: Ruleset = vec![("rule".to_string(),
-                                    Sequence(vec![Item::new(Symbol("def".to_string()))]))]
-                .into_iter()
-                .collect();
+    fn test_rules_parser_trailing() {
+        let result = vec![
+            (
+                Symbol::from("rule"),
+                Sequence(vec![Item::new(Content::Symbol(Symbol::from("def")))])
+            ),
+        ];
 
         let input = b"rule = def\n";
-        assert_eq!(parse::ruleset(&input[..]), Done(&b"\n"[..], (result.clone())));
+        assert_eq!(parse::rules(&input[..]), Done(&b"\n"[..], (result.clone())));
 
         let input = b"rule = def ";
-        assert_eq!(parse::ruleset(&input[..]), Done(&b" "[..], (result)));
+        assert_eq!(parse::rules(&input[..]), Done(&b" "[..], (result)));
     }
 
     #[test]
