@@ -214,9 +214,24 @@ pub struct Properties {
 
 const SKELETON_LIMIT: usize = 10_000;
 const INSTRUCTION_LIMIT: usize = SKELETON_LIMIT * 50;
+const RULE_LIMIT: usize = 1000;
+
+fn within_limits(lsystem: &ol::LSystem) -> bool {
+    if lsystem.axiom.len() > RULE_LIMIT {
+        return false;
+    }
+
+    for rule in lsystem.productions.iter() {
+        if rule.len() > RULE_LIMIT {
+            return false;
+        }
+    }
+
+    true
+}
 
 pub fn is_crap(lsystem: &ol::LSystem, settings: &lsys::Settings) -> bool {
-    if is_nothing(lsystem) {
+    if is_nothing(lsystem) || !within_limits(lsystem) {
         return true;
     }
 
@@ -300,7 +315,7 @@ impl fmt::Display for Fitness {
 }
 
 pub fn evaluate(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (Fitness, Option<Properties>) {
-    if is_nothing(lsystem) {
+    if is_nothing(lsystem) || !within_limits(lsystem) {
         return (Fitness::nothing(), None);
     }
 
