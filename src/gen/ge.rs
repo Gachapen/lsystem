@@ -247,6 +247,7 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .long("grammar")
                 .short("g")
                 .takes_value(true)
+                .required(true)
                 .help("Grammar used for the Distribution, must be supplied for verion 1\
                        Distributions")
             )
@@ -2771,16 +2772,15 @@ fn run_distribution_csv_to_bin(matches: &ArgMatches) {
         "Could not read input file",
     );
 
-    let distribution = if let Some(version) = version {
+    let grammar_path = matches.value_of("grammar").unwrap();
+    let grammar = abnf::parse_file(grammar_path).expect("Could not parse grammar file");
+
+    let mut distribution = if let Some(version) = version {
         let version: u32 = version.parse().expect(
             "'version' argument must be an integer",
         );
         if version == 1 {
             println!("Loading distribution using v1 structure");
-            let grammar_path = matches.value_of("grammar").expect(
-                "'grammar' argument must be provieded",
-            );
-            let grammar = abnf::parse_file(grammar_path).expect("Could not parse grammar file");
             Distribution::from_csv_v1(&csv, &grammar)
         } else {
             println!("Unknown version {}, assuming latest version", version);
@@ -2789,6 +2789,13 @@ fn run_distribution_csv_to_bin(matches: &ArgMatches) {
     } else {
         Distribution::from_csv(&csv)
     };
+
+    let string_index = grammar.symbol_index("string").expect(
+        "Grammar does not contain 'string' symbol",
+    );
+    distribution.set_default_weights(string_index, 1, &[1.0, 0.0]);
+    // Remove the default weights from the depth weights.
+    distribution.depths[DEPTHS - 1][string_index].pop();
 
     let output_file = File::create(&output_path).unwrap();
     bincode::serialize_into(
