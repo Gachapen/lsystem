@@ -17,9 +17,7 @@ serde_derive = "1"
 serde_yaml = "0.7"
 bincode = "0.8"
 clap = "2"
-parking_lot = { version = "0.4", features = ["nightly"] }
 csv = "0.15"
-fnv = "^1.0.5"
 
 cpuprofiler = "0.0.3"
 

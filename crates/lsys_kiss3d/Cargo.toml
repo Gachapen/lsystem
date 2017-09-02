@@ -5,7 +5,6 @@ authors = ["Magnus Bjerke Vik <mbvett@gmail.com>"]
 
 [dependencies]
 kiss3d = "0.10"
-num-traits = "0.1"
 time = "0.1"
 
 # Dependencies of kiss3d also used by the project.

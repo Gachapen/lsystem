@@ -1,7 +1,6 @@
 extern crate kiss3d;
 extern crate nalgebra as na;
 extern crate ncollide_transformation as nct;
-extern crate num_traits;
 extern crate time;
 
 extern crate lsys;

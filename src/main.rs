@@ -10,15 +10,12 @@ extern crate num_cpus;
 extern crate futures;
 extern crate futures_cpupool;
 extern crate bincode;
-extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate clap;
-extern crate parking_lot;
 extern crate csv;
 extern crate chrono;
 extern crate cpuprofiler;
-extern crate fnv;
 
 #[macro_use]
 extern crate lsys;
