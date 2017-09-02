@@ -4,7 +4,7 @@ use std::{cmp, fmt, iter};
 use std::io::{self, BufWriter, BufReader, Write, Read};
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::ops::Add;
 use std::time::{Instant, Duration};
@@ -2464,7 +2464,7 @@ fn run_learning(matches: &ArgMatches) {
     let csv_path = Path::new(matches.value_of("csv").unwrap());
     println!("Saving distribution to \"{}\".", csv_path.to_str().unwrap());
 
-    let stats_csv_path = Arc::new(matches.value_of("stats-csv").unwrap().to_string());
+    let stats_csv_path = matches.value_of("stats-csv").unwrap().to_string();
     println!("Saving distribution to \"{}\".", stats_csv_path);
 
     let settings = Arc::new(lsys::Settings {
@@ -2595,10 +2595,19 @@ fn run_learning(matches: &ArgMatches) {
     println!("Generated {} samples.", num_samples);
     println!("Initial distribution has score {}.", current_score);
 
+    let stats_csv_file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&stats_csv_path)
+        .expect("Could not create stats file");
+
+    let stats_writer = Arc::new(Mutex::new(BufWriter::with_capacity(1024 * 1024, stats_csv_file)));
+
     let mut distribution_save_future =
         {
             let distribution = distribution.clone();
-            let stats_csv_path = stats_csv_path.clone();
+            let stats_writer = stats_writer.clone();
 
             pool.spawn_fn(move || -> FutureResult<(), ()> {
             let first_dist_filename = format!("{}.csv", 0);
@@ -2611,10 +2620,11 @@ fn run_learning(matches: &ArgMatches) {
             let stats_csv = "iteration,samples,measure samples,score,accepted,temperature,type\n"
                 .to_string() +
                 &format!("{},{},{},{},,,{}\n", 0, num_samples, num_samples, current_score, "init");
-            let mut stats_csv_file = File::create(&*stats_csv_path).unwrap();
-            stats_csv_file
+            stats_writer
+                .lock()
+                .unwrap()
                 .write_all(stats_csv.as_bytes())
-                .unwrap();
+                .expect("Could not write to stats file");
 
             future::ok(())
         })
@@ -2680,7 +2690,7 @@ fn run_learning(matches: &ArgMatches) {
         distribution_save_future.wait().unwrap();
         distribution_save_future = {
             let distribution = new_distribution.clone();
-            let stats_csv_path = stats_csv_path.clone();
+            let stats_writer = stats_writer.clone();
 
             pool.spawn_fn(move || -> FutureResult<(), ()> {
                 let filename = format!("{}.csv", iteration);
@@ -2708,11 +2718,11 @@ fn run_learning(matches: &ArgMatches) {
                     temperature,
                     iteration_type
                 );
-                let mut stats_csv_file = OpenOptions::new()
-                    .append(true)
-                    .open(&*stats_csv_path)
-                    .unwrap();
-                stats_csv_file.write_all(stats_csv.as_bytes()).unwrap();
+                stats_writer
+                    .lock()
+                    .unwrap()
+                    .write_all(stats_csv.as_bytes())
+                    .expect("Could not write to stats file");
 
                 future::ok(())
             })
@@ -2737,6 +2747,8 @@ fn run_learning(matches: &ArgMatches) {
         seconds,
         duration.subsec_nanos()
     );
+
+    stats_writer.lock().unwrap().flush().expect("Could not save stats");
 
     match Arc::try_unwrap(distribution) {
         Ok(distribution) => {
