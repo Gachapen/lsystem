@@ -2960,7 +2960,7 @@ fn run_benchmark(_: &ArgMatches) {
 
     PROFILER.lock().unwrap().start("./bench.profile").unwrap();
 
-    for _ in 0..50 {
+    for _ in 0..200 {
         let lsystem = generate_sample(&grammar, &distribution);
         fitness::evaluate(&lsystem, &settings);
     }
