@@ -4,7 +4,7 @@ require(gridExtra)
 distribution <- read.csv(file = "distribution.csv", header = TRUE)
 
 productions <- function(distribution) {
-  prods <- distribution[distribution$rule == "productions",]
+  prods <- distribution[distribution$rule == "productions" | distribution$rule == 2,]
   ggplot(prods, aes(alternative + 1, weight)) +
     geom_col() +
     xlab("num productions") +
@@ -12,7 +12,7 @@ productions <- function(distribution) {
 }
 
 operation <- function(distribution) {
-  operations <- distribution[distribution$rule == "operation",]
+  operations <- distribution[distribution$rule == "operation" | distribution$rule == 10,]
   ggplot(operations, aes(depth, weight, fill=factor(alternative))) +
     geom_col(position="dodge") +
     guides(fill=guide_legend(title="operation")) +
@@ -21,7 +21,7 @@ operation <- function(distribution) {
 }
 
 strlen <- function(distribution) {
-  strlens <- distribution[distribution$rule == "string" & distribution$choice == 0,]
+  strlens <- distribution[(distribution$rule == "string" | distribution$rule == 6) & distribution$choice == 0,]
   ggplot(strlens, aes(depth, weight, fill=factor(alternative + 1))) +
     geom_col(position="dodge") +
     guides(fill=guide_legend(title="string length", ncol=2)) +
@@ -29,7 +29,7 @@ strlen <- function(distribution) {
 }
 
 stack <- function(distribution) {
-  stacks <- distribution[distribution$rule == "string" & distribution$choice == 1,]
+  stacks <- distribution[(distribution$rule == "string" | distribution$rule == 6) & distribution$choice == 1,]
   ggplot(stacks, aes(depth, weight, fill=factor(alternative))) +
     geom_col(position="dodge") +
     guides(fill=guide_legend(title="symbol vs stack")) +
@@ -38,7 +38,7 @@ stack <- function(distribution) {
 }
 
 symbol <- function(distribution) {
-  symbols <- distribution[distribution$rule == "symbol",]
+  symbols <- distribution[distribution$rule == "symbol" | distribution$rule == 8,]
   ggplot(symbols, aes(depth, weight, fill=factor(alternative))) +
     geom_col(position="dodge") +
     guides(fill=guide_legend(title="symbol type")) +
@@ -47,7 +47,7 @@ symbol <- function(distribution) {
 }
 
 variable <- function(distribution) {
-  variables <- distribution[distribution$rule == "variable",]
+  variables <- distribution[distribution$rule == "variable" | distribution$rule == 9,]
   ggplot(variables, aes(depth, weight, fill=factor(alternative))) +
     geom_col(position="dodge") +
     guides(fill=guide_legend(title="variable", ncol=2)) +
