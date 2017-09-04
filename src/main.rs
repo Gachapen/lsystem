@@ -47,7 +47,7 @@ fn main() {
         .subcommand(
             SubCommand::with_name("generated").about("Run random generation of plant"),
         )
-        .subcommand(gen::ge::get_subcommand())
+        .subcommand(gen::dgel::get_subcommand())
         .get_matches();
 
     if matches.subcommand_matches("static").is_some() {
@@ -59,8 +59,8 @@ fn main() {
     } else if matches.subcommand_matches("generated").is_some() {
         let (mut window, mut camera) = setup_window();
         gen::glp::run_generated(&mut window, &mut camera);
-    } else if let Some(matches) = matches.subcommand_matches("ge") {
-        gen::ge::run_ge(matches);
+    } else if let Some(matches) = matches.subcommand_matches(gen::dgel::COMMAND_NAME) {
+        gen::dgel::run_dgel(matches);
     } else {
         println!("A subcommand must be specified. See help by passing -h.");
     }

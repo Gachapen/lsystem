@@ -39,8 +39,10 @@ use gen::fitness::{self, Fitness};
 
 const DEPTHS: usize = 4;
 
+pub const COMMAND_NAME: &'static str = "dgel";
+
 pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
-    SubCommand::with_name("ge")
+    SubCommand::with_name(COMMAND_NAME)
         .about("Run random plant generation using GE")
         .subcommand(SubCommand::with_name("abnf")
             .about("Print the parsed ABNF structure")
@@ -285,7 +287,7 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
         )
 }
 
-pub fn run_ge(matches: &ArgMatches) {
+pub fn run_dgel(matches: &ArgMatches) {
     if matches.subcommand_matches("abnf").is_some() {
         run_print_abnf();
     } else if matches.subcommand_matches("random").is_some() {
