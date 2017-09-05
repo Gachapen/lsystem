@@ -1697,9 +1697,9 @@ impl Distribution {
     }
 
     fn dimensions(&self) -> usize {
-        self.depths.iter().fold(0, |count, ref rules| {
-            count + rules.iter().fold(0, |count, ref choices| {
-                count + choices.iter().fold(0, |count, ref alternatives| {
+        self.depths.iter().fold(0, |count, rules| {
+            count + rules.iter().fold(0, |count, choices| {
+                count + choices.iter().fold(0, |count, alternatives| {
                     count + alternatives.len()
                 })
             })
@@ -2398,7 +2398,11 @@ fn run_learning(matches: &ArgMatches) {
     let min_samples = matches.value_of("min-samples").unwrap().parse().unwrap();
     let fitness_scale: f32 = matches.value_of("fitness-scale").unwrap().parse().unwrap();
     let cooldown: f32 = matches.value_of("cooldown-rate").unwrap().parse().unwrap();
-    let max_moves = matches.value_of("max-moves").unwrap().parse::<usize>().unwrap() * dimensions;
+    let max_moves = matches
+        .value_of("max-moves")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap() * dimensions;
 
     println!("Distribution has {} dimensions.", dimensions);
     println!("Using error error threshold {}.", error_threshold);
@@ -2435,10 +2439,10 @@ fn run_learning(matches: &ArgMatches) {
             let result = match future::join_all(tasks).wait() {
                 Ok(result) => result,
                 Err(()) => {
-                    panic!("Failed joining tasks: Unknown reason.");
+                    panic!("Failed joining tasks: Unknown reason.")
                 }
             };
-            let batch_scores: Vec<_> = result;
+            let batch_scores = result;
 
             step_scores.extend(batch_scores);
 
@@ -2792,7 +2796,7 @@ fn run_sample_weight_space(matches: &ArgMatches) {
     let samples = match future::join_all(tasks).wait() {
         Ok(result) => result,
         Err(()) => {
-            panic!("Failed joining tasks: Unknown reason.");
+            panic!("Failed joining tasks: Unknown reason.")
         }
     };
 
