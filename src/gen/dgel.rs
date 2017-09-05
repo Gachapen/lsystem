@@ -538,6 +538,7 @@ fn run_with_distribution(matches: &ArgMatches) {
                         .map(|e| e.unwrap().path())
                         .collect::<Vec<_>>();
                     models.sort();
+                    models.reverse();
                     let models = models;
 
                     if model_index >= models.len() {
