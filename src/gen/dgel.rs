@@ -1,6 +1,6 @@
 use std::f32::consts::{PI, E};
 use std::f32;
-use std::{cmp, fmt, iter};
+use std::iter;
 use std::io::{self, BufWriter, BufReader, Write, Read};
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
@@ -8,8 +8,9 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{self, AtomicBool, AtomicUsize};
 use std::ops::Add;
 use std::time::Instant;
-use std::cmp::Ordering;
-use std::cell::{Cell, RefCell};
+use std::cmp::{self, Ordering};
+use std::cell::Cell;
+use std::fmt::{self, Display, Formatter};
 
 use rand::{self, Rng, XorShiftRng, SeedableRng};
 use rand::distributions::{IndependentSample, Range};
@@ -437,8 +438,8 @@ fn run_with_distribution(matches: &ArgMatches) {
                             generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
                         let system = generate_system(
                             grammar,
-                            &mut WeightedGenotype::new(
-                                chromosome,
+                            &mut WeightedChromosmeStrategy::new(
+                                &chromosome,
                                 distribution,
                                 grammar.symbol_index("stack").unwrap(),
                             ),
@@ -504,8 +505,8 @@ fn run_with_distribution(matches: &ArgMatches) {
                     );
                     system = generate_system(
                         &grammar,
-                        &mut WeightedGenotype::new(
-                            chromosome,
+                        &mut WeightedChromosmeStrategy::new(
+                            &chromosome,
                             &distribution,
                             grammar.symbol_index("stack").unwrap(),
                         ),
@@ -638,8 +639,8 @@ fn run_random_sampling(matches: &ArgMatches) {
         let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
         let system = generate_system(
             grammar,
-            &mut WeightedGenotype::new(
-                chromosome,
+            &mut WeightedChromosmeStrategy::new(
+                &chromosome,
                 distribution,
                 grammar.symbol_index("stack").unwrap(),
             ),
@@ -870,8 +871,8 @@ fn run_sampling_distribution(matches: &ArgMatches) {
 
         tasks.push(pool.spawn_fn(move || {
             let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
-            let mut stats_genotype = WeightedGenotypeStats::new(
-                chromosome,
+            let mut stats_genotype = WeightedChromosmeStrategyStats::new(
+                &chromosome,
                 &distribution,
                 grammar.symbol_index("stack").unwrap(),
             );
@@ -1206,19 +1207,23 @@ impl<'a> iter::Sum<&'a Self> for SelectionStats {
     }
 }
 
-struct WeightedGenotypeStats<'a, G> {
-    weighted_genotype: WeightedGenotype<'a, G>,
+struct WeightedChromosmeStrategyStats<'a, G: 'a> {
+    weighted_genotype: WeightedChromosmeStrategy<'a, G>,
     stats: SelectionStats,
 }
 
-impl<'a, G: Gene> WeightedGenotypeStats<'a, G> {
+impl<'a, G: Gene> WeightedChromosmeStrategyStats<'a, G> {
     fn new(
-        chromosome: Vec<G>,
+        chromosome: &'a [G],
         distribution: &'a Distribution,
         stack_rule_index: usize,
-    ) -> WeightedGenotypeStats<'a, G> {
-        WeightedGenotypeStats {
-            weighted_genotype: WeightedGenotype::new(chromosome, distribution, stack_rule_index),
+    ) -> WeightedChromosmeStrategyStats<'a, G> {
+        WeightedChromosmeStrategyStats {
+            weighted_genotype: WeightedChromosmeStrategy::new(
+                chromosome,
+                distribution,
+                stack_rule_index,
+            ),
             stats: SelectionStats::new(),
         }
     }
@@ -1228,7 +1233,7 @@ impl<'a, G: Gene> WeightedGenotypeStats<'a, G> {
     }
 }
 
-impl<'a, G: Gene> SelectionStrategy for WeightedGenotypeStats<'a, G> {
+impl<'a, G: Gene> SelectionStrategy for WeightedChromosmeStrategyStats<'a, G> {
     fn select_alternative(&mut self, num: usize, rulechain: &Rulechain, choice: u32) -> usize {
         let selection = self.weighted_genotype.select_alternative(
             num,
@@ -1307,13 +1312,10 @@ fn run_random_genes() {
     let (mut window, _) = setup_window();
 
     let lsys_abnf = abnf::parse_file("grammar/lsys.abnf").expect("Could not parse ABNF file");
+    let chromosome = generate_chromosome(&mut rand::thread_rng(), 100);
+    let mut genotype = ChromosmeStrategy::new(&chromosome);
 
-    let mut genotype = {
-        let chromosome = generate_chromosome(&mut rand::thread_rng(), 100);
-        Genotype::new(chromosome)
-    };
-
-    println!("Genes: {:?}", genotype.chromosome);
+    println!("Genes: {:?}", chromosome);
     println!("");
 
     let settings = get_sample_settings();
@@ -1353,29 +1355,61 @@ fn run_bush_inferred() {
         let (system, mut settings) = lsystems::make_bush();
 
         let axiom_gen = infer_selections(&system.axiom, &lsys_abnf, "axiom").unwrap();
-        let mut axiom_geno = Genotype::new(axiom_gen.iter().map(|g| *g as u8).collect());
+        let axiom_geno: Vec<_> = axiom_gen.iter().map(|g| *g as u8).collect();
 
         let a_gen = infer_selections(&system.productions['A'], &lsys_abnf, "successor").unwrap();
-        let mut a_geno = Genotype::new(a_gen.iter().map(|g| *g as u8).collect());
+        let a_geno: Vec<_> = a_gen.iter().map(|g| *g as u8).collect();
 
         let f_gen = infer_selections(&system.productions['F'], &lsys_abnf, "successor").unwrap();
-        let mut f_geno = Genotype::new(f_gen.iter().map(|g| *g as u8).collect());
+        let f_geno: Vec<_> = f_gen.iter().map(|g| *g as u8).collect();
 
         let s_gen = infer_selections(&system.productions['S'], &lsys_abnf, "successor").unwrap();
-        let mut s_geno = Genotype::new(s_gen.iter().map(|g| *g as u8).collect());
+        let s_geno: Vec<_> = s_gen.iter().map(|g| *g as u8).collect();
 
         let l_gen = infer_selections(&system.productions['L'], &lsys_abnf, "successor").unwrap();
-        let mut l_geno = Genotype::new(l_gen.iter().map(|g| *g as u8).collect());
+        let l_geno: Vec<_> = l_gen.iter().map(|g| *g as u8).collect();
 
         let mut new_system = ol::LSystem {
-            axiom: expand_grammar(&lsys_abnf, "axiom", &mut axiom_geno),
+            axiom: expand_grammar(
+                &lsys_abnf,
+                "axiom",
+                &mut ChromosmeStrategy::new(&axiom_geno),
+            ),
             ..ol::LSystem::new()
         };
 
-        new_system.set_rule('A', &expand_grammar(&lsys_abnf, "successor", &mut a_geno));
-        new_system.set_rule('F', &expand_grammar(&lsys_abnf, "successor", &mut f_geno));
-        new_system.set_rule('S', &expand_grammar(&lsys_abnf, "successor", &mut s_geno));
-        new_system.set_rule('L', &expand_grammar(&lsys_abnf, "successor", &mut l_geno));
+        new_system.set_rule(
+            'A',
+            &expand_grammar(
+                &lsys_abnf,
+                "successor",
+                &mut ChromosmeStrategy::new(&a_geno),
+            ),
+        );
+        new_system.set_rule(
+            'F',
+            &expand_grammar(
+                &lsys_abnf,
+                "successor",
+                &mut ChromosmeStrategy::new(&f_geno),
+            ),
+        );
+        new_system.set_rule(
+            'S',
+            &expand_grammar(
+                &lsys_abnf,
+                "successor",
+                &mut ChromosmeStrategy::new(&s_geno),
+            ),
+        );
+        new_system.set_rule(
+            'L',
+            &expand_grammar(
+                &lsys_abnf,
+                "successor",
+                &mut ChromosmeStrategy::new(&l_geno),
+            ),
+        );
 
         settings.map_command('f', lsys::Command::Forward);
 
@@ -1458,14 +1492,14 @@ impl Gene for u64 {}
 impl Gene for usize {}
 
 #[derive(Clone)]
-struct Genotype<G> {
-    chromosome: Vec<G>,
+struct ChromosmeStrategy<'a, G: 'a> {
+    chromosome: &'a [G],
     index: usize,
 }
 
-impl<G: Gene> Genotype<G> {
-    fn new(chromosome: Vec<G>) -> Genotype<G> {
-        Genotype {
+impl<'a, G: Gene> ChromosmeStrategy<'a, G> {
+    fn new(chromosome: &'a [G]) -> Self {
+        ChromosmeStrategy {
             chromosome: chromosome,
             index: 0,
         }
@@ -1474,7 +1508,7 @@ impl<G: Gene> Genotype<G> {
     fn use_next_gene(&mut self) -> G {
         assert!(
             self.index < self.chromosome.len(),
-            "Genotype index overflows gene list"
+            "ChromosmeStrategy index overflows gene list"
         );
 
         let gene = self.chromosome[self.index];
@@ -1492,7 +1526,7 @@ impl<G: Gene> Genotype<G> {
     }
 }
 
-impl<G: Gene> SelectionStrategy for Genotype<G> {
+impl<'a, G: Gene> SelectionStrategy for ChromosmeStrategy<'a, G> {
     fn select_alternative(&mut self, num: usize, _: &Rulechain, _: u32) -> usize {
         let limit = Self::max_selection_value(num);
         let gene = self.use_next_gene();
@@ -1805,20 +1839,16 @@ impl fmt::Display for Distribution {
 }
 
 #[derive(Clone)]
-struct WeightedGenotype<'a, G> {
-    genotype: Genotype<G>,
+struct WeightedChromosmeStrategy<'a, G: 'a> {
+    genotype: ChromosmeStrategy<'a, G>,
     distribution: &'a Distribution,
     stack_rule_index: usize,
 }
 
-impl<'a, G: Gene> WeightedGenotype<'a, G> {
-    fn new(
-        chromosome: Vec<G>,
-        distribution: &'a Distribution,
-        stack_rule_index: usize,
-    ) -> WeightedGenotype<G> {
-        WeightedGenotype {
-            genotype: Genotype::new(chromosome),
+impl<'a, G: Gene> WeightedChromosmeStrategy<'a, G> {
+    fn new(chromosome: &'a [G], distribution: &'a Distribution, stack_rule_index: usize) -> Self {
+        WeightedChromosmeStrategy {
+            genotype: ChromosmeStrategy::new(chromosome),
             distribution: distribution,
             stack_rule_index: stack_rule_index,
         }
@@ -1840,7 +1870,7 @@ impl<'a, G: Gene> WeightedGenotype<'a, G> {
     }
 }
 
-impl<'a, G: Gene> SelectionStrategy for WeightedGenotype<'a, G> {
+impl<'a, G: Gene> SelectionStrategy for WeightedChromosmeStrategy<'a, G> {
     fn select_alternative(&mut self, num: usize, rulechain: &Rulechain, choice: u32) -> usize {
         let gene = self.genotype.use_next_gene();
 
@@ -2173,8 +2203,8 @@ fn run_stats(matches: &ArgMatches) {
         let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
         let system = generate_system(
             grammar,
-            &mut WeightedGenotype::new(
-                chromosome,
+            &mut WeightedChromosmeStrategy::new(
+                &chromosome,
                 distribution,
                 grammar.symbol_index("stack").unwrap(),
             ),
@@ -2274,8 +2304,8 @@ fn run_learning(matches: &ArgMatches) {
     fn generate_sample(grammar: &abnf::Grammar, distribution: &Distribution) -> ol::LSystem {
         let seed = random_seed();
         let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
-        let mut genotype = WeightedGenotype::new(
-            chromosome,
+        let mut genotype = WeightedChromosmeStrategy::new(
+            &chromosome,
             distribution,
             grammar.symbol_index("stack").unwrap(),
         );
@@ -2833,20 +2863,20 @@ fn run_ge(matches: &ArgMatches) {
     println!("Mutation factor: {}", MUTATION_PROB);
     println!("Max iterations: {}", MAX_ITERATIONS);
 
+    let stack_rule_index = grammar.symbol_index("stack").unwrap();
+    let base_phenotype = LsysPhenotype::new(
+        &grammar,
+        &distribution,
+        stack_rule_index,
+        &settings,
+        Vec::new(),
+    );
+
     let mut population = (0..POPULATION_SIZE)
         .map(|_| {
             let seed = random_seed();
             let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
-            LsysPhenotype {
-                grammar: &grammar,
-                settings: &settings,
-                genotype: RefCell::new(WeightedGenotype::new(
-                    chromosome,
-                    &distribution,
-                    grammar.symbol_index("stack").unwrap(),
-                )),
-                fitness: Cell::new(None),
-            }
+            base_phenotype.clone_with_chromosome(chromosome)
         })
         .collect();
 
@@ -2858,9 +2888,17 @@ fn run_ge(matches: &ArgMatches) {
     simulator.run();
     let best = simulator.get().unwrap();
 
-    let lsystem = generate_system(&grammar, &mut *best.genotype.borrow_mut());
+    let lsystem =
+        generate_system(
+            &grammar,
+            &mut WeightedChromosmeStrategy::new(&best.chromosome, &distribution, stack_rule_index),
+        );
     println!("{}", lsystem);
-    println!("Fitness: {}", best.fitness().0);
+    println!(
+        "Fitness: {} (real: {})",
+        best.fitness(),
+        fitness::evaluate(&lsystem, &settings).0
+    );
 
     let model_dir = Path::new("model");
     fs::create_dir_all(model_dir).unwrap();
@@ -2896,12 +2934,49 @@ fn run_ge(matches: &ArgMatches) {
         }
     }
 
+    impl Display for LsysFitness {
+        fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+            write!(f, "{}", self.0)
+        }
+    }
+
     #[derive(Clone)]
-    struct LsysPhenotype<'a, G> {
+    struct LsysPhenotype<'a, G: 'a> {
         grammar: &'a Grammar,
+        distribution: &'a Distribution,
+        stack_rule_index: usize,
         settings: &'a lsys::Settings,
-        genotype: RefCell<WeightedGenotype<'a, G>>,
+        chromosome: Vec<G>,
         fitness: Cell<Option<LsysFitness>>,
+    }
+
+    impl<'a, G: Gene> LsysPhenotype<'a, G> {
+        fn new(
+            grammar: &'a Grammar,
+            distribution: &'a Distribution,
+            stack_rule_index: usize,
+            settings: &'a lsys::Settings,
+            chromosome: Vec<G>,
+        ) -> Self {
+            LsysPhenotype {
+                grammar: grammar,
+                distribution: distribution,
+                stack_rule_index: stack_rule_index,
+                settings: settings,
+                chromosome: chromosome,
+                fitness: Cell::new(None),
+            }
+        }
+
+        fn clone_with_chromosome(&self, chromosome: Vec<G>) -> Self {
+            LsysPhenotype::new(
+                self.grammar,
+                self.distribution,
+                self.stack_rule_index,
+                self.settings,
+                chromosome,
+            )
+        }
     }
 
     impl<'a, G: Gene + Clone> Phenotype<LsysFitness> for LsysPhenotype<'a, G> {
@@ -2909,7 +2984,14 @@ fn run_ge(matches: &ArgMatches) {
             if let Some(ref fitness) = self.fitness.get() {
                 *fitness
             } else {
-                let lsystem = generate_system(self.grammar, &mut *self.genotype.borrow_mut());
+                let lsystem = generate_system(
+                    self.grammar,
+                    &mut WeightedChromosmeStrategy::new(
+                        &self.chromosome,
+                        self.distribution,
+                        self.stack_rule_index,
+                    ),
+                );
                 let fitness = fitness::evaluate(&lsystem, self.settings);
                 let fitness = LsysFitness(fitness.0.score());
 
@@ -2920,29 +3002,14 @@ fn run_ge(matches: &ArgMatches) {
         }
 
         fn crossover(&self, other: &Self) -> Self {
-            let genotype_self = self.genotype.borrow();
-            let crossover_point = Range::new(0, genotype_self.genotype.chromosome.len())
-                .ind_sample(&mut rand::thread_rng());
-            let iter_self = genotype_self.genotype.chromosome.iter().take(
-                crossover_point,
-            );
+            let crossover_point =
+                Range::new(0, self.chromosome.len()).ind_sample(&mut rand::thread_rng());
+            let iter_self = self.chromosome.iter().take(crossover_point);
 
-            let genotype_other = other.genotype.borrow();
-            let iter_other = genotype_other.genotype.chromosome.iter().skip(
-                crossover_point,
-            );
+            let iter_other = other.chromosome.iter().skip(crossover_point);
             let chromosome = iter_self.chain(iter_other).cloned().collect();
 
-            LsysPhenotype {
-                grammar: self.grammar,
-                settings: self.settings,
-                genotype: RefCell::new(WeightedGenotype::new(
-                    chromosome,
-                    genotype_self.distribution,
-                    genotype_self.stack_rule_index,
-                )),
-                fitness: Cell::new(None),
-            }
+            self.clone_with_chromosome(chromosome)
         }
 
         fn mutate(&self) -> Self {
@@ -2951,23 +3018,13 @@ fn run_ge(matches: &ArgMatches) {
             if Range::new(0.0, 1.0).ind_sample(&mut rng) > MUTATION_PROB {
                 self.clone()
             } else {
-                let genotype = self.genotype.borrow();
-                let mut chromosome = genotype.genotype.chromosome.clone();
+                let mut chromosome = self.chromosome.clone();
                 let mutation_index =
                     Range::new(0, chromosome.len()).ind_sample(&mut rand::thread_rng());
                 chromosome[mutation_index] = Range::new(G::min_value(), G::max_value())
                     .ind_sample(&mut rng);
 
-                LsysPhenotype {
-                    grammar: self.grammar,
-                    settings: self.settings,
-                    genotype: RefCell::new(WeightedGenotype::new(
-                        chromosome,
-                        genotype.distribution,
-                        genotype.stack_rule_index,
-                    )),
-                    fitness: Cell::new(None),
-                }
+                self.clone_with_chromosome(chromosome)
             }
         }
     }
@@ -2979,8 +3036,8 @@ fn run_benchmark(_: &ArgMatches) {
     fn generate_sample(grammar: &abnf::Grammar, distribution: &Distribution) -> ol::LSystem {
         let seed = random_seed();
         let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
-        let mut genotype = WeightedGenotype::new(
-            chromosome,
+        let mut genotype = WeightedChromosmeStrategy::new(
+            &chromosome,
             distribution,
             grammar.symbol_index("stack").unwrap(),
         );
@@ -3145,7 +3202,7 @@ mod test {
            0, // variable - "X"
            1, // "X"
         ];
-        let mut genotype = Genotype::new(chromosome);
+        let mut genotype = ChromosmeStrategy::new(chromosome);
 
         assert_eq!(expand_grammar(&grammar, "axiom", &mut genotype), "F[FX]X");
     }
