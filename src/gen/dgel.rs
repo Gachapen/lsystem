@@ -5,13 +5,16 @@ use std::io::{self, BufWriter, BufReader, Write, Read};
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{self, AtomicBool, AtomicUsize};
 use std::ops::Add;
 use std::time::{Instant, Duration};
+use std::cmp::Ordering;
+use std::cell::{Cell, RefCell};
 
 use rand::{self, Rng, XorShiftRng, SeedableRng};
 use rand::distributions::{IndependentSample, Range};
 use na::{self, UnitQuaternion, Point3};
+use rand::distributions::range::SampleRange;
 use kiss3d::camera::ArcBall;
 use kiss3d::scene::SceneNode;
 use num::{self, Unsigned, NumCast};
@@ -282,6 +285,22 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .help("Sample the dividers instead of the weights")
             )
         )
+        .subcommand(SubCommand::with_name("ge")
+            .about("Run grammatical evolution")
+            .arg(Arg::with_name("distribution")
+                .short("d")
+                .long("distribution")
+                .takes_value(true)
+                .help("Distribution file to use. Otherwise default distribution is used.")
+            )
+            .arg(Arg::with_name("grammar")
+                .short("g")
+                .long("grammar")
+                .takes_value(true)
+                .default_value("grammar/lsys2.abnf")
+                .help("Which ABNF grammar to use")
+            )
+        )
         .subcommand(SubCommand::with_name("bench")
             .about("Run benchmarks")
         )
@@ -308,6 +327,8 @@ pub fn run_dgel(matches: &ArgMatches) {
         run_distribution_csv_to_bin(matches);
     } else if let Some(matches) = matches.subcommand_matches("sample-weight-space") {
         run_sample_weight_space(matches);
+    } else if let Some(matches) = matches.subcommand_matches("ge") {
+        run_ge(matches);
     } else if let Some(matches) = matches.subcommand_matches("bench") {
         run_benchmark(matches);
     } else {
@@ -715,7 +736,7 @@ fn run_random_sampling(matches: &ArgMatches) {
                 let mut batch = 0;
                 let mut batch_num_samples = 0;
 
-                while work.load(Ordering::Relaxed) {
+                while work.load(atomic::Ordering::Relaxed) {
                     for _ in 0..SEQUENCE_SIZE {
                         let (seed, lsystem) = generate_sample(&grammar, &distribution);
                         if accept_sample(&lsystem, &settings) {
@@ -728,7 +749,7 @@ fn run_random_sampling(matches: &ArgMatches) {
                     if accepted_samples.len() >= batch_size {
                         dump_samples(&accepted_samples, batch_num_samples, batch);
 
-                        num_samples.fetch_add(batch_num_samples, Ordering::Relaxed);
+                        num_samples.fetch_add(batch_num_samples, atomic::Ordering::Relaxed);
 
                         accepted_samples.clear();
                         batch += 1;
@@ -737,10 +758,10 @@ fn run_random_sampling(matches: &ArgMatches) {
                 }
 
                 dump_samples(&accepted_samples, batch_num_samples, batch);
-                num_samples.fetch_add(batch_num_samples, Ordering::Relaxed);
+                num_samples.fetch_add(batch_num_samples, atomic::Ordering::Relaxed);
                 num_good_samples.fetch_add(
                     batch * batch_size + accepted_samples.len(),
-                    Ordering::Relaxed,
+                    atomic::Ordering::Relaxed,
                 );
             });
         }
@@ -757,7 +778,7 @@ fn run_random_sampling(matches: &ArgMatches) {
         }
 
         println!("Quitting...");
-        work.store(false, Ordering::Relaxed);
+        work.store(false, atomic::Ordering::Relaxed);
     });
 
     let end_time = Instant::now();
@@ -1397,7 +1418,37 @@ impl_max_value!(usize);
 impl_max_value!(f32);
 impl_max_value!(f64);
 
-trait Gene: Unsigned + NumCast + Copy + MaxValue<Self> {}
+trait MinValue<V> {
+    fn min_value() -> V;
+}
+
+macro_rules! impl_min_value {
+    ($t:ident) => {
+        impl MinValue<Self> for $t {
+            fn min_value() -> Self {
+                ::std::$t::MIN
+            }
+        }
+    };
+}
+
+impl_min_value!(i8);
+impl_min_value!(i16);
+impl_min_value!(i32);
+impl_min_value!(i64);
+impl_min_value!(isize);
+impl_min_value!(u8);
+impl_min_value!(u16);
+impl_min_value!(u32);
+impl_min_value!(u64);
+impl_min_value!(usize);
+impl_min_value!(f32);
+impl_min_value!(f64);
+
+trait Gene
+    : Unsigned + NumCast + Clone + Copy + MaxValue<Self> + MinValue<Self> + SampleRange + PartialOrd
+    {
+}
 
 impl Gene for u8 {}
 impl Gene for u16 {}
@@ -2938,6 +2989,185 @@ fn run_sample_weight_space(matches: &ArgMatches) {
     );
 }
 
+fn run_ge(matches: &ArgMatches) {
+    use rsgenetic::pheno::{Fitness, Phenotype};
+    use rsgenetic::sim::seq::Simulator;
+    use rsgenetic::sim::{Simulation, Builder};
+    use rsgenetic::sim::select::MaximizeSelector;
+
+    const POPULATION_SIZE: usize = 128;
+    const SELECTION_SIZE: usize = 16;
+    const MUTATION_PROB: f32 = 0.2;
+    const MAX_ITERATIONS: u64 = 200;
+
+    let (grammar, distribution) = get_sample_setup(matches.value_of("grammar").unwrap());
+    let grammar = Arc::new(grammar);
+
+    let distribution = match matches.value_of("distribution") {
+        Some(filename) => {
+            println!("Using distribution from {}", filename);
+            let file = File::open(filename).unwrap();
+            let d: Distribution =
+                bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite).unwrap();
+            Arc::new(d)
+        }
+        None => Arc::new(distribution),
+    };
+
+    println!("{}", distribution);
+
+    let settings = lsys::Settings {
+        width: 0.05,
+        angle: PI / 8.0,
+        iterations: 5,
+        ..lsys::Settings::default()
+    };
+
+    println!("Population size: {}", POPULATION_SIZE);
+    println!("Selection size: {}", SELECTION_SIZE);
+    println!("Mutation factor: {}", MUTATION_PROB);
+    println!("Max iterations: {}", MAX_ITERATIONS);
+
+    let mut population = (0..POPULATION_SIZE)
+        .map(|_| {
+            let seed = random_seed();
+            let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
+            LsysPhenotype {
+                grammar: &grammar,
+                settings: &settings,
+                genotype: RefCell::new(WeightedGenotype::new(
+                    chromosome,
+                    &distribution,
+                    grammar.symbol_index("stack").unwrap(),
+                )),
+                fitness: Cell::new(None),
+            }
+        })
+        .collect();
+
+    let mut simulator = Simulator::builder(&mut population)
+        .set_selector(Box::new(MaximizeSelector::new(SELECTION_SIZE)))
+        .set_max_iters(MAX_ITERATIONS)
+        .build();
+
+    simulator.run();
+    let best = simulator.get().unwrap();
+
+    let lsystem = generate_system(&grammar, &mut *best.genotype.borrow_mut());
+    println!("{}", lsystem);
+    println!("Fitness: {}", best.fitness().0);
+
+    let model_dir = Path::new("model");
+    fs::create_dir_all(model_dir).unwrap();
+
+    let filename = format!("{}.yaml", Local::now().to_rfc3339());
+    let path = model_dir.join(filename);
+
+    let file = File::create(&path).unwrap();
+    serde_yaml::to_writer(&mut BufWriter::new(file), &lsystem).unwrap();
+
+    println!("Saved to {}", path.to_str().unwrap());
+
+    #[derive(PartialEq, PartialOrd, Clone, Copy)]
+    struct LsysFitness(f32);
+
+    impl Eq for LsysFitness {}
+
+    impl Ord for LsysFitness {
+        fn cmp(&self, other: &LsysFitness) -> Ordering {
+            self.0.partial_cmp(&other.0).expect(
+                "Fitness is NaN and can't be ordered",
+            )
+        }
+    }
+
+    impl Fitness for LsysFitness {
+        fn zero() -> LsysFitness {
+            LsysFitness(0.0)
+        }
+
+        fn abs_diff(&self, other: &LsysFitness) -> LsysFitness {
+            LsysFitness(self.0 - other.0)
+        }
+    }
+
+    #[derive(Clone)]
+    struct LsysPhenotype<'a, G> {
+        grammar: &'a Grammar,
+        settings: &'a lsys::Settings,
+        genotype: RefCell<WeightedGenotype<'a, G>>,
+        fitness: Cell<Option<LsysFitness>>,
+    }
+
+    impl<'a, G: Gene + Clone> Phenotype<LsysFitness> for LsysPhenotype<'a, G> {
+        fn fitness(&self) -> LsysFitness {
+            if let Some(ref fitness) = self.fitness.get() {
+                *fitness
+            } else {
+                let lsystem = generate_system(self.grammar, &mut *self.genotype.borrow_mut());
+                let fitness = fitness::evaluate(&lsystem, self.settings);
+                let fitness = LsysFitness(fitness.0.score());
+
+                self.fitness.set(Some(fitness));
+
+                fitness
+            }
+        }
+
+        fn crossover(&self, other: &Self) -> Self {
+            let genotype_self = self.genotype.borrow();
+            let crossover_point = Range::new(0, genotype_self.genotype.chromosome.len())
+                .ind_sample(&mut rand::thread_rng());
+            let iter_self = genotype_self.genotype.chromosome.iter().take(
+                crossover_point,
+            );
+
+            let genotype_other = other.genotype.borrow();
+            let iter_other = genotype_other.genotype.chromosome.iter().skip(
+                crossover_point,
+            );
+            let chromosome = iter_self.chain(iter_other).cloned().collect();
+
+            LsysPhenotype {
+                grammar: self.grammar,
+                settings: self.settings,
+                genotype: RefCell::new(WeightedGenotype::new(
+                    chromosome,
+                    genotype_self.distribution,
+                    genotype_self.stack_rule_index,
+                )),
+                fitness: Cell::new(None),
+            }
+        }
+
+        fn mutate(&self) -> Self {
+            let mut rng = rand::thread_rng();
+
+            if Range::new(0.0, 1.0).ind_sample(&mut rng) > MUTATION_PROB {
+                self.clone()
+            } else {
+                let genotype = self.genotype.borrow();
+                let mut chromosome = genotype.genotype.chromosome.clone();
+                let mutation_index =
+                    Range::new(0, chromosome.len()).ind_sample(&mut rand::thread_rng());
+                chromosome[mutation_index] = Range::new(G::min_value(), G::max_value())
+                    .ind_sample(&mut rng);
+
+                LsysPhenotype {
+                    grammar: self.grammar,
+                    settings: self.settings,
+                    genotype: RefCell::new(WeightedGenotype::new(
+                        chromosome,
+                        genotype.distribution,
+                        genotype.stack_rule_index,
+                    )),
+                    fitness: Cell::new(None),
+                }
+            }
+        }
+    }
+}
+
 fn run_benchmark(_: &ArgMatches) {
     use cpuprofiler::PROFILER;
 
@@ -3039,7 +3269,10 @@ mod test {
             ),
         ]);
 
-        assert_eq!(infer_selections("value", &grammar, "symbol"), Ok(vec![]));
+        assert_eq!(
+            infer_selections("value", &grammar, "symbol"),
+            Ok(Vec::new())
+        );
     }
 
     #[test]

@@ -16,6 +16,7 @@ extern crate clap;
 extern crate csv;
 extern crate chrono;
 extern crate cpuprofiler;
+extern crate rsgenetic;
 
 #[macro_use]
 extern crate lsys;
