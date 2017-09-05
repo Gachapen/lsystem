@@ -29,6 +29,7 @@ use crossbeam;
 use clap::{App, SubCommand, Arg, ArgMatches};
 use csv;
 use chrono::prelude::*;
+use chrono::Duration;
 
 use abnf::{self, Grammar};
 use abnf::expand::{SelectionStrategy, Rulechain, expand_grammar};
@@ -2457,12 +2458,11 @@ fn run_learning(matches: &ArgMatches) {
 
     let mut scores = Vec::new();
 
-    println!("Measuring initial distribution");
+    println!("Measuring initial distribution.");
 
     let (mut current_score, mut num_samples) = measure_distribution(distribution.clone());
     scores.push((num_samples, num_samples, current_score));
 
-    println!("Generated {} samples.", num_samples);
     println!("Initial distribution has score {}.", current_score);
 
     let stats_csv_file = OpenOptions::new()
@@ -2506,12 +2506,20 @@ fn run_learning(matches: &ArgMatches) {
     let mut iteration = 0_usize;
     let mut temperature = 1.0_f32;
 
+    let status_update_interval = Duration::seconds(4);
+    let mut next_status_update = Local::now() + status_update_interval;
+
+    println!("Starting SA.");
+
     while iteration < max_moves {
-        println!("Iteration {}.", iteration);
-        println!("Temperature: {}.", temperature);
+        let now = Local::now();
+        if now >= next_status_update {
+            println!("Progress: {:.2}%", iteration as f32 / max_moves as f32 * 100.0);
+            next_status_update = now + status_update_interval;
+        }
 
         if temperature < 0.01 {
-            println!("Performing re-annealing");
+            println!("Performing re-annealing.");
             temperature = 1.0;
         }
 
@@ -2523,17 +2531,6 @@ fn run_learning(matches: &ArgMatches) {
         let (new_score, new_num_samples) = measure_distribution(new_distribution.clone());
         num_samples += new_num_samples;
 
-        println!(
-            "Generated {} of total {} samples.",
-            new_num_samples,
-            num_samples
-        );
-        println!(
-            "Neighbour score was {} with a difference of {}.",
-            new_score,
-            new_score - old_score
-        );
-
         let score_diff = (new_score - old_score) * fitness_scale;
         let accepted = if score_diff > 0.0 {
             true
@@ -2543,8 +2540,6 @@ fn run_learning(matches: &ArgMatches) {
             } else {
                 0.0
             };
-
-            println!("Probability of being selected is {}.", probability);
 
             let random = Range::new(0.0, 1.0).ind_sample(&mut rng);
 
@@ -2556,7 +2551,6 @@ fn run_learning(matches: &ArgMatches) {
         };
 
         if accepted {
-            println!("Neighbour was selected.");
             distribution = new_distribution.clone();
             current_score = new_score;
         }
@@ -2618,7 +2612,7 @@ fn run_learning(matches: &ArgMatches) {
     let hours = seconds / (60 * 60);
     let minutes = seconds % (60 * 60) / 60;
     println!(
-        "Duration: {}:{}:{}.{}",
+        "Duration: {:02}:{:02}:{:02}.{}",
         hours,
         minutes,
         seconds,
