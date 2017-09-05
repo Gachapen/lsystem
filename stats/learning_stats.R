@@ -75,6 +75,7 @@ plot_sa_2 <- function(file) {
     # geom_point(data = stats, aes(iteration, temperature), color = "green") +
     # geom_line(data = stats[stats$accepted == "true",], aes(iteration, score), size = 1, color = "grey") +
     # geom_smooth(data = stats[stats$type == "improve",], aes(iteration, score), color = "green4") +
+    geom_point(data = stats, aes(iteration, temperature), size = 1, color = "black") +
     geom_point(data = stats[stats$type == "stay",], aes(iteration, score), size = 1, color = "red3") +
     # geom_smooth(data = stats[stats$type == "stay",], aes(iteration, score), color = "red3") +
     geom_point(data = stats[stats$type == "explore",], aes(iteration, score), size = 1, color = "blue3") +

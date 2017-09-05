@@ -1003,7 +1003,7 @@ struct SelectionStats {
 
 impl SelectionStats {
     fn new() -> SelectionStats {
-        SelectionStats { data: vec![] }
+        SelectionStats { data: Vec::new() }
     }
 
     fn make_room(&mut self, depth: usize, rule_index: usize, choice: u32, num: usize) {
@@ -1540,7 +1540,7 @@ struct Distribution {
 impl Distribution {
     fn new() -> Distribution {
         Distribution {
-            depths: vec![],
+            depths: Vec::new(),
             defaults: Vec::new(),
         }
     }
@@ -2014,7 +2014,7 @@ fn infer_list_selections(
 
     match *list {
         List::Sequence(ref sequence) => {
-            let mut selections = vec![];
+            let mut selections = Vec::new();
 
             for item in sequence {
                 let (item_selections, updated_index) =
@@ -2074,7 +2074,7 @@ fn infer_item_selections(
         None => (1, 1),
     };
 
-    let mut selections = vec![];
+    let mut selections = Vec::new();
     let mut matched = false;
     let mut times_repeated = 0;
 
