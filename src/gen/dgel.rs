@@ -2331,6 +2331,11 @@ fn run_learning(matches: &ArgMatches) {
     let stats_csv_path = matches.value_of("stats-csv").unwrap().to_string();
     println!("Saving learning stats to \"{}\".", stats_csv_path);
 
+    let dump_distributions = !matches.is_present("no-dump");
+    if dump_distributions {
+        println!("Dumping distribution snapshots");
+    }
+
     let settings = Arc::new(lsys::Settings {
         width: 0.05,
         angle: PI / 8.0,
@@ -2344,38 +2349,41 @@ fn run_learning(matches: &ArgMatches) {
     );
 
     let dist_dump_path = Path::new("dist");
-    match fs::create_dir_all(dist_dump_path) {
-        Ok(_) => {}
-        Err(err) => {
-            println!(
-                "Failed creating distribution dump directory \"{}\": {}",
-                dist_dump_path.to_str().unwrap(),
-                err
-            );
-            return;
+
+    if dump_distributions {
+        match fs::create_dir_all(dist_dump_path) {
+            Ok(_) => {}
+            Err(err) => {
+                println!(
+                    "Failed creating distribution dump directory \"{}\": {}",
+                    dist_dump_path.to_str().unwrap(),
+                    err
+                );
+                return;
+            }
         }
-    }
 
-    let mut dist_files = fs::read_dir(dist_dump_path).unwrap().peekable();
-    if dist_files.peek().is_some() {
-        println!(
-            "There are files in \"{}\", remove these?",
-            dist_dump_path.to_str().unwrap()
-        );
-        print!("[y/C]: ");
-        io::stdout().flush().unwrap();
+        let mut dist_files = fs::read_dir(dist_dump_path).unwrap().peekable();
+        if dist_files.peek().is_some() {
+            println!(
+                "There are files in \"{}\", remove these?",
+                dist_dump_path.to_str().unwrap()
+            );
+            print!("[y/C]: ");
+            io::stdout().flush().unwrap();
 
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
-        input.pop().unwrap(); // remove '\n'.
+            let mut input = String::new();
+            io::stdin().read_line(&mut input).unwrap();
+            input.pop().unwrap(); // remove '\n'.
 
-        if input != "y" && input != "Y" {
-            println!("Cancelled.");
-            return;
-        } else {
-            println!("Removing files in \"{}\"", dist_dump_path.to_str().unwrap());
-            for file in dist_files {
-                fs::remove_file(file.unwrap().path()).unwrap();
+            if input != "y" && input != "Y" {
+                println!("Cancelled.");
+                return;
+            } else {
+                println!("Removing files in \"{}\"", dist_dump_path.to_str().unwrap());
+                for file in dist_files {
+                    fs::remove_file(file.unwrap().path()).unwrap();
+                }
             }
         }
     }
@@ -2390,7 +2398,6 @@ fn run_learning(matches: &ArgMatches) {
     let fitness_scale: f32 = matches.value_of("fitness-scale").unwrap().parse().unwrap();
     let cooldown: f32 = matches.value_of("cooldown-rate").unwrap().parse().unwrap();
     let max_moves = matches.value_of("max-moves").unwrap().parse::<usize>().unwrap() * dimensions;
-    let dump_distributions = !matches.is_present("no-dump");
 
     println!("Distribution has {} dimensions.", dimensions);
     println!("Using error error threshold {}.", error_threshold);
