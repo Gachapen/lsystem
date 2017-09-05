@@ -2505,6 +2505,8 @@ fn run_learning(matches: &ArgMatches) {
 
     let mut iteration = 0_usize;
     let mut temperature = 1.0_f32;
+    let mut best_score = 0.0;
+    let mut best_distribution = distribution.clone();
 
     let status_update_interval = Duration::seconds(4);
     let mut next_status_update = Local::now() + status_update_interval;
@@ -2543,16 +2545,16 @@ fn run_learning(matches: &ArgMatches) {
 
             let random = Range::new(0.0, 1.0).ind_sample(&mut rng);
 
-            if random < probability {
-                true
-            } else {
-                false
-            }
+            random < probability
         };
 
         if accepted {
             distribution = new_distribution.clone();
             current_score = new_score;
+            if new_score > best_score {
+                best_score = new_score;
+                best_distribution = new_distribution.clone();
+            }
         }
 
         save_future.wait().unwrap();
@@ -2602,7 +2604,7 @@ fn run_learning(matches: &ArgMatches) {
         temperature /= 1.0 + cooldown * temperature;
     }
 
-    println!("Finished search.");
+    println!("Finished search with best score {}.", best_score);
 
     save_future.wait().unwrap();
 
@@ -2623,7 +2625,7 @@ fn run_learning(matches: &ArgMatches) {
         "Could not save stats",
     );
 
-    match Arc::try_unwrap(distribution) {
+    match Arc::try_unwrap(best_distribution) {
         Ok(distribution) => {
             let dist_file = File::create(bin_path).unwrap();
             bincode::serialize_into(
