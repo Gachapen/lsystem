@@ -273,16 +273,19 @@ impl Fitness {
         }
     }
 
+    /// Amount of reward in range [0, 1], where 1 is the best.
     pub fn reward(&self) -> f32 {
         let branching_reward = partial_max(self.branching, 0.0).expect("Brancing is NaN");
         let balance_reward = partial_max(self.balance, 0.0).expect("Balance is NaN");
         (balance_reward + branching_reward) / 2.0
     }
 
+    /// Punisment of being nothing as either 0 or 1, where 1 is worst.
     pub fn nothing_punishment(&self) -> f32 {
         if self.is_nothing { 1.0 } else { 0.0 }
     }
 
+    /// Amount of punishment in range [0, 1], where 1 is the worst.
     pub fn punishment(&self) -> f32 {
         let branching_punishment = partial_max(-self.branching, 0.0).expect("Branching is NaN");
         let balance_punishment = partial_max(-self.balance, 0.0).expect("Balance is NaN");
@@ -290,8 +293,9 @@ impl Fitness {
             self.nothing_punishment()
     }
 
+    /// Combined reward and punisment in range [0, 1], where 1 is the best.
     pub fn score(&self) -> f32 {
-        self.reward() - self.punishment()
+        (self.reward() - self.punishment() + 1.0) * 0.5
     }
 }
 

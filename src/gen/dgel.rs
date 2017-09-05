@@ -7,14 +7,14 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{self, AtomicBool, AtomicUsize};
 use std::ops::Add;
-use std::time::{Instant, Duration};
+use std::time::Instant;
 use std::cmp::Ordering;
 use std::cell::{Cell, RefCell};
 
 use rand::{self, Rng, XorShiftRng, SeedableRng};
 use rand::distributions::{IndependentSample, Range};
-use na::{self, UnitQuaternion, Point3};
 use rand::distributions::range::SampleRange;
+use na::{UnitQuaternion, Point3};
 use kiss3d::camera::ArcBall;
 use kiss3d::scene::SceneNode;
 use num::{self, Unsigned, NumCast};
@@ -29,14 +29,13 @@ use crossbeam;
 use clap::{App, SubCommand, Arg, ArgMatches};
 use csv;
 use chrono::prelude::*;
-use chrono::format::strftime::StrftimeItems;
 
 use abnf::{self, Grammar};
 use abnf::expand::{SelectionStrategy, Rulechain, expand_grammar};
 use lsys::{self, ol};
 use lsys3d;
 use lsystems;
-use yobun::{read_dir_all, parse_duration_hms, partial_clamp};
+use yobun::read_dir_all;
 use setup_window;
 use gen::fitness::{self, Fitness};
 
@@ -183,29 +182,6 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .takes_value(true)
                 .help("How many workers (threads) to run. Default is number of CPU cores + 1.")
             )
-            .arg(Arg::with_name("until")
-                .long("until")
-                .takes_value(true)
-                .help("Run learning until specified time")
-            )
-            .arg(Arg::with_name("duration")
-                .long("duration")
-                .takes_value(true)
-                .help("Run learning for specified amount of time")
-            )
-            .arg(Arg::with_name("iterations")
-                .long("iterations")
-                .takes_value(true)
-                .help("Run learning for specified number of iterations")
-            )
-            .arg(Arg::with_name("mutation-factor")
-                .long("mutation-factor")
-                .short("m")
-                .takes_value(true)
-                .default_value("0.1")
-                .help("How strongly the distribution should be mutated for each iteration, \
-                       in range [0,1], where 0 is no  mutation")
-            )
             .arg(Arg::with_name("error-threshold")
                 .long("error-threshold")
                 .short("e")
@@ -227,6 +203,25 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .default_value("1")
                 .help("A factor multiplied with the fitness when calculating the acceptance \
                        probability")
+            )
+            .arg(Arg::with_name("cooldown-rate")
+                .long("cooldown-rate")
+                .short("c")
+                .takes_value(true)
+                .default_value("0.1")
+                .help("How fast to cool down the SA process. Higher values means faster cooldown. \
+                       Range [0, 1).")
+            )
+            .arg(Arg::with_name("max-moves")
+                .long("max-moves")
+                .short("m")
+                .takes_value(true)
+                .default_value("1")
+                .help("How many moves per dimension to perform until SA stops.")
+            )
+            .arg(Arg::with_name("no-dump")
+                .long("no-dump")
+                .help("Disable dumping of the distribution each iteration.")
             )
         )
         .subcommand(SubCommand::with_name("dist-csv-to-bin")
@@ -943,7 +938,7 @@ fn adjust_distribution(distribution: &mut Distribution, stats: &SelectionStats, 
     }
 }
 
-fn mutate_distribution<R>(distribution: &mut Distribution, factor: f32, rng: &mut R)
+fn mutate_distribution<R>(distribution: &mut Distribution, rng: &mut R)
 where
     R: Rng,
 {
@@ -951,15 +946,34 @@ where
         for choices in rules {
             for mut options in choices {
                 let i = Range::new(0, options.len()).ind_sample(rng);
-                let change = Range::new(-factor, factor).ind_sample(rng);
-                options[i] = na::clamp(options[i] + change, 0.0, 1.0);
+                let u = Range::new(0.0, 1.0).ind_sample(rng);
 
-                let expected_remaining_sum = 1.0 - options[i];
+                let old = options[i];
+                let new = if u < 0.5 {
+                    old + u * (1.0 - old)
+                } else if u > 0.5 {
+                    old - u * old
+                } else {
+                    old
+                };
+
+                let expected_remaining_sum = 1.0 - new;
+                options[i] = new;
                 let remaining_sum: f32 = options
                     .iter()
                     .take(i)
                     .chain(options.iter().skip(i + 1))
                     .sum();
+
+                if remaining_sum == 0.0 {
+                    // The expected remaining sum must be divided over the remaining weights.
+                    let new_value = expected_remaining_sum / (options.len() - 1) as f32;
+                    modify_remaining(&mut options, i, |w| *w = new_value);
+                } else {
+                    // The remaining options are normalized to sum up to remaining_sum.
+                    let normalization_factor = expected_remaining_sum / remaining_sum;
+                    modify_remaining(&mut options, i, |w| *w *= normalization_factor);
+                }
 
                 fn modify_remaining<F>(weights: &mut [f32], changed_index: usize, mut f: F)
                 where
@@ -972,16 +986,6 @@ where
                     for w in weights.iter_mut().skip(changed_index + 1) {
                         f(w);
                     }
-                }
-
-                if remaining_sum == 0.0 {
-                    // The expected remaining sum must be divided over the remaining weights.
-                    let new_value = expected_remaining_sum / (options.len() - 1) as f32;
-                    modify_remaining(&mut options, i, |w| *w = new_value);
-                } else {
-                    // Based on: 1.0 / (remaining_sum * (1.0 / expected_remaining_sum))
-                    let normalization_factor = expected_remaining_sum / remaining_sum;
-                    modify_remaining(&mut options, i, |w| *w *= normalization_factor);
                 }
             }
         }
@@ -1691,6 +1695,16 @@ impl Distribution {
         self
     }
 
+    fn dimensions(&self) -> usize {
+        self.depths.iter().fold(0, |count, ref rules| {
+            count + rules.iter().fold(0, |count, ref choices| {
+                count + choices.iter().fold(0, |count, ref alternatives| {
+                    count + alternatives.len()
+                })
+            })
+        })
+    }
+
     fn to_csv(&self) -> String {
         let mut csv = "depth,rule,choice,alternative,weight\n".to_string();
         for (depth, rules) in self.depths.iter().enumerate() {
@@ -2265,148 +2279,6 @@ fn run_stats(matches: &ArgMatches) {
 }
 
 fn run_learning(matches: &ArgMatches) {
-    enum Schedule {
-        Iterations { current: usize, max: usize },
-        EndTime {
-            start: NaiveDateTime,
-            end: NaiveDateTime,
-        },
-        Duration { start: NaiveDateTime, max: Duration },
-    }
-
-    impl Schedule {
-        fn new_iterations(max: usize) -> Schedule {
-            Schedule::Iterations { current: 0, max }
-        }
-
-        fn new_end_time(end_time: NaiveDateTime) -> Schedule {
-            Schedule::EndTime {
-                start: Local::now().naive_local(),
-                end: end_time,
-            }
-        }
-
-        fn new_duration(max: Duration) -> Schedule {
-            Schedule::Duration {
-                start: Local::now().naive_local(),
-                max,
-            }
-        }
-
-        fn start(&mut self) {
-            if let Schedule::Duration { ref mut start, .. } = *self {
-                *start = Local::now().naive_local()
-            }
-        }
-
-        fn keep_going(&mut self) -> bool {
-            match *self {
-                Schedule::Iterations {
-                    ref mut current,
-                    max,
-                } => {
-                    let keep_going = *current < max;
-                    *current += 1;
-                    keep_going
-                }
-                Schedule::EndTime { end, .. } => Local::now().naive_local() < end,
-                Schedule::Duration { start, max } => {
-                    Local::now()
-                        .naive_local()
-                        .signed_duration_since(start)
-                        .to_std()
-                        .unwrap() < max
-                }
-            }
-        }
-
-        fn progress(&self) -> f32 {
-            match *self {
-                Schedule::Iterations { current, max } => {
-                    partial_clamp(current as f32 / max as f32, 0.0, 1.0)
-                        .expect("Iteration progress is NaN")
-                }
-                Schedule::EndTime { start, end } => {
-                    let max = end.signed_duration_since(start).to_std().unwrap();
-                    let spent = Local::now()
-                        .naive_local()
-                        .signed_duration_since(start)
-                        .to_std()
-                        .unwrap();
-                    let max = max.as_secs();
-                    let spent = spent.as_secs();
-
-                    partial_clamp(spent as f32 / max as f32, 0.0, 1.0).expect(
-                        "Time progress is NaN",
-                    )
-                }
-                Schedule::Duration { start, max } => {
-                    let spent = Local::now()
-                        .naive_local()
-                        .signed_duration_since(start)
-                        .to_std()
-                        .unwrap();
-                    let max = max.as_secs();
-                    let spent = spent.as_secs();
-
-                    partial_clamp(spent as f32 / max as f32, 0.0, 1.0).expect(
-                        "Time progress is NaN",
-                    )
-                }
-            }
-
-        }
-    }
-
-    impl fmt::Display for Schedule {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            match *self {
-                Schedule::Iterations { current, max } => {
-                    write!(f, "iteration {} of {}", current, max)
-                }
-                Schedule::EndTime { end, .. } => {
-                    let now = Local::now().naive_local();
-                    let remaining = match end.signed_duration_since(now).to_std() {
-                        Ok(duration) => duration.as_secs(),
-                        Err(_) => 0,
-                    };
-                    write!(
-                        f,
-                        "{}h {}m {}s remaining until {}",
-                        remaining / 60 / 60,
-                        remaining % (60 * 60) / 60,
-                        remaining % 60,
-                        end
-                    )
-                }
-                Schedule::Duration { start, max } => {
-                    let spent = Local::now()
-                        .naive_local()
-                        .signed_duration_since(start)
-                        .to_std()
-                        .unwrap();
-                    let remaining = (max - spent).as_secs();
-                    let max = max.as_secs();
-                    let spent = spent.as_secs();
-
-                    write!(
-                        f,
-                        "{}h {}m {}s remaining of {}h {}m {}s (spent {}h {}m {}s)",
-                        remaining / 60 / 60,
-                        remaining % (60 * 60) / 60,
-                        remaining % 60,
-                        max / 60 / 60,
-                        max % (60 * 60) / 60,
-                        max % 60,
-                        spent / 60 / 60,
-                        spent % (60 * 60) / 60,
-                        spent % 60
-                    )
-                }
-            }
-        }
-    }
-
     fn generate_sample(grammar: &abnf::Grammar, distribution: &Distribution) -> ol::LSystem {
         let seed = random_seed();
         let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
@@ -2417,67 +2289,6 @@ fn run_learning(matches: &ArgMatches) {
         );
         generate_system(grammar, &mut genotype)
     }
-
-    let schedule = {
-        if let Some(iterations_str) = matches.value_of("iterations") {
-            let iterations = match iterations_str.parse() {
-                Ok(iterations) => iterations,
-                Err(err) => {
-                    println!("Could not parse --iterations argument: {}", err);
-                    return;
-                }
-            };
-
-            println!("Running learning for {} iterations.", iterations);
-            Schedule::new_iterations(iterations)
-        } else if let Some(time) = matches.value_of("until") {
-            use chrono::format::Parsed;
-            use chrono::format::parse;
-
-            // This can probably be done in a nicer way...
-            let mut parsed = Parsed::new();
-            if parse(&mut parsed, time, StrftimeItems::new("%F %T")).is_err() &&
-                parse(&mut parsed, time, StrftimeItems::new("%F %R")).is_err() &&
-                parse(&mut parsed, time, StrftimeItems::new("%T")).is_err() &&
-                parse(&mut parsed, time, StrftimeItems::new("%R")).is_err()
-            {
-                println!("Could not parse --until argument.");
-                return;
-            }
-
-            let end_date = parsed.to_naive_date().unwrap_or_else(
-                |_| Local::today().naive_local(),
-            );
-            let end_time = parsed.to_naive_time().unwrap();
-            let end_datetime = NaiveDateTime::new(end_date, end_time);
-
-            println!("Running learning until {}.", end_datetime);
-            Schedule::new_end_time(end_datetime)
-        } else if let Some(duration_str) = matches.value_of("duration") {
-            let duration = match parse_duration_hms(duration_str) {
-                Ok(duration) => duration,
-                Err(err) => {
-                    println!("Could not parse --duration argument: {}", err);
-                    return;
-                }
-            };
-
-            println!(
-                "Running learning for {}h {}m {}s.",
-                duration.as_secs() / 60 / 60,
-                duration.as_secs() % (60 * 60) / 60,
-                duration.as_secs() % (60 * 60 * 60)
-            );
-            Schedule::new_duration(duration)
-        } else {
-            let default = 128;
-            println!(
-                "Schedule not specified. Using default of {} iterations.",
-                default
-            );
-            Schedule::new_iterations(default)
-        }
-    };
 
     let (grammar, distribution) = get_sample_setup("grammar/lsys2.abnf");
 
@@ -2518,7 +2329,7 @@ fn run_learning(matches: &ArgMatches) {
     println!("Saving distribution to \"{}\".", csv_path.to_str().unwrap());
 
     let stats_csv_path = matches.value_of("stats-csv").unwrap().to_string();
-    println!("Saving distribution to \"{}\".", stats_csv_path);
+    println!("Saving learning stats to \"{}\".", stats_csv_path);
 
     let settings = Arc::new(lsys::Settings {
         width: 0.05,
@@ -2569,23 +2380,23 @@ fn run_learning(matches: &ArgMatches) {
         }
     }
 
+    let dimensions = distribution.dimensions();
     let error_threshold = matches
         .value_of("error-threshold")
         .unwrap()
         .parse()
         .unwrap();
     let min_samples = matches.value_of("min-samples").unwrap().parse().unwrap();
-    let mutation_factor = matches
-        .value_of("mutation-factor")
-        .unwrap()
-        .parse()
-        .unwrap();
     let fitness_scale: f32 = matches.value_of("fitness-scale").unwrap().parse().unwrap();
+    let cooldown: f32 = matches.value_of("cooldown-rate").unwrap().parse().unwrap();
+    let max_moves = matches.value_of("max-moves").unwrap().parse::<usize>().unwrap() * dimensions;
+    let dump_distributions = !matches.is_present("no-dump");
 
+    println!("Distribution has {} dimensions.", dimensions);
     println!("Using error error threshold {}.", error_threshold);
     println!("Using minimum samples {}.", min_samples);
-    println!("Using mutation factor {}.", mutation_factor);
     println!("Using fitness scale {}.", fitness_scale);
+    println!("Running with max {} total moves.", max_moves);
 
     let start_time = Instant::now();
     let pool = CpuPool::new(num_workers);
@@ -2632,7 +2443,6 @@ fn run_learning(matches: &ArgMatches) {
 
             error = sample_standard_deviation / size as f32;
             step_mean = mean;
-            println!("M: {}, SE: {}", step_mean, error);
         }
 
         (step_mean, step_scores.len())
@@ -2655,20 +2465,23 @@ fn run_learning(matches: &ArgMatches) {
         .open(&stats_csv_path)
         .expect("Could not create stats file");
 
-    let stats_writer = Arc::new(Mutex::new(BufWriter::with_capacity(1024 * 1024, stats_csv_file)));
+    let stats_writer = Arc::new(Mutex::new(
+        BufWriter::with_capacity(1024 * 1024, stats_csv_file),
+    ));
 
-    let mut distribution_save_future =
-        {
-            let distribution = distribution.clone();
-            let stats_writer = stats_writer.clone();
+    let mut save_future = {
+        let distribution = distribution.clone();
+        let stats_writer = stats_writer.clone();
 
-            pool.spawn_fn(move || -> FutureResult<(), ()> {
-            let first_dist_filename = format!("{}.csv", 0);
-            let first_dist_file_path = dist_dump_path.join(first_dist_filename);
-            let mut csv_file = File::create(first_dist_file_path).unwrap();
-            csv_file
-                .write_all(distribution.to_csv().as_bytes())
-                .unwrap();
+        pool.spawn_fn(move || -> FutureResult<(), ()> {
+            if dump_distributions {
+                let first_dist_filename = format!("{}.csv", 0);
+                let first_dist_file_path = dist_dump_path.join(first_dist_filename);
+                let mut csv_file = File::create(first_dist_file_path).unwrap();
+                csv_file
+                    .write_all(distribution.to_csv().as_bytes())
+                    .unwrap();
+            }
 
             let stats_csv = "iteration,samples,measure samples,score,accepted,temperature,type\n"
                 .to_string() +
@@ -2681,21 +2494,25 @@ fn run_learning(matches: &ArgMatches) {
 
             future::ok(())
         })
-        };
+    };
 
     let mut iteration = 0_usize;
+    let mut temperature = 1.0_f32;
 
-    let mut schedule = schedule;
-    schedule.start();
-
-    while schedule.keep_going() {
+    while iteration < max_moves {
         println!("Iteration {}.", iteration);
-        println!("Schedule: {}", schedule);
+        println!("Temperature: {}.", temperature);
+
+        if temperature < 0.01 {
+            println!("Performing re-annealing");
+            temperature = 1.0;
+        }
 
         let mut new_distribution = (*distribution).clone();
-        mutate_distribution(&mut new_distribution, mutation_factor, &mut rng);
+        mutate_distribution(&mut new_distribution, &mut rng);
 
         let new_distribution = Arc::new(new_distribution);
+        let old_score = current_score;
         let (new_score, new_num_samples) = measure_distribution(new_distribution.clone());
         num_samples += new_num_samples;
 
@@ -2707,51 +2524,50 @@ fn run_learning(matches: &ArgMatches) {
         println!(
             "Neighbour score was {} with a difference of {}.",
             new_score,
-            new_score - current_score
+            new_score - old_score
         );
 
-        let calc_probability = |score_diff, temp| -> f32 {
-            if temp > 0.0 {
-                E.powf(score_diff / temp)
-            } else if score_diff > 0.0 {
-                1.0
+        let score_diff = (new_score - old_score) * fitness_scale;
+        let accepted = if score_diff > 0.0 {
+            true
+        } else {
+            let probability = if temperature > 0.0 {
+                E.powf(score_diff / ((1.0 - old_score) * temperature))
             } else {
                 0.0
+            };
+
+            println!("Probability of being selected is {}.", probability);
+
+            let random = Range::new(0.0, 1.0).ind_sample(&mut rng);
+
+            if random < probability {
+                true
+            } else {
+                false
             }
         };
 
-        let temperature = 1.0 - schedule.progress();
-        let score_diff = new_score - current_score;
-        let probability = calc_probability(score_diff * fitness_scale, temperature);
-
-        println!("Temperature is {}.", temperature);
-        println!("Probability of being selected is {}.", probability);
-
-        let random = Range::new(0.0, 1.0).ind_sample(&mut rng);
-
-        let accepted = if probability >= random {
+        if accepted {
             println!("Neighbour was selected.");
-
             distribution = new_distribution.clone();
             current_score = new_score;
-            true
-        } else {
-            println!("Neighbour was discarded.");
-            false
-        };
+        }
 
-        distribution_save_future.wait().unwrap();
-        distribution_save_future = {
+        save_future.wait().unwrap();
+        save_future = {
             let distribution = new_distribution.clone();
             let stats_writer = stats_writer.clone();
 
             pool.spawn_fn(move || -> FutureResult<(), ()> {
-                let filename = format!("{}.csv", iteration);
-                let file_path = dist_dump_path.join(filename);
-                let mut csv_file = File::create(file_path).unwrap();
-                csv_file
-                    .write_all(distribution.to_csv().as_bytes())
-                    .unwrap();
+                if dump_distributions {
+                    let filename = format!("{}.csv", iteration);
+                    let file_path = dist_dump_path.join(filename);
+                    let mut csv_file = File::create(file_path).unwrap();
+                    csv_file
+                        .write_all(distribution.to_csv().as_bytes())
+                        .unwrap();
+                }
 
                 let iteration_type = if !accepted {
                     "stay"
@@ -2782,11 +2598,12 @@ fn run_learning(matches: &ArgMatches) {
         };
 
         iteration += 1;
+        temperature /= 1.0 + cooldown * temperature;
     }
 
     println!("Finished search.");
 
-    distribution_save_future.wait().unwrap();
+    save_future.wait().unwrap();
 
     let end_time = Instant::now();
     let duration = end_time - start_time;
@@ -2801,7 +2618,9 @@ fn run_learning(matches: &ArgMatches) {
         duration.subsec_nanos()
     );
 
-    stats_writer.lock().unwrap().flush().expect("Could not save stats");
+    stats_writer.lock().unwrap().flush().expect(
+        "Could not save stats",
+    );
 
     match Arc::try_unwrap(distribution) {
         Ok(distribution) => {
@@ -3218,7 +3037,7 @@ mod test {
 
         assert_eq!(
             infer_item_selections(&item, 0, "value", &grammar),
-            Ok((vec![], 5))
+            Ok((Vec::new(), 5))
         );
     }
 
@@ -3662,7 +3481,6 @@ mod test {
     #[test]
     #[ignore]
     fn test_mutate_distribution_valid() {
-        let mutation_rate = 1.0;
         let mut distribution = Distribution::new();
         let mut rng = rand::thread_rng();
         let num_runs = 100000;
@@ -3670,7 +3488,7 @@ mod test {
         distribution.set_weights(0, 0, 0, &[0.5, 0.5, 0.5, 0.5, 0.5]);
 
         for _ in 0..num_runs {
-            mutate_distribution(&mut distribution, mutation_rate, &mut rng);
+            mutate_distribution(&mut distribution, &mut rng);
 
             for rules in &distribution.depths {
                 for choices in rules {
