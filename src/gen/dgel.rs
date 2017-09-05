@@ -372,7 +372,7 @@ fn random_seed() -> [u32; 4] {
 fn run_with_distribution(matches: &ArgMatches) {
     let (mut window, _) = setup_window();
 
-    let (grammar, distribution) = get_sample_setup(matches.value_of("grammar").unwrap());
+    let (grammar, distribution, settings) = get_sample_setup(matches.value_of("grammar").unwrap());
     let grammar = Arc::new(grammar);
 
     let distribution = match matches.value_of("distribution") {
@@ -391,13 +391,7 @@ fn run_with_distribution(matches: &ArgMatches) {
 
     let num_samples = usize::from_str_radix(matches.value_of("num-samples").unwrap(), 10).unwrap();
 
-    let settings = Arc::new(lsys::Settings {
-        width: 0.05,
-        angle: PI / 8.0,
-        iterations: 5,
-        ..lsys::Settings::new()
-    });
-
+    let settings = Arc::new(settings);
     let mut system = ol::LSystem::new();
     let mut model = SceneNode::new_empty();
 
@@ -560,14 +554,16 @@ fn run_with_distribution(matches: &ArgMatches) {
                         println!("LSystem:");
                         println!("{}", system);
 
-                        let instructions =
-                            system.instructions_iter(settings.iterations, &settings.command_map);
                         let (fit, properties) = fitness::evaluate(&system, &settings);
                         println!("{:#?}", properties);
                         println!("Fitness: {}", fit);
 
                         if let Some(properties) = properties {
                             window.remove(&mut model);
+                            let instructions = system.instructions_iter(
+                                settings.iterations,
+                                &settings.command_map,
+                            );
                             model = lsys3d::build_model(instructions, &settings);
                             fitness::add_properties_rendering(&mut model, &properties);
                             window.scene_mut().add_child(model.clone());
@@ -605,7 +601,16 @@ struct SampleBatch {
     accepted: Vec<[u32; 4]>,
 }
 
-fn get_sample_setup(grammar_path: &str) -> (abnf::Grammar, Distribution) {
+fn get_sample_settings() -> lsys::Settings {
+    lsys::Settings {
+        width: 0.05,
+        angle: PI / 8.0,
+        iterations: 5,
+        ..lsys::Settings::new()
+    }
+}
+
+fn get_sample_setup(grammar_path: &str) -> (abnf::Grammar, Distribution, lsys::Settings) {
     let grammar = abnf::parse_file(grammar_path).expect("Could not parse ABNF file");
     let string_index = grammar.symbol_index("string").expect(
         "Grammar does not contain 'string' symbol",
@@ -620,7 +625,7 @@ fn get_sample_setup(grammar_path: &str) -> (abnf::Grammar, Distribution) {
         distribution
     };
 
-    (grammar, distribution)
+    (grammar, distribution, get_sample_settings())
 }
 
 fn run_random_sampling(matches: &ArgMatches) {
@@ -662,7 +667,7 @@ fn run_random_sampling(matches: &ArgMatches) {
         }
     };
 
-    let (grammar, distribution) = get_sample_setup("grammar/lsys2.abnf");
+    let (grammar, distribution, settings) = get_sample_setup("grammar/lsys2.abnf");
 
     let grammar = Arc::new(grammar);
     let distribution = match matches.value_of("distribution") {
@@ -676,12 +681,7 @@ fn run_random_sampling(matches: &ArgMatches) {
         None => Arc::new(distribution),
     };
 
-    let settings = Arc::new(lsys::Settings {
-        width: 0.05,
-        angle: PI / 8.0,
-        iterations: 5,
-        ..lsys::Settings::new()
-    });
+    let settings = Arc::new(settings);
 
     let batch_size = usize::from_str_radix(matches.value_of("batch-size").unwrap(), 10).unwrap();
     println!("Using batch size {}.", batch_size);
@@ -846,7 +846,7 @@ fn run_sampling_distribution(matches: &ArgMatches) {
         sample_count
     );
 
-    let (grammar, distribution) = get_sample_setup("grammar/lsys2.abnf");
+    let (grammar, distribution, _) = get_sample_setup("grammar/lsys2.abnf");
     let grammar = Arc::new(grammar);
     let distribution = match matches.value_of("distribution") {
         Some(filename) => {
@@ -1315,12 +1315,7 @@ fn run_random_genes() {
     println!("Genes: {:?}", genotype.chromosome);
     println!("");
 
-    let settings = lsys::Settings {
-        width: 0.05,
-        angle: PI / 8.0,
-        iterations: 5,
-        ..lsys::Settings::new()
-    };
+    let settings = get_sample_settings();
 
     let mut system = ol::LSystem {
         axiom: expand_grammar(&lsys_abnf, "axiom", &mut genotype),
@@ -2166,12 +2161,7 @@ fn run_stats(matches: &ArgMatches) {
     let num_samples = usize::from_str_radix(matches.value_of("num-samples").unwrap(), 10).unwrap();
     let csv_path = Path::new(matches.value_of("csv").unwrap());
 
-    let settings = Arc::new(lsys::Settings {
-        width: 0.05,
-        angle: PI / 8.0,
-        iterations: 5,
-        ..lsys::Settings::new()
-    });
+    let settings = Arc::new(get_sample_settings());
 
     fn generate_sample(
         grammar: &abnf::Grammar,
@@ -2291,7 +2281,7 @@ fn run_learning(matches: &ArgMatches) {
         generate_system(grammar, &mut genotype)
     }
 
-    let (grammar, distribution) = get_sample_setup("grammar/lsys2.abnf");
+    let (grammar, distribution, settings) = get_sample_setup("grammar/lsys2.abnf");
 
     let grammar = Arc::new(grammar);
     let distribution = match matches.value_of("distribution") {
@@ -2337,12 +2327,7 @@ fn run_learning(matches: &ArgMatches) {
         println!("Dumping distribution snapshots");
     }
 
-    let settings = Arc::new(lsys::Settings {
-        width: 0.05,
-        angle: PI / 8.0,
-        iterations: 5,
-        ..lsys::Settings::new()
-    });
+    let settings = Arc::new(settings);
 
     let num_workers = matches.value_of("workers").map_or(
         num_cpus::get() + 1,
@@ -2826,7 +2811,7 @@ fn run_ge(matches: &ArgMatches) {
     const MUTATION_PROB: f32 = 0.2;
     const MAX_ITERATIONS: u64 = 200;
 
-    let (grammar, distribution) = get_sample_setup(matches.value_of("grammar").unwrap());
+    let (grammar, distribution, settings) = get_sample_setup(matches.value_of("grammar").unwrap());
     let grammar = Arc::new(grammar);
 
     let distribution = match matches.value_of("distribution") {
@@ -2841,13 +2826,6 @@ fn run_ge(matches: &ArgMatches) {
     };
 
     println!("{}", distribution);
-
-    let settings = lsys::Settings {
-        width: 0.05,
-        angle: PI / 8.0,
-        iterations: 5,
-        ..lsys::Settings::default()
-    };
 
     println!("Population size: {}", POPULATION_SIZE);
     println!("Selection size: {}", SELECTION_SIZE);
@@ -3008,13 +2986,7 @@ fn run_benchmark(_: &ArgMatches) {
         generate_system(grammar, &mut genotype)
     }
 
-    let (grammar, distribution) = get_sample_setup("grammar/lsys2.abnf");
-    let settings = Arc::new(lsys::Settings {
-        width: 0.05,
-        angle: PI / 8.0,
-        iterations: 5,
-        ..lsys::Settings::new()
-    });
+    let (grammar, distribution, settings) = get_sample_setup("grammar/lsys2.abnf");
 
     PROFILER.lock().unwrap().start("./bench.profile").unwrap();
 
