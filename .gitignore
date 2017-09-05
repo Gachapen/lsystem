@@ -11,3 +11,4 @@ sample/
 stats.csv
 weight-space.csv
 models/
+*.tags
