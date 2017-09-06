@@ -2883,14 +2883,16 @@ fn run_sample_weight_space(matches: &ArgMatches) {
 
 fn run_ge(matches: &ArgMatches) {
     use rsgenetic::pheno::{Fitness, Phenotype};
-    use rsgenetic::sim::seq::Simulator;
-    use rsgenetic::sim::{Simulation, Builder};
-    use rsgenetic::sim::select::MaximizeSelector;
+    use rsgenetic::sim::{Simulation, StepResult, RunResult, SimResult, NanoSecond, Builder};
+    use rsgenetic::sim::select::{Selector, MaximizeSelector, TournamentSelector};
 
-    const POPULATION_SIZE: usize = 128;
+    const POPULATION_SIZE: usize = 500;
     const SELECTION_SIZE: usize = 16;
-    const MUTATION_PROB: f32 = 0.2;
-    const MAX_ITERATIONS: u64 = 200;
+    const TOURNAMENT_SIZE: usize = 50;
+    const MUTATION_PROB: f32 = 0.1;
+    const MAX_ITERATIONS: u64 = 60;
+    const MUTATE: bool = true;
+    const CROSSOVER: bool = true;
 
     let (grammar, distribution, settings) = get_sample_setup(matches.value_of("grammar").unwrap());
     let grammar = Arc::new(grammar);
@@ -2906,10 +2908,11 @@ fn run_ge(matches: &ArgMatches) {
         None => Arc::new(distribution),
     };
 
-    println!("{}", distribution);
+    // println!("{}", distribution);
 
     println!("Population size: {}", POPULATION_SIZE);
     println!("Selection size: {}", SELECTION_SIZE);
+    println!("Tournament size: {}", TOURNAMENT_SIZE);
     println!("Mutation factor: {}", MUTATION_PROB);
     println!("Max iterations: {}", MAX_ITERATIONS);
 
@@ -2930,13 +2933,46 @@ fn run_ge(matches: &ArgMatches) {
         })
         .collect();
 
-    let mut simulator = Simulator::builder(&mut population)
-        .set_selector(Box::new(MaximizeSelector::new(SELECTION_SIZE)))
-        .set_max_iters(MAX_ITERATIONS)
-        .build();
+    let stats_file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open("ge-stats.csv")
+        .expect("Could not create stats file");
+    let mut stats_writer = BufWriter::new(stats_file);
 
-    simulator.run();
-    let best = simulator.get().unwrap();
+    let stats_csv = "iteration,avg,best\n";
+    stats_writer.write_all(stats_csv.as_bytes()).expect(
+        "Could not write to stats file",
+    );
+
+
+    let best = {
+        let mut simulator = Simulator::builder(&mut population)
+            // .set_selector(Box::new(MaximizeSelector::new(SELECTION_SIZE)))
+            .set_selector(Box::new(TournamentSelector::new(SELECTION_SIZE, TOURNAMENT_SIZE)))
+            .set_max_iters(MAX_ITERATIONS)
+            .crossover(CROSSOVER)
+            .mutate(MUTATE)
+            .set_step_callback(|iteration: u64, population: &[LsysPhenotype<GenePrimitive>]| {
+                let fitnesses: Vec<_> = population.iter().map(|p| p.fitness().0).collect();
+
+                let sum: f32 = fitnesses.iter().sum();
+                let average = sum / population.len() as f32;
+                let best = fitnesses.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
+
+                let stats_csv = format!("{},{},{}\n", iteration, average, best);
+                stats_writer
+                    .write_all(stats_csv.as_bytes())
+                    .expect("Could not write to stats file");
+            })
+            .build();
+
+        simulator.run();
+        simulator.get().unwrap().clone()
+    };
+
+    stats_writer.flush().expect("Could not write to stats file");
 
     let lsystem =
         generate_system(
@@ -3076,6 +3112,198 @@ fn run_ge(matches: &ArgMatches) {
 
                 self.clone_with_chromosome(chromosome)
             }
+        }
+    }
+
+    /// A sequential implementation of `::sim::Simulation`.
+    /// The genetic algorithm is run in a single thread.
+    #[derive(Debug)]
+    pub struct Simulator<'a, T, F, C>
+    where
+        T: 'a + Phenotype<F>,
+        F: Fitness,
+    {
+        population: &'a mut Vec<T>,
+        selector: Box<Selector<T, F>>,
+        iteration_limit: u64,
+        iteration: u64,
+        step_callback: Option<C>,
+        do_crossover: bool,
+        mutate: bool,
+    }
+
+    impl<'a, T, F, C> Simulation<'a, T, F> for Simulator<'a, T, F, C>
+    where
+        T: Phenotype<F>,
+        F: Fitness,
+        C: FnMut(u64, &[T]),
+    {
+        type B = SimulatorBuilder<'a, T, F, C>;
+
+        /// Create builder.
+        fn builder(population: &'a mut Vec<T>) -> SimulatorBuilder<'a, T, F, C> {
+            SimulatorBuilder {
+                sim: Simulator {
+                    population: population,
+                    selector: Box::new(MaximizeSelector::new(3)),
+                    iteration_limit: 100,
+                    iteration: 0,
+                    step_callback: None,
+                    do_crossover: true,
+                    mutate: true,
+                },
+            }
+        }
+
+        fn step(&mut self) -> StepResult {
+            self.checked_step()
+        }
+
+        fn checked_step(&mut self) -> StepResult {
+            if self.population.is_empty() {
+                println!(
+                    "Tried to run a simulator without a population, or the \
+                        population was empty."
+                );
+                return StepResult::Failure;
+            }
+
+            if self.iteration > self.iteration_limit {
+                return StepResult::Done;
+            }
+
+            // Perform selection
+            let parents = match self.selector.select(self.population) {
+                Ok(parents) => parents,
+                Err(e) => {
+                    println!("Error selecting parents: {}", e);
+                    return StepResult::Failure;
+                }
+            };
+
+            let mut children: Vec<T> = if self.do_crossover {
+                parents
+                    .iter()
+                    .map(|&(ref a, ref b)| a.crossover(b))
+                    .collect()
+            } else {
+                let (parents_a, parents_b): (Vec<T>, Vec<T>) = parents.iter().cloned().unzip();
+                parents_a.iter().chain(parents_b.iter()).cloned().collect()
+            };
+
+            if self.mutate {
+                children = children.iter().map(|c| c.mutate()).collect();
+            }
+
+            // Kill off parts of the population at random to make room for the children
+            self.kill_off(children.len());
+            self.population.append(&mut children);
+
+            self.iteration += 1;
+
+            if let Some(ref mut callback) = self.step_callback {
+                callback(self.iteration, self.population);
+            }
+
+            StepResult::Success // Not done yet, but successful
+        }
+
+        fn run(&mut self) -> RunResult {
+            // Loop until Failure or Done.
+            loop {
+                match self.checked_step() {
+                    StepResult::Success => {}
+                    StepResult::Failure => return RunResult::Failure,
+                    StepResult::Done => return RunResult::Done,
+                }
+            }
+        }
+
+        fn get(&'a self) -> SimResult<'a, T> {
+            Ok(self.population.iter().max_by_key(|x| x.fitness()).unwrap())
+        }
+
+        fn iterations(&self) -> u64 {
+            self.iteration
+        }
+
+        fn time(&self) -> Option<NanoSecond> {
+            unimplemented!()
+        }
+
+        fn population(&self) -> Vec<T> {
+            self.population.clone()
+        }
+    }
+
+    impl<'a, T, F, C> Simulator<'a, T, F, C>
+    where
+        T: Phenotype<F>,
+        F: Fitness,
+    {
+        /// Kill off phenotypes using stochastic universal sampling.
+        fn kill_off(&mut self, count: usize) {
+            let ratio = self.population.len() / count;
+            let mut i = ::rand::thread_rng().gen_range::<usize>(0, self.population.len());
+            let mut selected = 0;
+            while selected < count {
+                self.population.remove(i);
+                i += ratio - 1;
+                i %= self.population.len();
+
+                selected += 1;
+            }
+        }
+    }
+
+    /// A `Builder` for the `Simulator` type.
+    #[derive(Debug)]
+    pub struct SimulatorBuilder<'a, T, F, C>
+    where
+        T: 'a + Phenotype<F>,
+        F: Fitness,
+    {
+        sim: Simulator<'a, T, F, C>,
+    }
+
+    impl<'a, T, F, C> SimulatorBuilder<'a, T, F, C>
+    where
+        T: Phenotype<F>,
+        F: Fitness,
+    {
+        pub fn set_selector(mut self, sel: Box<Selector<T, F>>) -> Self {
+            self.sim.selector = sel;
+            self
+        }
+
+        pub fn set_max_iters(mut self, i: u64) -> Self {
+            self.sim.iteration_limit = i;
+            self
+        }
+
+        pub fn set_step_callback(mut self, callback: C) -> Self {
+            self.sim.step_callback = Some(callback);
+            self
+        }
+
+        pub fn crossover(mut self, crossover: bool) -> Self {
+            self.sim.do_crossover = crossover;
+            self
+        }
+
+        pub fn mutate(mut self, mutate: bool) -> Self {
+            self.sim.mutate = mutate;
+            self
+        }
+    }
+
+    impl<'a, T, F, C> Builder<Simulator<'a, T, F, C>> for SimulatorBuilder<'a, T, F, C>
+    where
+        T: Phenotype<F>,
+        F: Fitness,
+    {
+        fn build(self) -> Simulator<'a, T, F, C> {
+            self.sim
         }
     }
 }
