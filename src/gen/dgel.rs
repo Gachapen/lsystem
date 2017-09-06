@@ -254,6 +254,23 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                        Distributions")
             )
         )
+        .subcommand(SubCommand::with_name("dump-default-dist")
+            .about("Dump default distribution to files")
+            .arg(Arg::with_name("output")
+                .long("output")
+                .short("o")
+                .takes_value(true)
+                .default_value("distribution")
+                .help("Name of the output files without extension.")
+            )
+            .arg(Arg::with_name("grammar")
+                .long("grammar")
+                .short("g")
+                .takes_value(true)
+                .required(true)
+                .help("Grammar used for the Distribution.")
+            )
+        )
         .subcommand(SubCommand::with_name("sample-weight-space")
             .about("Sample a weight space and write points to file")
             .arg(Arg::with_name("DIMENSIONS")
@@ -322,6 +339,8 @@ pub fn run_dgel(matches: &ArgMatches) {
         run_learning(matches);
     } else if let Some(matches) = matches.subcommand_matches("dist-csv-to-bin") {
         run_distribution_csv_to_bin(matches);
+    } else if let Some(matches) = matches.subcommand_matches("dump-default-dist") {
+        run_dump_default_dist(matches);
     } else if let Some(matches) = matches.subcommand_matches("sample-weight-space") {
         run_sample_weight_space(matches);
     } else if let Some(matches) = matches.subcommand_matches("ge") {
@@ -2712,6 +2731,31 @@ fn run_distribution_csv_to_bin(matches: &ArgMatches) {
     ).expect("Could not write output file");
 
     println!("Wrote \"{}\"", output_path.to_str().unwrap());
+}
+
+fn run_dump_default_dist(matches: &ArgMatches) {
+    let output_path = PathBuf::from(matches.value_of("output").unwrap());
+    let grammar_path = matches.value_of("grammar").unwrap();
+
+    let (_, distribution, _) = get_sample_setup(grammar_path);
+
+    let bin_path = output_path.with_extension("bin");
+    let bin_file = File::create(&bin_path).unwrap();
+    bincode::serialize_into(
+        &mut BufWriter::new(bin_file),
+        &distribution,
+        bincode::Infinite,
+    ).expect("Could not write bin file");
+
+    println!("Wrote \"{}\"", bin_path.to_str().unwrap());
+
+    let csv_path = output_path.with_extension("csv");
+    let mut csv_file = File::create(&csv_path).unwrap();
+    csv_file
+        .write_all(distribution.to_csv().as_bytes())
+        .expect("Could not write csv file");;
+
+    println!("Wrote \"{}\"", csv_path.to_str().unwrap());
 }
 
 fn dividers_from_weights(weights: &[f32]) -> Vec<f32> {
