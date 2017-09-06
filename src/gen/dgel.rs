@@ -969,7 +969,19 @@ where
     let depth = Range::new(0, depths.len()).ind_sample(rng);
     let rules = &mut depths[depth];
 
-    let rule = Range::new(0, rules.len()).ind_sample(rng);
+    let rule = {
+        // Only the actually mapped rules must be considered.
+        let rule_indices: Vec<_> = rules.iter().enumerate().filter_map(|(i, x)| {
+            if x.is_empty() {
+                None
+            } else {
+                Some(i)
+            }
+        }).collect();
+
+        let index = Range::new(0, rule_indices.len()).ind_sample(rng);
+        rule_indices[index]
+    };
     let choices = &mut rules[rule];
 
     let choice = Range::new(0, choices.len()).ind_sample(rng);
