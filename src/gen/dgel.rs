@@ -964,52 +964,58 @@ fn mutate_distribution<R>(distribution: &mut Distribution, rng: &mut R)
 where
     R: Rng,
 {
-    for rules in &mut distribution.depths {
-        for choices in rules {
-            for mut options in choices {
-                let i = Range::new(0, options.len()).ind_sample(rng);
-                let u = Range::new(0.0, 1.0).ind_sample(rng);
+    let depths = &mut distribution.depths;
 
-                let old = options[i];
-                let new = if u < 0.5 {
-                    old + u * (1.0 - old)
-                } else if u > 0.5 {
-                    old - u * old
-                } else {
-                    old
-                };
+    let depth = Range::new(0, depths.len()).ind_sample(rng);
+    let rules = &mut depths[depth];
 
-                let expected_remaining_sum = 1.0 - new;
-                options[i] = new;
-                let remaining_sum: f32 = options
-                    .iter()
-                    .take(i)
-                    .chain(options.iter().skip(i + 1))
-                    .sum();
+    let rule = Range::new(0, rules.len()).ind_sample(rng);
+    let choices = &mut rules[rule];
 
-                if remaining_sum == 0.0 {
-                    // The expected remaining sum must be divided over the remaining weights.
-                    let new_value = expected_remaining_sum / (options.len() - 1) as f32;
-                    modify_remaining(&mut options, i, |w| *w = new_value);
-                } else {
-                    // The remaining options are normalized to sum up to remaining_sum.
-                    let normalization_factor = expected_remaining_sum / remaining_sum;
-                    modify_remaining(&mut options, i, |w| *w *= normalization_factor);
-                }
+    let choice = Range::new(0, choices.len()).ind_sample(rng);
+    let options = &mut choices[choice];
 
-                fn modify_remaining<F>(weights: &mut [f32], changed_index: usize, mut f: F)
-                where
-                    F: FnMut(&mut f32),
-                {
-                    // Can't chain mut iterators, so need to have two for loops.
-                    for w in weights.iter_mut().take(changed_index) {
-                        f(w);
-                    }
-                    for w in weights.iter_mut().skip(changed_index + 1) {
-                        f(w);
-                    }
-                }
-            }
+    let i = Range::new(0, options.len()).ind_sample(rng);
+    let u = Range::new(0.0, 1.0).ind_sample(rng);
+
+    let old = options[i];
+    let new = if u < 0.5 {
+        old + u * (1.0 - old)
+    } else if u > 0.5 {
+        old - u * old
+    } else {
+        old
+    };
+
+    let expected_remaining_sum = 1.0 - new;
+    options[i] = new;
+    let remaining_sum: f32 = options
+        .iter()
+        .take(i)
+        .chain(options.iter().skip(i + 1))
+        .sum();
+
+    if remaining_sum == 0.0 {
+        // The expected remaining sum must be divided over the remaining weights.
+        // Normalization would have no effect.
+        let new_value = expected_remaining_sum / (options.len() - 1) as f32;
+        modify_remaining(options, i, |w| *w = new_value);
+    } else {
+        // The remaining options are normalized to sum up to remaining_sum.
+        let normalization_factor = expected_remaining_sum / remaining_sum;
+        modify_remaining(options, i, |w| *w *= normalization_factor);
+    }
+
+    fn modify_remaining<F>(weights: &mut [f32], changed_index: usize, mut f: F)
+    where
+        F: FnMut(&mut f32),
+    {
+        // Can't chain mut iterators, so need to have two for loops.
+        for w in weights.iter_mut().take(changed_index) {
+            f(w);
+        }
+        for w in weights.iter_mut().skip(changed_index + 1) {
+            f(w);
         }
     }
 }
