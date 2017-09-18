@@ -305,7 +305,7 @@ fn params_to_args(params: &[Param]) -> Vec<f32> {
 pub fn map_word_to_instructions(word: &WordSlice, command_map: &CommandMap) -> Vec<Instruction> {
     let mut instructions = Vec::with_capacity(word.len());
     for letter in word {
-        let command = command_map[letter.character as usize];
+        let command = command_map[letter.character];
         if command != Command::Noop {
             instructions.push(Instruction {
                                   command: command,

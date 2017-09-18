@@ -282,13 +282,13 @@ pub fn run_generated(window: &mut Window, camera: &mut Camera) {
 
     println!("{}", system);
 
-    settings.command_map[LETTER_BEGIN as usize] = lsys::Command::Forward;
-    settings.command_map[(LETTER_BEGIN + 1) as usize] = lsys::Command::YawLeft;
-    settings.command_map[(LETTER_BEGIN + 2) as usize] = lsys::Command::YawRight;
-    settings.command_map[(LETTER_BEGIN + 3) as usize] = lsys::Command::RollLeft;
-    settings.command_map[(LETTER_BEGIN + 4) as usize] = lsys::Command::RollRight;
-    settings.command_map[(LETTER_BEGIN + 5) as usize] = lsys::Command::PitchUp;
-    settings.command_map[(LETTER_BEGIN + 6) as usize] = lsys::Command::PitchDown;
+    settings.command_map[LETTER_BEGIN] = lsys::Command::Forward;
+    settings.command_map[(LETTER_BEGIN + 1)] = lsys::Command::YawLeft;
+    settings.command_map[(LETTER_BEGIN + 2)] = lsys::Command::YawRight;
+    settings.command_map[(LETTER_BEGIN + 3)] = lsys::Command::RollLeft;
+    settings.command_map[(LETTER_BEGIN + 4)] = lsys::Command::RollRight;
+    settings.command_map[(LETTER_BEGIN + 5)] = lsys::Command::PitchUp;
+    settings.command_map[(LETTER_BEGIN + 6)] = lsys::Command::PitchDown;
 
     let instructions = system.instructions(settings.iterations, &settings.command_map);
 

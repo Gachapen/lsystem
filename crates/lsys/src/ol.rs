@@ -284,7 +284,7 @@ impl<'a, 'b> Iterator for InstructionsIter<'a, 'b> {
         }
 
         if let Some((_, sym)) = top {
-            let command = self.command_map[sym as usize];
+            let command = self.command_map[sym];
             Some(Instruction::new(command))
         } else {
             None

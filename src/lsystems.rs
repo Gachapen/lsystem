@@ -44,7 +44,7 @@ pub fn make_plant1() -> (ol::LSystem, lsys::Settings) {
         ..lsys::Settings::new()
     };
 
-    settings.command_map['X' as usize] = Command::Noop;
+    settings.command_map['X'] = Command::Noop;
 
     (system, settings)
 }
@@ -65,8 +65,8 @@ pub fn make_gosper_hexa() -> (ol::LSystem, lsys::Settings) {
         ..lsys::Settings::new()
     };
 
-    settings.command_map['l' as usize] = Command::Forward;
-    settings.command_map['r' as usize] = Command::Forward;
+    settings.command_map['l'] = Command::Forward;
+    settings.command_map['r'] = Command::Forward;
 
     (system, settings)
 }
@@ -458,7 +458,7 @@ pub fn make_anim_tree() -> (param::LSystem, lsys::Settings) {
         ..lsys::Settings::new()
     };
 
-    settings.command_map['f' as usize] = Command::Forward;
+    settings.command_map['f'] = Command::Forward;
 
     (sys, settings)
 }
