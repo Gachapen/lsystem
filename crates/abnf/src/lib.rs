@@ -5,6 +5,7 @@ extern crate fnv;
 use std::{error, fmt, io};
 use std::io::prelude::*;
 use std::fs::File;
+use std::path::Path;
 
 mod syntax;
 mod parse;
@@ -19,8 +20,8 @@ pub enum Error {
     Io(io::Error),
 }
 
-pub fn parse_file(filename: &str) -> Result<Grammar, Error> {
-    let mut f = match File::open(filename) {
+pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<Grammar, Error> {
+    let mut f = match File::open(path) {
         Ok(file) => file,
         Err(err) => return Err(Error::Io(err)),
     };
