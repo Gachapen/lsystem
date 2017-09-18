@@ -37,7 +37,9 @@ use kiss3d::camera::ArcBall;
 use clap::{App, SubCommand};
 
 mod lsystems;
-mod gen;
+mod glp;
+mod dgel;
+mod fitness;
 
 fn main() {
     let matches = App::new("lsystem")
@@ -53,7 +55,7 @@ fn main() {
         .subcommand(SubCommand::with_name("generated").about(
             "Run random generation of plant",
         ))
-        .subcommand(gen::dgel::get_subcommand())
+        .subcommand(dgel::get_subcommand())
         .get_matches();
 
     if matches.subcommand_matches("static").is_some() {
@@ -64,9 +66,9 @@ fn main() {
         lsys3d::run_animated(&mut window, &mut camera, lsystems::make_anim_tree());
     } else if matches.subcommand_matches("generated").is_some() {
         let (mut window, mut camera) = setup_window();
-        gen::glp::run_generated(&mut window, &mut camera);
-    } else if let Some(matches) = matches.subcommand_matches(gen::dgel::COMMAND_NAME) {
-        gen::dgel::run_dgel(matches);
+        glp::run_generated(&mut window, &mut camera);
+    } else if let Some(matches) = matches.subcommand_matches(dgel::COMMAND_NAME) {
+        dgel::run_dgel(matches);
     } else {
         println!("A subcommand must be specified. See help by passing -h.");
     }

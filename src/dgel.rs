@@ -38,8 +38,8 @@ use lsys::{self, ol};
 use lsys3d;
 use lsystems;
 use yobun::read_dir_all;
-use setup_window;
-use gen::fitness::{self, Fitness};
+use super::setup_window;
+use super::fitness::{self, Fitness};
 
 const DEPTHS: usize = 4;
 
@@ -1800,11 +1800,13 @@ impl Distribution {
 
     fn dimensions(&self) -> usize {
         self.depths.iter().fold(0, |count, rules| {
-            count + rules.iter().fold(0, |count, choices| {
-                count + choices.iter().fold(0, |count, alternatives| {
-                    count + alternatives.len()
+            count +
+                rules.iter().fold(0, |count, choices| {
+                    count +
+                        choices.iter().fold(0, |count, alternatives| {
+                            count + alternatives.len()
+                        })
                 })
-            })
         })
     }
 
@@ -2568,11 +2570,12 @@ fn run_learning(matches: &ArgMatches) {
         BufWriter::with_capacity(1024 * 1024, stats_csv_file),
     ));
 
-    let mut save_future = {
-        let distribution = distribution.clone();
-        let stats_writer = stats_writer.clone();
+    let mut save_future =
+        {
+            let distribution = distribution.clone();
+            let stats_writer = stats_writer.clone();
 
-        pool.spawn_fn(move || -> FutureResult<(), ()> {
+            pool.spawn_fn(move || -> FutureResult<(), ()> {
             if dump_distributions {
                 let first_dist_filename = format!("{}.csv", 0);
                 let first_dist_file_path = dist_dump_path.join(first_dist_filename);
@@ -2593,7 +2596,7 @@ fn run_learning(matches: &ArgMatches) {
 
             future::ok(())
         })
-    };
+        };
 
     let mut iteration = 0_usize;
     let mut temperature = 1.0_f32;
@@ -2608,7 +2611,10 @@ fn run_learning(matches: &ArgMatches) {
     while iteration < max_moves {
         let now = Local::now();
         if now >= next_status_update {
-            println!("Progress: {:.2}%", iteration as f32 / max_moves as f32 * 100.0);
+            println!(
+                "Progress: {:.2}%",
+                iteration as f32 / max_moves as f32 * 100.0
+            );
             next_status_update = now + status_update_interval;
         }
 
