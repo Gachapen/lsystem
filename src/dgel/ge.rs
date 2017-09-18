@@ -475,7 +475,7 @@ where
             return StepResult::Failure;
         }
 
-        if self.iteration > self.iteration_limit {
+        if self.iteration >= self.iteration_limit {
             return StepResult::Done;
         }
 
