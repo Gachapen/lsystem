@@ -1,8 +1,6 @@
 library(ggplot2)
 library(gridExtra)
 
-stats <- read.csv(file = "learning-stats.csv", header = TRUE)
-
 plot_stat <- function(stat, label) {
   ggplot(stats, aes(sample, stat)) +
     geom_point(size = 1, alpha = 1 / 5) +
