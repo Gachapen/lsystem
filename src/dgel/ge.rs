@@ -14,7 +14,9 @@ use serde_yaml;
 use rsgenetic::pheno::{Fitness, Phenotype};
 use rsgenetic::sim::{Simulation, StepResult, RunResult, SimResult, NanoSecond, Builder};
 use rsgenetic::sim::select::{Selector, MaximizeSelector, TournamentSelector};
-
+use futures::future::{self, Future};
+use futures_cpupool::CpuPool;
+use num_cpus;
 
 use lsys;
 
@@ -80,30 +82,42 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
         )
         .arg(Arg::with_name("no-mutate").long("no-mutate"))
         .arg(Arg::with_name("no-crossover").long("no-crossover"))
+        .arg(
+            Arg::with_name("parallel")
+                .short("p")
+                .long("parallel")
+                .takes_value(true)
+                .default_value("0"),
+        )
 }
 
 pub fn run_ge(matches: &ArgMatches) {
-    let population_size: usize = matches
-        .value_of("population-size")
-        .unwrap()
-        .parse()
-        .unwrap();
-    let selection_size: usize = matches.value_of("selection-size").unwrap().parse().unwrap();
-    let tournament_size: usize = matches
-        .value_of("tournament-size")
-        .unwrap()
-        .parse()
-        .unwrap();
-    let mutation_prob: f32 = matches.value_of("mutation-rate").unwrap().parse().unwrap();
-    let max_iterations: u64 = matches
-        .value_of("max-generations")
-        .unwrap()
-        .parse()
-        .unwrap();
-    let mutate: bool = !matches.is_present("no-mutate");
-    let crossover: bool = !matches.is_present("no-crossover");
+    let parallel: usize = matches.value_of("parallel").unwrap().parse().unwrap();
 
-    let (grammar, distribution, settings) = get_sample_setup(matches.value_of("grammar").unwrap());
+    let settings = Settings {
+        population_size: matches
+            .value_of("population-size")
+            .unwrap()
+            .parse()
+            .unwrap(),
+        selection_size: matches.value_of("selection-size").unwrap().parse().unwrap(),
+        tournament_size: matches
+            .value_of("tournament-size")
+            .unwrap()
+            .parse()
+            .unwrap(),
+        mutation_rate: matches.value_of("mutation-rate").unwrap().parse().unwrap(),
+        max_iterations: matches
+            .value_of("max-generations")
+            .unwrap()
+            .parse()
+            .unwrap(),
+        mutate: !matches.is_present("no-mutate"),
+        crossover: !matches.is_present("no-crossover"),
+    };
+
+    let (grammar, distribution, lsys_settings) =
+        get_sample_setup(matches.value_of("grammar").unwrap());
     let grammar = Arc::new(grammar);
 
     let distribution = match matches.value_of("distribution") {
@@ -118,25 +132,94 @@ pub fn run_ge(matches: &ArgMatches) {
         None => Arc::new(distribution),
     };
 
-    // println!("{}", distribution);
-
-    println!("Population size: {}", population_size);
-    println!("Selection size: {}", selection_size);
-    println!("Tournament size: {}", tournament_size);
-    println!("Mutation factor: {}", mutation_prob);
-    println!("Max iterations: {}", max_iterations);
+    println!("{:#?}", settings);
 
     let stack_rule_index = grammar.symbol_index("stack").unwrap();
+
+    if parallel == 0 {
+        run(
+            &grammar,
+            &distribution,
+            stack_rule_index,
+            &lsys_settings,
+            &settings,
+        );
+    } else {
+        let pool = CpuPool::new(num_cpus::get() + 1);
+
+        let grammar = Arc::new(grammar);
+        let distribution = Arc::new(distribution);
+        let lsys_settings = Arc::new(lsys_settings);
+        let settings = Arc::new(settings);
+
+        let tasks: Vec<_> = (0..parallel)
+            .map(|_| {
+                let grammar = grammar.clone();
+                let distribution = distribution.clone();
+                let lsys_settings = lsys_settings.clone();
+                let settings = settings.clone();
+
+                pool.spawn_fn(move || {
+                    let best = run(
+                        &grammar,
+                        &distribution,
+                        stack_rule_index,
+                        &lsys_settings,
+                        &settings,
+                    );
+                    future::ok::<LsysFitness, ()>(best)
+                })
+            })
+            .collect();
+
+        let scores: Vec<f32> = future::join_all(tasks)
+            .wait()
+            .unwrap()
+            .iter()
+            .map(|f| f.0)
+            .collect();
+
+        let sum: f32 = scores.iter().sum();
+        let size = scores.len();
+        let mean = sum / size as f32;
+        let unbiased_sample_variance = scores.iter().map(|s| (s - mean).powi(2)).sum::<f32>() /
+            (size - 1) as f32;
+        let sample_standard_deviation = unbiased_sample_variance.sqrt();
+
+        println!("x̄: {}", mean);
+        println!("s²: {}", unbiased_sample_variance);
+        println!("s: {}", sample_standard_deviation);
+    }
+}
+
+#[derive(Debug)]
+struct Settings {
+    population_size: usize,
+    mutation_rate: f32,
+    max_iterations: u64,
+    crossover: bool,
+    mutate: bool,
+    selection_size: usize,
+    tournament_size: usize,
+}
+
+fn run(
+    grammar: &Grammar,
+    distribution: &Distribution,
+    stack_rule_index: usize,
+    lsys_settings: &lsys::Settings,
+    settings: &Settings,
+) -> LsysFitness {
     let base_phenotype = LsysPhenotype::new(
-        &grammar,
-        &distribution,
+        grammar,
+        distribution,
         stack_rule_index,
-        &settings,
-        mutation_prob,
+        lsys_settings,
+        settings.mutation_rate,
         Vec::new(),
     );
 
-    let mut population = (0..population_size)
+    let mut population = (0..settings.population_size)
         .map(|_| {
             let seed = random_seed();
             let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
@@ -160,12 +243,13 @@ pub fn run_ge(matches: &ArgMatches) {
 
     let best = {
         let mut simulator = Simulator::builder(&mut population)
-            .set_selector(Box::new(
-                TournamentSelector::new(selection_size, tournament_size),
-            ))
-            .set_max_iters(max_iterations)
-            .crossover(crossover)
-            .mutate(mutate)
+            .set_selector(Box::new(TournamentSelector::new(
+                settings.selection_size,
+                settings.tournament_size,
+            )))
+            .set_max_iters(settings.max_iterations)
+            .crossover(settings.crossover)
+            .mutate(settings.mutate)
             .set_step_callback(|iteration: u64,
              population: &[LsysPhenotype<GenePrimitive>]| {
                 let fitnesses: Vec<_> = population.iter().map(|p| p.fitness().0).collect();
@@ -192,14 +276,14 @@ pub fn run_ge(matches: &ArgMatches) {
 
     let lsystem =
         generate_system(
-            &grammar,
-            &mut WeightedChromosmeStrategy::new(&best.chromosome, &distribution, stack_rule_index),
+            grammar,
+            &mut WeightedChromosmeStrategy::new(&best.chromosome, distribution, stack_rule_index),
         );
     println!("{}", lsystem);
     println!(
         "Fitness: {} (real: {})",
         best.fitness(),
-        fitness::evaluate(&lsystem, &settings).0
+        fitness::evaluate(&lsystem, lsys_settings).0
     );
 
     let model_dir = Path::new("model");
@@ -212,6 +296,8 @@ pub fn run_ge(matches: &ArgMatches) {
     serde_yaml::to_writer(&mut BufWriter::new(file), &lsystem).unwrap();
 
     println!("Saved to {}", path.to_str().unwrap());
+
+    best.fitness()
 }
 
 #[derive(PartialEq, PartialOrd, Clone, Copy)]
@@ -328,8 +414,8 @@ impl<'a, G: Gene + Clone> Phenotype<LsysFitness> for LsysPhenotype<'a, G> {
             let mut chromosome = self.chromosome.clone();
             let mutation_index =
                 Range::new(0, chromosome.len()).ind_sample(&mut rand::thread_rng());
-            chromosome[mutation_index] = Range::new(G::min_value(), G::max_value())
-                .ind_sample(&mut rng);
+            chromosome[mutation_index] =
+                Range::new(G::min_value(), G::max_value()).ind_sample(&mut rng);
 
             self.clone_with_chromosome(chromosome)
         }
