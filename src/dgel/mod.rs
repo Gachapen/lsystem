@@ -974,13 +974,11 @@ where
 
     let rule = {
         // Only the actually mapped rules must be considered.
-        let rule_indices: Vec<_> = rules.iter().enumerate().filter_map(|(i, x)| {
-            if x.is_empty() {
-                None
-            } else {
-                Some(i)
-            }
-        }).collect();
+        let rule_indices: Vec<_> = rules
+            .iter()
+            .enumerate()
+            .filter_map(|(i, x)| if x.is_empty() { None } else { Some(i) })
+            .collect();
 
         let index = Range::new(0, rule_indices.len()).ind_sample(rng);
         rule_indices[index]
