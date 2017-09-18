@@ -1838,39 +1838,49 @@ impl Distribution {
 impl fmt::Display for Distribution {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for (depth, rules) in self.depths.iter().enumerate() {
-            writeln!(f, "{}:", depth)?;
+            if !rules.is_empty() {
+                writeln!(f, "{}:", depth)?;
 
-            for (rule, choices) in rules.iter().enumerate() {
-                let indent = "  ";
-                writeln!(f, "{}{}:", indent, rule)?;
+                for (rule, choices) in rules.iter().enumerate() {
+                    if !choices.is_empty() {
+                        let indent = "  ";
+                        writeln!(f, "{}{}:", indent, rule)?;
 
-                for (choice, weights) in choices.iter().enumerate() {
-                    let indent = indent.to_string() + "  ";
-                    write!(f, "{}{}: ", indent, choice)?;
+                        for (choice, weights) in choices.iter().enumerate() {
+                            if !weights.is_empty() {
+                                let indent = indent.to_string() + "  ";
+                                write!(f, "{}{}: ", indent, choice)?;
 
-                    for weight in weights {
-                        write!(f, "{}, ", weight)?;
+                                for weight in weights {
+                                    write!(f, "{:.2}, ", weight)?;
+                                }
+
+                                writeln!(f)?;
+                            }
+                        }
                     }
-
-                    writeln!(f)?;
                 }
             }
         }
 
         writeln!(f, "Default:")?;
         for (rule, choices) in self.defaults.iter().enumerate() {
-            let indent = "  ";
-            writeln!(f, "{}{}:", indent, rule)?;
+            if !choices.is_empty() {
+                let indent = "  ";
+                writeln!(f, "{}{}:", indent, rule)?;
 
-            for (choice, weights) in choices.iter().enumerate() {
-                let indent = indent.to_string() + "  ";
-                write!(f, "{}{}: ", indent, choice)?;
+                for (choice, weights) in choices.iter().enumerate() {
+                    if !weights.is_empty() {
+                        let indent = indent.to_string() + "  ";
+                        write!(f, "{}{}: ", indent, choice)?;
 
-                for weight in weights {
-                    write!(f, "{}, ", weight)?;
+                        for weight in weights {
+                            write!(f, "{:.2}, ", weight)?;
+                        }
+
+                        writeln!(f)?;
+                    }
                 }
-
-                writeln!(f)?;
             }
         }
 
