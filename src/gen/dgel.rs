@@ -314,6 +314,41 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .default_value("grammar/lsys2.abnf")
                 .help("Which ABNF grammar to use")
             )
+            .arg(Arg::with_name("population-size")
+                .short("p")
+                .long("population-size")
+                .takes_value(true)
+                .default_value("500")
+            )
+            .arg(Arg::with_name("selection-size")
+                .short("s")
+                .long("selection-size")
+                .takes_value(true)
+                .default_value("16")
+            )
+            .arg(Arg::with_name("tournament-size")
+                .short("t")
+                .long("tournament-size")
+                .takes_value(true)
+                .default_value("50")
+            )
+            .arg(Arg::with_name("mutation-rate")
+                .short("m")
+                .long("mutation-rate")
+                .takes_value(true)
+                .default_value("0.1")
+            )
+            .arg(Arg::with_name("max-generations")
+                .long("max-generations")
+                .takes_value(true)
+                .default_value("60")
+            )
+            .arg(Arg::with_name("no-mutate")
+                .long("no-mutate")
+            )
+            .arg(Arg::with_name("no-crossover")
+                .long("no-crossover")
+            )
         )
         .subcommand(SubCommand::with_name("bench")
             .about("Run benchmarks")
@@ -2898,13 +2933,25 @@ fn run_ge(matches: &ArgMatches) {
     use rsgenetic::sim::{Simulation, StepResult, RunResult, SimResult, NanoSecond, Builder};
     use rsgenetic::sim::select::{Selector, MaximizeSelector, TournamentSelector};
 
-    const POPULATION_SIZE: usize = 500;
-    const SELECTION_SIZE: usize = 16;
-    const TOURNAMENT_SIZE: usize = 50;
-    const MUTATION_PROB: f32 = 0.1;
-    const MAX_ITERATIONS: u64 = 60;
-    const MUTATE: bool = true;
-    const CROSSOVER: bool = true;
+    let population_size: usize = matches
+        .value_of("population-size")
+        .unwrap()
+        .parse()
+        .unwrap();
+    let selection_size: usize = matches.value_of("selection-size").unwrap().parse().unwrap();
+    let tournament_size: usize = matches
+        .value_of("tournament-size")
+        .unwrap()
+        .parse()
+        .unwrap();
+    let mutation_prob: f32 = matches.value_of("mutation-rate").unwrap().parse().unwrap();
+    let max_iterations: u64 = matches
+        .value_of("max-generations")
+        .unwrap()
+        .parse()
+        .unwrap();
+    let mutate: bool = !matches.is_present("no-mutate");
+    let crossover: bool = !matches.is_present("no-crossover");
 
     let (grammar, distribution, settings) = get_sample_setup(matches.value_of("grammar").unwrap());
     let grammar = Arc::new(grammar);
@@ -2914,7 +2961,9 @@ fn run_ge(matches: &ArgMatches) {
             println!("Using distribution from {}", filename);
             let file = File::open(filename).unwrap();
             let d: Distribution =
-                bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite).unwrap();
+                bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite).expect(
+                    "Could not deserialize distribution"
+                );
             Arc::new(d)
         }
         None => Arc::new(distribution),
@@ -2922,11 +2971,11 @@ fn run_ge(matches: &ArgMatches) {
 
     // println!("{}", distribution);
 
-    println!("Population size: {}", POPULATION_SIZE);
-    println!("Selection size: {}", SELECTION_SIZE);
-    println!("Tournament size: {}", TOURNAMENT_SIZE);
-    println!("Mutation factor: {}", MUTATION_PROB);
-    println!("Max iterations: {}", MAX_ITERATIONS);
+    println!("Population size: {}", population_size);
+    println!("Selection size: {}", selection_size);
+    println!("Tournament size: {}", tournament_size);
+    println!("Mutation factor: {}", mutation_prob);
+    println!("Max iterations: {}", max_iterations);
 
     let stack_rule_index = grammar.symbol_index("stack").unwrap();
     let base_phenotype = LsysPhenotype::new(
@@ -2934,10 +2983,11 @@ fn run_ge(matches: &ArgMatches) {
         &distribution,
         stack_rule_index,
         &settings,
+        mutation_prob,
         Vec::new(),
     );
 
-    let mut population = (0..POPULATION_SIZE)
+    let mut population = (0..population_size)
         .map(|_| {
             let seed = random_seed();
             let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
@@ -2961,11 +3011,10 @@ fn run_ge(matches: &ArgMatches) {
 
     let best = {
         let mut simulator = Simulator::builder(&mut population)
-            // .set_selector(Box::new(MaximizeSelector::new(SELECTION_SIZE)))
-            .set_selector(Box::new(TournamentSelector::new(SELECTION_SIZE, TOURNAMENT_SIZE)))
-            .set_max_iters(MAX_ITERATIONS)
-            .crossover(CROSSOVER)
-            .mutate(MUTATE)
+            .set_selector(Box::new(TournamentSelector::new(selection_size, tournament_size)))
+            .set_max_iters(max_iterations)
+            .crossover(crossover)
+            .mutate(mutate)
             .set_step_callback(|iteration: u64, population: &[LsysPhenotype<GenePrimitive>]| {
                 let fitnesses: Vec<_> = population.iter().map(|p| p.fitness().0).collect();
 
@@ -3045,6 +3094,7 @@ fn run_ge(matches: &ArgMatches) {
         stack_rule_index: usize,
         settings: &'a lsys::Settings,
         chromosome: Vec<G>,
+        mutation_probability: f32,
         fitness: Cell<Option<LsysFitness>>,
     }
 
@@ -3054,6 +3104,7 @@ fn run_ge(matches: &ArgMatches) {
             distribution: &'a Distribution,
             stack_rule_index: usize,
             settings: &'a lsys::Settings,
+            mutation_probability: f32,
             chromosome: Vec<G>,
         ) -> Self {
             LsysPhenotype {
@@ -3063,6 +3114,7 @@ fn run_ge(matches: &ArgMatches) {
                 settings: settings,
                 chromosome: chromosome,
                 fitness: Cell::new(None),
+                mutation_probability: mutation_probability,
             }
         }
 
@@ -3072,6 +3124,7 @@ fn run_ge(matches: &ArgMatches) {
                 self.distribution,
                 self.stack_rule_index,
                 self.settings,
+                self.mutation_probability,
                 chromosome,
             )
         }
@@ -3113,7 +3166,7 @@ fn run_ge(matches: &ArgMatches) {
         fn mutate(&self) -> Self {
             let mut rng = rand::thread_rng();
 
-            if Range::new(0.0, 1.0).ind_sample(&mut rng) > MUTATION_PROB {
+            if Range::new(0.0, 1.0).ind_sample(&mut rng) > self.mutation_probability {
                 self.clone()
             } else {
                 let mut chromosome = self.chromosome.clone();
