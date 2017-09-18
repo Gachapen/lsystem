@@ -618,11 +618,21 @@ fn get_sample_settings() -> lsys::Settings {
 }
 
 fn get_sample_setup(grammar_path: &str) -> (abnf::Grammar, Distribution, lsys::Settings) {
-    let grammar = abnf::parse_file(grammar_path).expect("Could not parse ABNF file");
-    let string_index = grammar.symbol_index("string").expect(
-        "Grammar does not contain 'string' symbol",
-    );
-    let distribution = {
+    let grammar_path = Path::new(grammar_path);
+    let grammar = abnf::parse_file(&grammar_path).expect("Could not parse ABNF file");
+
+    let grammar_dir = grammar_path.parent().unwrap();
+    let grammar_file_stem = grammar_path.file_stem().unwrap().to_str().unwrap();
+    let distribution_path = grammar_dir.join(grammar_file_stem.to_string() + ".distribution.yml");
+    let settings_path = grammar_dir.join(grammar_file_stem.to_string() + ".settings.yml");
+
+    let distribution = if let Ok(mut file) = File::open(distribution_path) {
+        println!("Loading distribution from file");
+        serde_yaml::from_reader(&mut file).unwrap()
+    } else {
+        let string_index = grammar.symbol_index("string").expect(
+            "Grammar does not contain 'string' symbol",
+        );
         let mut distribution = Distribution::new();
         for d in 0..DEPTHS - 1 {
             distribution.set_weights(d, string_index, 1, &[1.0, 1.0]);
@@ -632,7 +642,14 @@ fn get_sample_setup(grammar_path: &str) -> (abnf::Grammar, Distribution, lsys::S
         distribution
     };
 
-    (grammar, distribution, get_sample_settings())
+    let settings = if let Ok(mut file) = File::open(settings_path) {
+        println!("Loading settings from file");
+        serde_yaml::from_reader(&mut file).unwrap()
+    } else {
+        get_sample_settings()
+    };
+
+    (grammar, distribution, settings)
 }
 
 fn run_random_sampling(matches: &ArgMatches) {
