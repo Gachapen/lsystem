@@ -180,15 +180,18 @@ pub fn run_ge(matches: &ArgMatches) {
             .collect();
 
         let sum: f32 = scores.iter().sum();
-        let size = scores.len();
-        let mean = sum / size as f32;
+        let size = scores.len() as f32;
+        let ubniased_size = (scores.len() - 1) as f32;
+        let mean = sum / size;
         let unbiased_sample_variance = scores.iter().map(|s| (s - mean).powi(2)).sum::<f32>() /
-            (size - 1) as f32;
+            ubniased_size;
         let sample_standard_deviation = unbiased_sample_variance.sqrt();
+        let standard_error = sample_standard_deviation / size.sqrt();
 
         println!("x̄: {}", mean);
         println!("s²: {}", unbiased_sample_variance);
         println!("s: {}", sample_standard_deviation);
+        println!("SE: {}", standard_error);
     }
 }
 
