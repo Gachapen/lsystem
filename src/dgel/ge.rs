@@ -192,6 +192,7 @@ pub fn run_ge(matches: &ArgMatches) {
         println!("s²: {}", unbiased_sample_variance);
         println!("s: {}", sample_standard_deviation);
         println!("SE: {}", standard_error);
+        println!("CSV: {},{},{},{}", mean, unbiased_sample_variance, sample_standard_deviation, standard_error);
     }
 }
 
