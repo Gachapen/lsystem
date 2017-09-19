@@ -15,7 +15,7 @@ plot_ge_comparison <- function(file) {
   stats$label <- factor(stats$label, levels = stats$label)
 
   ggplot(data=stats, aes(label, mean)) +
-    ylim(0, 1) +
+    ylim(NA, 1) +
     geom_bar(stat="identity") +
     geom_errorbar(aes(ymin=mean-sd, ymax=mean+sd), width=0.8) +
     geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=0.8, color="red3")
@@ -26,6 +26,5 @@ plot_ge_comparison_sd <- function(file) {
   stats$label <- factor(stats$label, levels = stats$label)
 
   ggplot(data=stats, aes(label, sd)) +
-    ylim(0, 0.1) +
     geom_bar(stat="identity")
 }
