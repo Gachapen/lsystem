@@ -2513,13 +2513,14 @@ fn run_learning(matches: &ArgMatches) {
             step_scores.extend(batch_scores);
 
             let score_sum: f32 = step_scores.iter().sum();
-            let size = step_scores.len();
-            let mean = score_sum / size as f32;
+            let size = step_scores.len() as f32;
+            let unbiased_size = (step_scores.len() - 1) as f32;
+            let mean = score_sum / size;
             let unbiased_sample_variance =
-                step_scores.iter().map(|s| (s - mean).powi(2)).sum::<f32>() / (size - 1) as f32;
+                step_scores.iter().map(|s| (s - mean).powi(2)).sum::<f32>() / unbiased_size;
             let sample_standard_deviation = unbiased_sample_variance.sqrt();
 
-            error = sample_standard_deviation / size as f32;
+            error = sample_standard_deviation / size.sqrt();
             step_mean = mean;
         }
 
