@@ -1,0 +1,12 @@
+lsystem = axiom productions
+axiom = string
+productions = 1*20production
+production = predecessor successor
+predecessor = variable
+successor = string
+string = 1*20(symbol / stack / leaf)
+symbol = variable / operation
+variable = %x41-55
+operation = "+" / "-" / "^" / "&" / ">" / "<" / "!"
+stack = "[" string "]"
+leaf = "['{+f-f-f+|+f-f}]"
