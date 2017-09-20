@@ -5,10 +5,10 @@ extern crate time;
 
 extern crate lsys;
 
-use std::f32::consts::{PI, FRAC_PI_2};
+use std::f32::consts::{FRAC_PI_2, PI};
 use std::borrow::Borrow;
 
-use na::{Vector3, Point3, Rotation3, Translation3, Isometry3, UnitQuaternion};
+use na::{Isometry3, Point3, Rotation3, Translation3, UnitQuaternion, Vector3};
 use kiss3d::scene::SceneNode;
 use kiss3d::window::Window;
 use kiss3d::camera::Camera;
@@ -17,8 +17,9 @@ use lsys::Command;
 use lsys::param;
 
 pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
-    where I: IntoIterator,
-          I::Item: Borrow<lsys::Instruction>
+where
+    I: IntoIterator,
+    I::Item: Borrow<lsys::Instruction>,
 {
     let mut model = SceneNode::new_empty();
 
@@ -49,20 +50,18 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
 
                 if !filling {
                     let mut segment = model.add_cube(1.0 * width, 1.0 * width, segment_length);
-                    segment.append_translation(
-                        &Translation3::from_vector(
-                            Vector3::new(0.0, 0.0, -segment_length / 2.0)
-                        )
-                    );
-                    segment.append_transformation(
-                        &Isometry3::from_parts(
-                            Translation3::new(position.x, position.y, position.z),
-                            rotation,
-                        )
-                    );
+                    segment.append_translation(&Translation3::from_vector(
+                        Vector3::new(0.0, 0.0, -segment_length / 2.0),
+                    ));
+                    segment.append_transformation(&Isometry3::from_parts(
+                        Translation3::new(position.x, position.y, position.z),
+                        rotation,
+                    ));
 
-                    assert!(color_index < settings.colors.len(),
-                            "Color index is outside color palette");
+                    assert!(
+                        color_index < settings.colors.len(),
+                        "Color index is outside color palette"
+                    );
                     let color = settings.colors[color_index];
                     segment.set_color(color.0, color.1, color.2);
 
@@ -166,10 +165,9 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
                 states.push((position, rotation, width, color_index));
             }
             Command::Pop => {
-                if let Some((stored_position,
-                             stored_rotation,
-                             stored_width,
-                             stored_color_index)) = states.pop() {
+                if let Some((stored_position, stored_rotation, stored_width, stored_color_index)) =
+                    states.pop()
+                {
                     position = stored_position;
                     rotation = stored_rotation;
                     width = stored_width;
@@ -189,10 +187,9 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
                 surface_points.push(position);
             }
             Command::EndSurface => {
-                if let Some((stored_position,
-                             stored_rotation,
-                             stored_width,
-                             stored_color_index)) = states.pop() {
+                if let Some((stored_position, stored_rotation, stored_width, stored_color_index)) =
+                    states.pop()
+                {
                     position = stored_position;
                     rotation = stored_rotation;
                     width = stored_width;
@@ -210,19 +207,19 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
                     let mesh = nct::triangulate(&surface_points);
                     let mut node = model.add_trimesh(mesh, Vector3::new(1.0, 1.0, 1.0));
 
-                    let surface_rot = rotation *
-                                      UnitQuaternion::from_euler_angles(FRAC_PI_2, 0.0, 0.0);
+                    let surface_rot =
+                        rotation * UnitQuaternion::from_euler_angles(FRAC_PI_2, 0.0, 0.0);
 
                     node.enable_backface_culling(false);
-                    node.append_transformation(
-                        &Isometry3::from_parts(
-                            Translation3::new(position.x, position.y, position.z),
-                            surface_rot,
-                        )
-                    );
+                    node.append_transformation(&Isometry3::from_parts(
+                        Translation3::new(position.x, position.y, position.z),
+                        surface_rot,
+                    ));
 
-                    assert!(color_index < settings.colors.len(),
-                            "Color index is outside color palette");
+                    assert!(
+                        color_index < settings.colors.len(),
+                        "Color index is outside color palette"
+                    );
                     let color = settings.colors[color_index];
                     node.set_color(color.0, color.1, color.2);
                 }
@@ -241,10 +238,12 @@ pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
 }
 
 #[allow(dead_code)]
-pub fn run_static<T>(window: &mut Window,
-                     camera: &mut Camera,
-                     (system, settings): (T, lsys::Settings))
-    where T: lsys::Rewriter
+pub fn run_static<T>(
+    window: &mut Window,
+    camera: &mut Camera,
+    (system, settings): (T, lsys::Settings),
+) where
+    T: lsys::Rewriter,
 {
     let instructions = system.instructions(settings.iterations, &settings.command_map);
 
@@ -257,9 +256,11 @@ pub fn run_static<T>(window: &mut Window,
 }
 
 #[allow(dead_code)]
-pub fn run_animated(window: &mut Window,
-                    camera: &mut Camera,
-                    (system, settings): (param::LSystem, lsys::Settings)) {
+pub fn run_animated(
+    window: &mut Window,
+    camera: &mut Camera,
+    (system, settings): (param::LSystem, lsys::Settings),
+) {
     let mut model = SceneNode::new_empty();
 
     let mut word = system.axiom.clone();

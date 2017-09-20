@@ -1,9 +1,9 @@
 mod ge;
 
-use std::f32::consts::{PI, E};
+use std::f32::consts::{E, PI};
 use std::f32;
 use std::iter;
-use std::io::{self, BufWriter, BufReader, Write, Read};
+use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -13,28 +13,27 @@ use std::time::Instant;
 use std::cmp;
 use std::fmt;
 
-use rand::{self, Rng, XorShiftRng, SeedableRng};
+use rand::{self, Rng, SeedableRng, XorShiftRng};
 use rand::distributions::{IndependentSample, Range};
 use rand::distributions::range::SampleRange;
-use na::{UnitQuaternion, Point3};
+use na::{Point3, UnitQuaternion};
 use kiss3d::camera::ArcBall;
 use kiss3d::scene::SceneNode;
-use num::{self, Unsigned, NumCast};
-use glfw::{Key, WindowEvent, Action};
+use num::{self, NumCast, Unsigned};
+use glfw::{Action, Key, WindowEvent};
 use serde_yaml;
 use num_cpus;
-use futures::Future;
-use futures::future::{self, FutureResult};
+use futures::{future, Future};
 use futures_cpupool::CpuPool;
 use bincode;
 use crossbeam;
-use clap::{App, SubCommand, Arg, ArgMatches};
+use clap::{App, Arg, ArgMatches, SubCommand};
 use csv;
 use chrono::prelude::*;
 use chrono::Duration;
 
 use abnf::{self, Grammar};
-use abnf::expand::{SelectionStrategy, Rulechain, expand_grammar};
+use abnf::expand::{expand_grammar, Rulechain, SelectionStrategy};
 use lsys::{self, ol};
 use lsys3d;
 use lsystems;
@@ -567,10 +566,8 @@ fn run_with_distribution(matches: &ArgMatches) {
 
                         if let Some(properties) = properties {
                             window.remove(&mut model);
-                            let instructions = system.instructions_iter(
-                                settings.iterations,
-                                &settings.command_map,
-                            );
+                            let instructions = system
+                                .instructions_iter(settings.iterations, &settings.command_map);
                             model = lsys3d::build_model(instructions, &settings);
                             fitness::add_properties_rendering(&mut model, &properties);
                             window.scene_mut().add_child(model.clone());
@@ -630,9 +627,9 @@ fn get_sample_setup(grammar_path: &str) -> (abnf::Grammar, Distribution, lsys::S
         println!("Loading distribution from file");
         serde_yaml::from_reader(&mut file).unwrap()
     } else {
-        let string_index = grammar.symbol_index("string").expect(
-            "Grammar does not contain 'string' symbol",
-        );
+        let string_index = grammar
+            .symbol_index("string")
+            .expect("Grammar does not contain 'string' symbol");
         let mut distribution = Distribution::new();
         for d in 0..DEPTHS - 1 {
             distribution.set_weights(d, string_index, 1, &[1.0, 1.0]);
@@ -906,19 +903,18 @@ fn run_sampling_distribution(matches: &ArgMatches) {
     }
 
     let stats_collection = future::join_all(tasks).wait().unwrap();
-    let stats = stats_collection.iter().fold(
-        SelectionStats::new(),
-        |sum, stats| sum + stats,
-    );
+    let stats = stats_collection
+        .iter()
+        .fold(SelectionStats::new(), |sum, stats| sum + stats);
 
     let mut csv_file = File::create(csv_path).unwrap();
     csv_file
         .write_all(stats.to_csv_normalized().as_bytes())
         .unwrap();
 
-    let string_index = grammar.symbol_index("string").expect(
-        "Grammar does not contain 'string' symbol",
-    );
+    let string_index = grammar
+        .symbol_index("string")
+        .expect("Grammar does not contain 'string' symbol");
     let mut distribution = stats.to_distribution();
     distribution.set_default_weights(string_index, 1, &[1.0, 0.0]);
 
@@ -1273,62 +1269,39 @@ impl<'a, G: Gene> WeightedChromosmeStrategyStats<'a, G> {
 
 impl<'a, G: Gene> SelectionStrategy for WeightedChromosmeStrategyStats<'a, G> {
     fn select_alternative(&mut self, num: usize, rulechain: &Rulechain, choice: u32) -> usize {
-        let selection = self.weighted_genotype.select_alternative(
-            num,
-            rulechain,
-            choice,
-        );
+        let selection = self.weighted_genotype
+            .select_alternative(num, rulechain, choice);
 
         let depth = self.weighted_genotype.find_depth(rulechain);
         let rule = rulechain.last().unwrap();
 
-        if self.weighted_genotype.distribution.has_weights(
-            depth,
-            rule.index.unwrap(),
-            choice,
-        )
+        if self.weighted_genotype
+            .distribution
+            .has_weights(depth, rule.index.unwrap(), choice)
         {
-            self.stats.make_room(
-                depth,
-                rule.index.unwrap(),
-                choice,
-                num,
-            );
-            self.stats.add_selection(
-                selection,
-                depth,
-                rule.index.unwrap(),
-                choice,
-            );
+            self.stats
+                .make_room(depth, rule.index.unwrap(), choice, num);
+            self.stats
+                .add_selection(selection, depth, rule.index.unwrap(), choice);
         }
 
         selection
     }
 
     fn select_repetition(&mut self, min: u32, max: u32, rulechain: &Rulechain, choice: u32) -> u32 {
-        let selection = self.weighted_genotype.select_repetition(
-            min,
-            max,
-            rulechain,
-            choice,
-        );
+        let selection = self.weighted_genotype
+            .select_repetition(min, max, rulechain, choice);
 
         let depth = self.weighted_genotype.find_depth(rulechain);
         let rule = rulechain.last().unwrap();
         let num = (max - min + 1) as usize;
 
-        if self.weighted_genotype.distribution.has_weights(
-            depth,
-            rule.index.unwrap(),
-            choice,
-        )
+        if self.weighted_genotype
+            .distribution
+            .has_weights(depth, rule.index.unwrap(), choice)
         {
-            self.stats.make_room(
-                depth,
-                rule.index.unwrap(),
-                choice,
-                num,
-            );
+            self.stats
+                .make_room(depth, rule.index.unwrap(), choice, num);
             self.stats.add_selection(
                 (selection - min) as usize,
                 depth,
@@ -1766,13 +1739,12 @@ impl Distribution {
 
     fn dimensions(&self) -> usize {
         self.depths.iter().fold(0, |count, rules| {
-            count +
-                rules.iter().fold(0, |count, choices| {
-                    count +
-                        choices.iter().fold(0, |count, alternatives| {
-                            count + alternatives.len()
-                        })
-                })
+            count + rules.iter().fold(0, |count, choices| {
+                count +
+                    choices
+                        .iter()
+                        .fold(0, |count, alternatives| count + alternatives.len())
+            })
         })
     }
 
@@ -1803,11 +1775,13 @@ impl Distribution {
         let mut dist = Distribution::new();
 
         for row in reader.decode() {
-            let (depth, rule, choice, alternative, weight): (usize,
-                                                             usize,
-                                                             u32,
-                                                             usize,
-                                                             f32) = row.unwrap();
+            let (depth, rule, choice, alternative, weight): (
+                usize,
+                usize,
+                u32,
+                usize,
+                f32,
+            ) = row.unwrap();
             dist.set_weight(depth, rule, choice, alternative, weight);
         }
 
@@ -1819,15 +1793,16 @@ impl Distribution {
         let mut dist = Distribution::new();
 
         for row in reader.decode() {
-            let (depth, rule, choice, alternative, weight): (usize,
-                                                             String,
-                                                             u32,
-                                                             usize,
-                                                             f32) = row.unwrap();
-            let rule_index = grammar.symbol_index(&rule).expect(&format!(
-                "Symbol '{}' not found in grammar",
-                rule
-            ));
+            let (depth, rule, choice, alternative, weight): (
+                usize,
+                String,
+                u32,
+                usize,
+                f32,
+            ) = row.unwrap();
+            let rule_index = grammar
+                .symbol_index(&rule)
+                .expect(&format!("Symbol '{}' not found in grammar", rule));
             dist.set_weight(depth, rule_index, choice, alternative, weight);
         }
 
@@ -1905,9 +1880,9 @@ impl<'a, G: Gene> WeightedChromosmeStrategy<'a, G> {
     }
 
     fn find_depth(&self, rulechain: &Rulechain) -> usize {
-        rulechain.iter().fold(
-            0,
-            |acc, r| if let Some(index) = r.index {
+        rulechain
+            .iter()
+            .fold(0, |acc, r| if let Some(index) = r.index {
                 if index == self.stack_rule_index {
                     acc + 1
                 } else {
@@ -1915,8 +1890,7 @@ impl<'a, G: Gene> WeightedChromosmeStrategy<'a, G> {
                 }
             } else {
                 acc
-            },
-        )
+            })
     }
 }
 
@@ -1926,13 +1900,10 @@ impl<'a, G: Gene> SelectionStrategy for WeightedChromosmeStrategy<'a, G> {
 
         let depth = self.find_depth(rulechain);
         let rule = rulechain.last().unwrap();
-        let gene_frac = num::cast::<_, f32>(gene).unwrap() /
-            num::cast::<_, f32>(G::max_value()).unwrap();
-        let weights = self.distribution.get_weights(
-            depth,
-            rule.index.unwrap(),
-            choice,
-        );
+        let gene_frac =
+            num::cast::<_, f32>(gene).unwrap() / num::cast::<_, f32>(G::max_value()).unwrap();
+        let weights = self.distribution
+            .get_weights(depth, rule.index.unwrap(), choice);
 
         if let Some(weights) = weights {
             assert_eq!(
@@ -1954,13 +1925,10 @@ impl<'a, G: Gene> SelectionStrategy for WeightedChromosmeStrategy<'a, G> {
 
         let depth = self.find_depth(rulechain);
         let rule = rulechain.last().unwrap();
-        let gene_frac = num::cast::<_, f32>(gene).unwrap() /
-            num::cast::<_, f32>(G::max_value()).unwrap();
-        let weights = self.distribution.get_weights(
-            depth,
-            rule.index.unwrap(),
-            choice,
-        );
+        let gene_frac =
+            num::cast::<_, f32>(gene).unwrap() / num::cast::<_, f32>(G::max_value()).unwrap();
+        let weights = self.distribution
+            .get_weights(depth, rule.index.unwrap(), choice);
 
         if let Some(weights) = weights {
             assert_eq!(
@@ -2064,17 +2032,15 @@ fn infer_selections(
     );
 
     match selection {
-        Ok((list, index)) => {
-            if index == expanded.len() {
-                Ok(list)
-            } else {
-                Err(format!(
-                    "Expanded string does not fully match grammar. \
-                             The first {} characters matched",
-                    index
-                ))
-            }
-        }
+        Ok((list, index)) => if index == expanded.len() {
+            Ok(list)
+        } else {
+            Err(format!(
+                "Expanded string does not fully match grammar. \
+                 The first {} characters matched",
+                index
+            ))
+        },
         Err(_) => Err("Expanded string does not match grammar".to_string()),
     }
 }
@@ -2217,14 +2183,14 @@ fn infer_item_selections(
 }
 
 fn run_stats(matches: &ArgMatches) {
-    let grammar = Arc::new(abnf::parse_file("grammar/lsys2.abnf").expect(
-        "Could not parse ABNF file",
-    ));
+    let grammar = Arc::new(
+        abnf::parse_file("grammar/lsys2.abnf").expect("Could not parse ABNF file"),
+    );
 
     let distributions: Vec<Arc<Distribution>> = {
-        let paths = matches.values_of("DISTRIBUTIONS").expect(
-            "No distributions specified",
-        );
+        let paths = matches
+            .values_of("DISTRIBUTIONS")
+            .expect("No distributions specified");
 
         println!("Distributions: {:?}", paths.clone().collect::<Vec<_>>());
 
@@ -2328,9 +2294,9 @@ fn run_stats(matches: &ArgMatches) {
         }
     };
 
-    let csv = samples.iter().fold(
-        csv,
-        |csv, &(d, ref f)| if f.is_nothing {
+    let csv = samples
+        .iter()
+        .fold(csv, |csv, &(d, ref f)| if f.is_nothing {
             csv + &format!("{},{},,,,,{}\n", d, f.score(), f.nothing_punishment())
         } else {
             csv +
@@ -2344,8 +2310,7 @@ fn run_stats(matches: &ArgMatches) {
                     f.drop,
                     f.nothing_punishment()
                 )
-        },
-    );
+        });
 
     csv_file.write_all(csv.as_bytes()).unwrap();
 }
@@ -2410,10 +2375,9 @@ fn run_learning(matches: &ArgMatches) {
 
     let settings = Arc::new(settings);
 
-    let num_workers = matches.value_of("workers").map_or(
-        num_cpus::get() + 1,
-        |w| w.parse().unwrap(),
-    );
+    let num_workers = matches
+        .value_of("workers")
+        .map_or(num_cpus::get() + 1, |w| w.parse().unwrap());
 
     let dist_dump_path = Path::new("dist");
 
@@ -2492,7 +2456,7 @@ fn run_learning(matches: &ArgMatches) {
                     let grammar = grammar.clone();
                     let settings = settings.clone();
                     let distribution = distribution.clone();
-                    pool.spawn_fn(move || -> FutureResult<f32, ()> {
+                    pool.spawn_fn(move || {
                         let lsystem = generate_sample(&grammar, &distribution);
 
                         let (fit, _) = fitness::evaluate(&lsystem, &settings);
@@ -2504,9 +2468,7 @@ fn run_learning(matches: &ArgMatches) {
 
             let result = match future::join_all(tasks).wait() {
                 Ok(result) => result,
-                Err(()) => {
-                    panic!("Failed joining tasks: Unknown reason.")
-                }
+                Err(()) => panic!("Failed joining tasks: Unknown reason."),
             };
             let batch_scores = result;
 
@@ -2547,12 +2509,11 @@ fn run_learning(matches: &ArgMatches) {
         BufWriter::with_capacity(1024 * 1024, stats_csv_file),
     ));
 
-    let mut save_future =
-        {
-            let distribution = distribution.clone();
-            let stats_writer = stats_writer.clone();
+    let mut save_future = {
+        let distribution = distribution.clone();
+        let stats_writer = stats_writer.clone();
 
-            pool.spawn_fn(move || -> FutureResult<(), ()> {
+        pool.spawn_fn(move || {
             if dump_distributions {
                 let first_dist_filename = format!("{}.csv", 0);
                 let first_dist_file_path = dist_dump_path.join(first_dist_filename);
@@ -2564,16 +2525,23 @@ fn run_learning(matches: &ArgMatches) {
 
             let stats_csv = "iteration,samples,measure samples,score,accepted,temperature,type\n"
                 .to_string() +
-                &format!("{},{},{},{},,,{}\n", 0, num_samples, num_samples, current_score, "init");
+                &format!(
+                    "{},{},{},{},,,{}\n",
+                    0,
+                    num_samples,
+                    num_samples,
+                    current_score,
+                    "init"
+                );
             stats_writer
                 .lock()
                 .unwrap()
                 .write_all(stats_csv.as_bytes())
                 .expect("Could not write to stats file");
 
-            future::ok(())
+            future::ok::<(),()>(())
         })
-        };
+    };
 
     let mut iteration = 0_usize;
     let mut temperature = 1.0_f32;
@@ -2637,7 +2605,7 @@ fn run_learning(matches: &ArgMatches) {
             let distribution = new_distribution.clone();
             let stats_writer = stats_writer.clone();
 
-            pool.spawn_fn(move || -> FutureResult<(), ()> {
+            pool.spawn_fn(move || {
                 if dump_distributions {
                     let filename = format!("{}.csv", iteration);
                     let file_path = dist_dump_path.join(filename);
@@ -2696,9 +2664,11 @@ fn run_learning(matches: &ArgMatches) {
         duration.subsec_nanos()
     );
 
-    stats_writer.lock().unwrap().flush().expect(
-        "Could not save stats",
-    );
+    stats_writer
+        .lock()
+        .unwrap()
+        .flush()
+        .expect("Could not save stats");
 
     match Arc::try_unwrap(best_distribution) {
         Ok(distribution) => {
@@ -2730,17 +2700,17 @@ fn run_distribution_csv_to_bin(matches: &ArgMatches) {
 
     let mut input_file = File::open(input_path).expect("Could not open input file");
     let mut csv = String::new();
-    input_file.read_to_string(&mut csv).expect(
-        "Could not read input file",
-    );
+    input_file
+        .read_to_string(&mut csv)
+        .expect("Could not read input file");
 
     let grammar_path = matches.value_of("grammar").unwrap();
     let grammar = abnf::parse_file(grammar_path).expect("Could not parse grammar file");
 
     let mut distribution = if let Some(version) = version {
-        let version: u32 = version.parse().expect(
-            "'version' argument must be an integer",
-        );
+        let version: u32 = version
+            .parse()
+            .expect("'version' argument must be an integer");
         if version == 1 {
             println!("Loading distribution using v1 structure");
             Distribution::from_csv_v1(&csv, &grammar)
@@ -2752,9 +2722,9 @@ fn run_distribution_csv_to_bin(matches: &ArgMatches) {
         Distribution::from_csv(&csv)
     };
 
-    let string_index = grammar.symbol_index("string").expect(
-        "Grammar does not contain 'string' symbol",
-    );
+    let string_index = grammar
+        .symbol_index("string")
+        .expect("Grammar does not contain 'string' symbol");
     distribution.set_default_weights(string_index, 1, &[1.0, 0.0]);
     // Remove the default weights from the depth weights.
     distribution.depths[DEPTHS - 1][string_index].pop();
@@ -2879,21 +2849,15 @@ fn run_sample_weight_space(matches: &ArgMatches) {
 
     let tasks: Vec<_> = (0..num_samples)
         .map(|_| if dividers {
-            pool.spawn_fn(move || -> FutureResult<Vec<f32>, ()> {
-                future::ok(dividers_from_weights(&generate_weight(dimensions)))
-            })
+            pool.spawn_fn(move || future::ok(dividers_from_weights(&generate_weight(dimensions))))
         } else {
-            pool.spawn_fn(move || -> FutureResult<Vec<f32>, ()> {
-                future::ok(generate_weight(dimensions))
-            })
+            pool.spawn_fn(move || future::ok(generate_weight(dimensions)))
         })
         .collect();
 
     let samples = match future::join_all(tasks).wait() {
         Ok(result) => result,
-        Err(()) => {
-            panic!("Failed joining tasks: Unknown reason.")
-        }
+        Err(()) => panic!("Failed joining tasks: Unknown reason."),
     };
 
     let mut csv = String::new();
@@ -2906,9 +2870,9 @@ fn run_sample_weight_space(matches: &ArgMatches) {
     }
 
     let mut csv_file = File::create(output_path).unwrap();
-    csv_file.write_all(csv.as_bytes()).expect(
-        "Failed writing sample csv file",
-    );
+    csv_file
+        .write_all(csv.as_bytes())
+        .expect("Failed writing sample csv file");
 }
 
 fn run_benchmark(_: &ArgMatches) {
@@ -2940,17 +2904,14 @@ fn run_benchmark(_: &ArgMatches) {
 #[cfg(test)]
 mod test {
     use super::*;
-    use abnf::{Item, Content, Grammar, List, Repeat, Symbol};
+    use abnf::{Content, Grammar, Item, List, Repeat, Symbol};
 
     #[test]
     fn test_infer_selections_value() {
         let item = Item::new(Content::Value("value".to_string()));
 
         let grammar = Grammar::from_rules(vec![
-            (
-                Symbol::from("symbol"),
-                List::Sequence(vec![item.clone()])
-            ),
+            (Symbol::from("symbol"), List::Sequence(vec![item.clone()])),
         ]);
 
         assert_eq!(
@@ -2967,10 +2928,7 @@ mod test {
         );
 
         let grammar = Grammar::from_rules(vec![
-            (
-                Symbol::from("symbol"),
-                List::Sequence(vec![item.clone()])
-            ),
+            (Symbol::from("symbol"), List::Sequence(vec![item.clone()])),
         ]);
 
         assert_eq!(
@@ -3000,10 +2958,7 @@ mod test {
         let item = Item::new(Content::Value("value".to_string()));
 
         let grammar = Grammar::from_rules(vec![
-            (
-                Symbol::from("symbol"),
-                List::Sequence(vec![item.clone()])
-            ),
+            (Symbol::from("symbol"), List::Sequence(vec![item.clone()])),
         ]);
 
         assert_eq!(
@@ -3030,10 +2985,7 @@ mod test {
         let item = Item::new(Content::Value("value".to_string()));
 
         let grammar = Grammar::from_rules(vec![
-            (
-                Symbol::from("symbol"),
-                List::Sequence(vec![item.clone()])
-            ),
+            (Symbol::from("symbol"), List::Sequence(vec![item.clone()])),
         ]);
 
         assert_eq!(
@@ -3047,10 +2999,7 @@ mod test {
         let item = Item::new(Content::Value("value".to_string()));
 
         let grammar = Grammar::from_rules(vec![
-            (
-                Symbol::from("symbol"),
-                List::Sequence(vec![item.clone()])
-            ),
+            (Symbol::from("symbol"), List::Sequence(vec![item.clone()])),
         ]);
 
         assert_eq!(
@@ -3067,21 +3016,21 @@ mod test {
     fn test_lsystem_ge_expansion() {
         let grammar = abnf::parse_file("grammar/lsys.abnf").expect("Could not parse ABNF file");
         let chromosome = vec![
-           2u8, // repeat 3 - "F[FX]X"
-           0, // symbol - "F"
-           0, // variable - "F"
-           0, // "F"
-           1, // stack - "[FX]"
-           1, // repeat - "FX"
-           0, // symbol - "F"
-           0, // variable - "F"
-           0, // "F"
-           0, // symbol - "X"
-           0, // variable - "X"
-           1, // "X"
-           0, // symbol - "X"
-           0, // variable - "X"
-           1, // "X"
+            2u8, // repeat 3 - "F[FX]X"
+            0,   // symbol - "F"
+            0,   // variable - "F"
+            0,   // "F"
+            1,   // stack - "[FX]"
+            1,   // repeat - "FX"
+            0,   // symbol - "F"
+            0,   // variable - "F"
+            0,   // "F"
+            0,   // symbol - "X"
+            0,   // variable - "X"
+            1,   // "X"
+            0,   // symbol - "X"
+            0,   // variable - "X"
+            1,   // "X"
         ];
         let mut genotype = ChromosmeStrategy::new(chromosome);
 
@@ -3092,21 +3041,21 @@ mod test {
     fn test_lsystem_ge_inference() {
         let grammar = abnf::parse_file("grammar/lsys.abnf").expect("Could not parse ABNF file");
         let chromosome = vec![
-           2, // repeat - "F[FX]X"
-           0, // symbol - "F"
-           0, // variable - "F"
-           0, // "F"
-           1, // stack - "[FX]"
-           1, // repeat - "FX"
-           0, // symbol - "F"
-           0, // variable - "F"
-           0, // "F"
-           0, // symbol - "X"
-           0, // variable - "X"
-           1, // "X"
-           0, // symbol - "X"
-           0, // variable - "X"
-           1, // "X"
+            2, // repeat - "F[FX]X"
+            0, // symbol - "F"
+            0, // variable - "F"
+            0, // "F"
+            1, // stack - "[FX]"
+            1, // repeat - "FX"
+            0, // symbol - "F"
+            0, // variable - "F"
+            0, // "F"
+            0, // symbol - "X"
+            0, // variable - "X"
+            1, // "X"
+            0, // symbol - "X"
+            0, // variable - "X"
+            1, // "X"
         ];
 
         assert_eq!(

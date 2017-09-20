@@ -1,6 +1,6 @@
+extern crate fnv;
 #[macro_use]
 extern crate nom;
-extern crate fnv;
 
 use std::{error, fmt, io};
 use std::io::prelude::*;

@@ -1,6 +1,6 @@
 use std::{fmt, slice};
 use std::ops::{Index, IndexMut};
-use serde::{Serialize, Serializer, Deserialize, Deserializer, de};
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde::ser::SerializeMap;
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]

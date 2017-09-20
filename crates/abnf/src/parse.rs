@@ -1,7 +1,7 @@
 use nom::{alphanumeric, digit, eol, space, hex_u32};
 use std::str;
 
-use syntax::{Repeat, Item, Content, Sequence, Symbol, List, Rule};
+use syntax::{Content, Item, List, Repeat, Rule, Sequence, Symbol};
 
 named!(pub string_literal<String>,
     delimited!(
@@ -212,7 +212,7 @@ mod tests {
 
     use parse;
     use super::*;
-    use syntax::List::{Sequence, Alternatives};
+    use syntax::List::{Alternatives, Sequence};
     use syntax::{Content, Symbol};
 
     #[test]
@@ -237,9 +237,9 @@ mod tests {
             Done(
                 &b""[..],
                 (Repeat {
-                     min: None,
-                     max: None,
-                 }),
+                    min: None,
+                    max: None,
+                }),
             )
         );
     }
@@ -251,9 +251,9 @@ mod tests {
             Done(
                 &b""[..],
                 (Repeat {
-                     min: Some(4),
-                     max: None,
-                 }),
+                    min: Some(4),
+                    max: None,
+                }),
             )
         );
     }
@@ -265,9 +265,9 @@ mod tests {
             Done(
                 &b""[..],
                 (Repeat {
-                     min: None,
-                     max: Some(8),
-                 }),
+                    min: None,
+                    max: Some(8),
+                }),
             )
         );
     }
@@ -279,9 +279,9 @@ mod tests {
             Done(
                 &b""[..],
                 (Repeat {
-                     min: Some(4),
-                     max: Some(8),
-                 }),
+                    min: Some(4),
+                    max: Some(8),
+                }),
             )
         );
     }
@@ -441,11 +441,11 @@ mod tests {
             vec![
                 (
                     Symbol::from("def"),
-                    Sequence(vec![Item::new(Content::Value("value".to_string()))])
+                    Sequence(vec![Item::new(Content::Value("value".to_string()))]),
                 ),
                 (
                     Symbol::from("def2"),
-                    Sequence(vec![Item::new(Content::Symbol(Symbol::from("def")))])
+                    Sequence(vec![Item::new(Content::Symbol(Symbol::from("def")))]),
                 ),
             ]
         };
@@ -466,25 +466,25 @@ mod tests {
         let result = vec![
             (
                 Symbol::from("def"),
-                Sequence(vec![Item::new(Content::Value("value".to_string()))])
+                Sequence(vec![Item::new(Content::Value("value".to_string()))]),
             ),
             (
                 Symbol::from("rule"),
-                Sequence(vec![Item::new(Content::Symbol(Symbol::from("def")))])
+                Sequence(vec![Item::new(Content::Symbol(Symbol::from("def")))]),
             ),
             (
                 Symbol::from("rule2"),
                 Sequence(vec![
                     Item::new(Content::Symbol(Symbol::from("def"))),
                     Item::new(Content::Symbol(Symbol::from("def"))),
-                ])
+                ]),
             ),
             (
                 Symbol::from("rule3"),
                 Alternatives(vec![
                     Item::new(Content::Symbol(Symbol::from("def"))),
                     Item::new(Content::Symbol(Symbol::from("def"))),
-                ])
+                ]),
             ),
         ];
 
@@ -498,7 +498,7 @@ mod tests {
         let result = vec![
             (
                 Symbol::from("rule"),
-                Sequence(vec![Item::new(Content::Symbol(Symbol::from("def")))])
+                Sequence(vec![Item::new(Content::Symbol(Symbol::from("def")))]),
             ),
         ];
         let input = b"rule = def";
@@ -510,7 +510,7 @@ mod tests {
         let result = vec![
             (
                 Symbol::from("rule"),
-                Sequence(vec![Item::new(Content::Symbol(Symbol::from("def")))])
+                Sequence(vec![Item::new(Content::Symbol(Symbol::from("def")))]),
             ),
         ];
 

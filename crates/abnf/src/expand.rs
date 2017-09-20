@@ -1,7 +1,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use syntax::{Symbol, Content, Item, List, Grammar};
+use syntax::{Content, Grammar, Item, List, Symbol};
 use core;
 
 pub type Rulechain<'a> = [&'a Symbol];
@@ -28,7 +28,7 @@ where
         Node::List(
             vec![&root_symbol],
             Rc::new(Cell::new(0)),
-            grammar.map_rule(&root_symbol).unwrap()
+            grammar.map_rule(&root_symbol).unwrap(),
         ),
     ];
 
@@ -36,30 +36,19 @@ where
         let node = visit_stack.pop().unwrap();
 
         match node {
-            Node::List(rulechain, choice, list) => {
-                match *list {
-                    List::Sequence(ref sequence) => {
-                        for item in sequence.iter().rev() {
-                            visit_stack.push(Node::Item(rulechain.clone(), choice.clone(), item));
-                        }
-                    }
-                    List::Alternatives(ref alternatives) => {
-                        let selection = strategy.select_alternative(
-                            alternatives.len(),
-                            &rulechain,
-                            choice.get(),
-                        );
-                        let alternative = &alternatives[selection];
-                        visit_stack.push(Node::Item(
-                            rulechain.clone(),
-                            choice.clone(),
-                            alternative,
-                        ));
+            Node::List(rulechain, choice, list) => match *list {
+                List::Sequence(ref sequence) => for item in sequence.iter().rev() {
+                    visit_stack.push(Node::Item(rulechain.clone(), choice.clone(), item));
+                },
+                List::Alternatives(ref alternatives) => {
+                    let selection =
+                        strategy.select_alternative(alternatives.len(), &rulechain, choice.get());
+                    let alternative = &alternatives[selection];
+                    visit_stack.push(Node::Item(rulechain.clone(), choice.clone(), alternative));
 
-                        choice.set(choice.get() + 1);
-                    }
+                    choice.set(choice.get() + 1);
                 }
-            }
+            },
             Node::Item(rulechain, choice, item) => {
                 let times = match item.repeat {
                     Some(ref repeat) => {
@@ -88,7 +77,7 @@ where
                                 // TODO: Return Result instead of panicing.
                                 panic!(format!(
                                     "Symbol '{}' does not exist in ABNF grammar and is \
-                                                not a core rule",
+                                     not a core rule",
                                     symbol.name
                                 ));
                             };
@@ -96,11 +85,8 @@ where
                             let mut updated_chain = rulechain.clone();
                             updated_chain.push(symbol);
 
-                            visit_stack.push(Node::List(
-                                updated_chain,
-                                Rc::new(Cell::new(0)),
-                                list,
-                            ));
+                            visit_stack
+                                .push(Node::List(updated_chain, Rc::new(Cell::new(0)), list));
                         }
                         Content::Group(ref group) => {
                             // Hacky mack hack to prevent each repeat to count towards the total
@@ -138,7 +124,7 @@ where
 mod tests {
     use super::*;
     use syntax::Repeat;
-    use List::{Sequence, Alternatives};
+    use List::{Alternatives, Sequence};
     use Content;
     use Symbol;
 
@@ -160,9 +146,7 @@ mod tests {
         let grammar = Grammar::from_rules(vec![
             (
                 Symbol::from("test"),
-                Sequence(
-                    vec![Item::new(Content::Value("value".to_string()))],
-                )
+                Sequence(vec![Item::new(Content::Value("value".to_string()))]),
             ),
         ]);
 
@@ -179,15 +163,11 @@ mod tests {
         let rules = Grammar::from_rules(vec![
             (
                 Symbol::from("symbol"),
-                Sequence(
-                    vec![Item::new(Content::Value("value".to_string()))],
-                )
+                Sequence(vec![Item::new(Content::Value("value".to_string()))]),
             ),
             (
                 Symbol::from("test"),
-                Sequence(
-                    vec![Item::new(Content::Symbol(Symbol::from("symbol")))],
-                )
+                Sequence(vec![Item::new(Content::Symbol(Symbol::from("symbol")))]),
             ),
         ]);
 
@@ -206,7 +186,7 @@ mod tests {
                 Sequence(vec![
                     Item::new(Content::Value("value".to_string())),
                     Item::new(Content::Value("value".to_string())),
-                ])
+                ]),
             ),
         ]);
 
@@ -225,7 +205,7 @@ mod tests {
                 Alternatives(vec![
                     Item::new(Content::Value("one".to_string())),
                     Item::new(Content::Value("two".to_string())),
-                ])
+                ]),
             ),
         ]);
 
@@ -246,7 +226,7 @@ mod tests {
                         Item::new(Content::Value("value".to_string())),
                         Item::new(Content::Value("value".to_string())),
                     ]))),
-                ])
+                ]),
             ),
         ]);
 
@@ -265,9 +245,9 @@ mod tests {
                 Sequence(vec![
                     Item::repeated(
                         Content::Value("value".to_string()),
-                        Repeat::with_limits(2, 2)
+                        Repeat::with_limits(2, 2),
                     ),
-                ])
+                ]),
             ),
         ]);
 
@@ -289,9 +269,8 @@ mod tests {
 
     impl SelectionStrategy for VisitsStrategy {
         fn select_alternative(&mut self, _: usize, rulechain: &Rulechain, choice: u32) -> usize {
-            self.visits.push(
-                ((*rulechain.last().unwrap()).clone(), choice),
-            );
+            self.visits
+                .push(((*rulechain.last().unwrap()).clone(), choice));
 
             0
         }
@@ -303,9 +282,8 @@ mod tests {
             rulechain: &Rulechain,
             choice: u32,
         ) -> u32 {
-            self.visits.push(
-                ((*rulechain.last().unwrap()).clone(), choice),
-            );
+            self.visits
+                .push(((*rulechain.last().unwrap()).clone(), choice));
 
             min
         }
@@ -320,16 +298,16 @@ mod tests {
                 Alternatives(vec![
                     Item::new(Content::Value("value".to_string())),
                     Item::new(Content::Value("value".to_string())),
-                ])
+                ]),
             ),
         ]);
 
         expand_grammar(&rules, "test", &mut strategy);
         assert_eq!(strategy.visits.len(), 1);
-        assert_eq!(strategy.visits[0], (
-            Symbol::with_index("test".to_string(), 0),
-            0,
-        ));
+        assert_eq!(
+            strategy.visits[0],
+            (Symbol::with_index("test".to_string(), 0), 0,)
+        );
     }
 
     #[test]
@@ -341,9 +319,9 @@ mod tests {
                 Sequence(vec![
                     Item::repeated(
                         Content::Value("value".to_string()),
-                        Repeat::with_limits(0, 1)
+                        Repeat::with_limits(0, 1),
                     ),
-                ])
+                ]),
             ),
         ]);
 
@@ -367,9 +345,9 @@ mod tests {
                             Item::new(Content::Value("value".to_string())),
                             Item::new(Content::Value("value".to_string())),
                         ])),
-                        Repeat::with_limits(2, 2)
+                        Repeat::with_limits(2, 2),
                     ),
-                ])
+                ]),
             ),
         ]);
 
@@ -398,14 +376,14 @@ mod tests {
                         Item::new(Content::Value("value".to_string())),
                     ]))),
                     Item::new(Content::Symbol(Symbol::from("b"))),
-                ])
+                ]),
             ),
             (
                 Symbol::from("b"),
                 Alternatives(vec![
                     Item::new(Content::Value("value".to_string())),
                     Item::new(Content::Value("value".to_string())),
-                ])
+                ]),
             ),
         ]);
 

@@ -4,7 +4,7 @@ extern crate nalgebra as na;
 extern crate nom;
 extern crate num;
 
-use std::f32::consts::{PI, E};
+use std::f32::consts::{E, PI};
 use std::path::Path;
 use std::{fs, io, str};
 use std::time::Duration;
@@ -48,7 +48,11 @@ pub fn gaussian(x: f32, a: f32, b: f32, c: f32) -> f32 {
 /// ```
 #[inline]
 pub fn min_max<T: PartialOrd>(a: T, b: T) -> (T, T) {
-    if a < b { (a, b) } else { (b, a) }
+    if a < b {
+        (a, b)
+    } else {
+        (b, a)
+    }
 }
 
 /// Projects vector `a` onto direction vector `b`.
@@ -76,7 +80,8 @@ pub fn project_onto<V: FiniteDimVectorSpace>(a: &V, b: &Unit<V>) -> V::Field {
 /// Linearly interpolate between `a` and `b` at time `t` where `t` is in range [0.0, 1.0]
 #[inline]
 pub fn interpolate_linear<N>(a: N, b: N, t: N) -> N
-    where N: Real
+where
+    N: Real,
 {
     a * (na::one::<N>() - t) + b * t
 }
@@ -141,12 +146,15 @@ impl Iterator for ReadDirAll {
 pub fn read_dir_all<P: AsRef<Path>>(path: P) -> io::Result<ReadDirAll> {
     let top_dir = fs::read_dir(path)?;
 
-    Ok(ReadDirAll { visit_stack: vec![top_dir] })
+    Ok(ReadDirAll {
+        visit_stack: vec![top_dir],
+    })
 }
 
 #[inline]
 pub fn partial_min<T>(a: T, b: T) -> Option<T>
-    where T: PartialOrd
+where
+    T: PartialOrd,
 {
     if let Some(ordering) = a.partial_cmp(&b) {
         match ordering {
@@ -160,7 +168,8 @@ pub fn partial_min<T>(a: T, b: T) -> Option<T>
 
 #[inline]
 pub fn partial_max<T>(a: T, b: T) -> Option<T>
-    where T: PartialOrd
+where
+    T: PartialOrd,
 {
     if let Some(ordering) = a.partial_cmp(&b) {
         match ordering {
@@ -174,7 +183,8 @@ pub fn partial_max<T>(a: T, b: T) -> Option<T>
 
 #[inline]
 pub fn partial_clamp<T>(v: T, min: T, max: T) -> Option<T>
-    where T: PartialOrd
+where
+    T: PartialOrd,
 {
     if let Some(min_clamped) = partial_max(v, min) {
         if let Some(max_clamped) = partial_min(min_clamped, max) {
@@ -199,7 +209,7 @@ pub fn parse_duration_hms(string: &str) -> Result<Duration, &str> {
 
     match parse::duration(string.as_bytes()) {
         Done(_, duration) => Ok(duration),
-        Error(_) | Incomplete(_) => Err("Failed parsing duration in H:M:(S) format")
+        Error(_) | Incomplete(_) => Err("Failed parsing duration in H:M:(S) format"),
     }
 }
 
@@ -228,7 +238,8 @@ macro_rules! assert_approx_eq {
 }
 
 pub fn slice_approx_eq<T>(x: &[T], y: &[T], epsilon: T) -> bool
-    where T: Float
+where
+    T: Float,
 {
     if x.len() != y.len() {
         return false;
@@ -285,7 +296,7 @@ macro_rules! assert_slice_approx_ne {
 mod parse {
     use std::str;
     use std::time::Duration;
-    use nom::{digit};
+    use nom::digit;
 
     named!(pub num_u64<u64>,
         fold_many1!(
@@ -370,12 +381,10 @@ mod test {
             ).is_nan()
         );
 
-        assert!(
-            !project_onto(
-                &Vector2::new(0.0, 0.0),
-                &Unit::new_unchecked(Vector2::new(0.0, 0.0))
-            ).is_nan()
-        );
+        assert!(!project_onto(
+            &Vector2::new(0.0, 0.0),
+            &Unit::new_unchecked(Vector2::new(0.0, 0.0))
+        ).is_nan());
     }
 
     #[test]
@@ -391,8 +400,10 @@ mod test {
         assert_eq!(interpolate_cos(0.0, 1.0, 0.5), 0.5);
         assert_eq!(interpolate_cos(0.0, 1.0, 1.0), 1.0);
 
-        assert_eq!(interpolate_cos(0.0, 1.0, 0.25),
-                   0.146446609406726237799577818947575480357582031155762981705);
+        assert_eq!(
+            interpolate_cos(0.0, 1.0, 0.25),
+            0.146446609406726237799577818947575480357582031155762981705
+        );
     }
 
     #[test]
@@ -403,15 +414,19 @@ mod test {
             .iter()
             .map(|p| p.to_str().unwrap())
             .collect::<Vec<_>>();
-        assert_eq!(path_str,
-                   vec!["testdata/read_dir_all/a",
-                        "testdata/read_dir_all/a/c",
-                        "testdata/read_dir_all/a/c/d",
-                        "testdata/read_dir_all/a/c/e",
-                        "testdata/read_dir_all/a/b",
-                        "testdata/read_dir_all/a/b/y",
-                        "testdata/read_dir_all/a/b/z",
-                        "testdata/read_dir_all/a/b/x"])
+        assert_eq!(
+            path_str,
+            vec![
+                "testdata/read_dir_all/a",
+                "testdata/read_dir_all/a/c",
+                "testdata/read_dir_all/a/c/d",
+                "testdata/read_dir_all/a/c/e",
+                "testdata/read_dir_all/a/b",
+                "testdata/read_dir_all/a/b/y",
+                "testdata/read_dir_all/a/b/z",
+                "testdata/read_dir_all/a/b/x",
+            ]
+        )
     }
 
     #[test]
@@ -427,39 +442,89 @@ mod test {
     fn test_parse_num_u64() {
         assert_eq!(parse::num_u64(&b"1"[..]), Done(&b""[..], (1)));
         assert_eq!(parse::num_u64(&b"12345"[..]), Done(&b""[..], (12345)));
-        assert_eq!(parse::num_u64(&b"18446744073709551615"[..]),
-                       Done(&b""[..], (18446744073709551615)));
+        assert_eq!(
+            parse::num_u64(&b"18446744073709551615"[..]),
+            Done(&b""[..], (18446744073709551615))
+        );
     }
 
     #[test]
     fn test_parse_duration_seconds() {
-        assert_eq!(parse::duration(&b"0"[..]), Done(&b""[..], (Duration::from_secs(0))));
-        assert_eq!(parse::duration(&b"01"[..]), Done(&b""[..], (Duration::from_secs(1))));
-        assert_eq!(parse::duration(&b"1"[..]), Done(&b""[..], (Duration::from_secs(1))));
-        assert_eq!(parse::duration(&b"100"[..]), Done(&b""[..], (Duration::from_secs(100))));
+        assert_eq!(
+            parse::duration(&b"0"[..]),
+            Done(&b""[..], (Duration::from_secs(0)))
+        );
+        assert_eq!(
+            parse::duration(&b"01"[..]),
+            Done(&b""[..], (Duration::from_secs(1)))
+        );
+        assert_eq!(
+            parse::duration(&b"1"[..]),
+            Done(&b""[..], (Duration::from_secs(1)))
+        );
+        assert_eq!(
+            parse::duration(&b"100"[..]),
+            Done(&b""[..], (Duration::from_secs(100)))
+        );
     }
 
     #[test]
     fn test_parse_duration_hms_seconds() {
-        assert_eq!(parse::duration(&b"00:00:00"[..]), Done(&b""[..], (Duration::from_secs(0))));
-        assert_eq!(parse::duration(&b"00:00:01"[..]), Done(&b""[..], (Duration::from_secs(1))));
-        assert_eq!(parse::duration(&b"00:00:1"[..]), Done(&b""[..], (Duration::from_secs(1))));
-        assert_eq!(parse::duration(&b"00:00:100"[..]), Done(&b""[..], (Duration::from_secs(100))));
+        assert_eq!(
+            parse::duration(&b"00:00:00"[..]),
+            Done(&b""[..], (Duration::from_secs(0)))
+        );
+        assert_eq!(
+            parse::duration(&b"00:00:01"[..]),
+            Done(&b""[..], (Duration::from_secs(1)))
+        );
+        assert_eq!(
+            parse::duration(&b"00:00:1"[..]),
+            Done(&b""[..], (Duration::from_secs(1)))
+        );
+        assert_eq!(
+            parse::duration(&b"00:00:100"[..]),
+            Done(&b""[..], (Duration::from_secs(100)))
+        );
     }
 
     #[test]
     fn test_parse_duration_hms_minutes() {
-        assert_eq!(parse::duration(&b"00:00"[..]), Done(&b""[..], (Duration::from_secs(0))));
-        assert_eq!(parse::duration(&b"00:01"[..]), Done(&b""[..], (Duration::from_secs(60))));
-        assert_eq!(parse::duration(&b"00:1"[..]), Done(&b""[..], (Duration::from_secs(60))));
-        assert_eq!(parse::duration(&b"00:100"[..]), Done(&b""[..], (Duration::from_secs(100 * 60))));
+        assert_eq!(
+            parse::duration(&b"00:00"[..]),
+            Done(&b""[..], (Duration::from_secs(0)))
+        );
+        assert_eq!(
+            parse::duration(&b"00:01"[..]),
+            Done(&b""[..], (Duration::from_secs(60)))
+        );
+        assert_eq!(
+            parse::duration(&b"00:1"[..]),
+            Done(&b""[..], (Duration::from_secs(60)))
+        );
+        assert_eq!(
+            parse::duration(&b"00:100"[..]),
+            Done(&b""[..], (Duration::from_secs(100 * 60)))
+        );
     }
 
     #[test]
     fn test_parse_duration_hms_hours() {
-        assert_eq!(parse::duration(&b"00:00"[..]), Done(&b""[..], (Duration::from_secs(0))));
-        assert_eq!(parse::duration(&b"01:00"[..]), Done(&b""[..], (Duration::from_secs(60 * 60))));
-        assert_eq!(parse::duration(&b"1:00"[..]), Done(&b""[..], (Duration::from_secs(60 * 60))));
-        assert_eq!(parse::duration(&b"100:00"[..]), Done(&b""[..], (Duration::from_secs(100 * 60 * 60))));
+        assert_eq!(
+            parse::duration(&b"00:00"[..]),
+            Done(&b""[..], (Duration::from_secs(0)))
+        );
+        assert_eq!(
+            parse::duration(&b"01:00"[..]),
+            Done(&b""[..], (Duration::from_secs(60 * 60)))
+        );
+        assert_eq!(
+            parse::duration(&b"1:00"[..]),
+            Done(&b""[..], (Duration::from_secs(60 * 60)))
+        );
+        assert_eq!(
+            parse::duration(&b"100:00"[..]),
+            Done(&b""[..], (Duration::from_secs(100 * 60 * 60)))
+        );
     }
 }

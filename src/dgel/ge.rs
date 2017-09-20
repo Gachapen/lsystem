@@ -2,18 +2,18 @@ use std::cell::Cell;
 use std::cmp::Ordering;
 use std::fmt::{self, Display, Formatter};
 use std::fs::{self, File, OpenOptions};
-use std::io::{BufWriter, BufReader, Write};
+use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
 use std::sync::Arc;
 use bincode;
 use chrono::prelude::*;
-use clap::{App, SubCommand, Arg, ArgMatches};
-use rand::{self, Rng, XorShiftRng, SeedableRng};
+use clap::{App, Arg, ArgMatches, SubCommand};
+use rand::{self, Rng, SeedableRng, XorShiftRng};
 use rand::distributions::{IndependentSample, Range};
 use serde_yaml;
 use rsgenetic::pheno::{Fitness, Phenotype};
-use rsgenetic::sim::{Simulation, StepResult, RunResult, SimResult, NanoSecond, Builder};
-use rsgenetic::sim::select::{Selector, MaximizeSelector, TournamentSelector};
+use rsgenetic::sim::{Builder, NanoSecond, RunResult, SimResult, Simulation, StepResult};
+use rsgenetic::sim::select::{MaximizeSelector, Selector, TournamentSelector};
 use futures::future::{self, Future};
 use futures_cpupool::CpuPool;
 use num_cpus;
@@ -21,8 +21,8 @@ use num_cpus;
 use lsys;
 
 use super::fitness;
-use dgel::{Gene, Distribution, Grammar, GenePrimitive, WeightedChromosmeStrategy, generate_system,
-           get_sample_setup, random_seed, generate_chromosome, CHROMOSOME_LEN};
+use dgel::{generate_chromosome, generate_system, get_sample_setup, random_seed, Distribution,
+           Gene, GenePrimitive, Grammar, WeightedChromosmeStrategy, CHROMOSOME_LEN};
 
 pub const COMMAND_NAME: &'static str = "ge";
 
@@ -183,8 +183,8 @@ pub fn run_ge(matches: &ArgMatches) {
         let size = scores.len() as f32;
         let ubniased_size = (scores.len() - 1) as f32;
         let mean = sum / size;
-        let unbiased_sample_variance = scores.iter().map(|s| (s - mean).powi(2)).sum::<f32>() /
-            ubniased_size;
+        let unbiased_sample_variance =
+            scores.iter().map(|s| (s - mean).powi(2)).sum::<f32>() / ubniased_size;
         let sample_standard_deviation = unbiased_sample_variance.sqrt();
         let standard_error = sample_standard_deviation / size.sqrt();
 
@@ -192,7 +192,13 @@ pub fn run_ge(matches: &ArgMatches) {
         println!("s²: {}", unbiased_sample_variance);
         println!("s: {}", sample_standard_deviation);
         println!("SE: {}", standard_error);
-        println!("CSV: {},{},{},{}", mean, unbiased_sample_variance, sample_standard_deviation, standard_error);
+        println!(
+            "CSV: {},{},{},{}",
+            mean,
+            unbiased_sample_variance,
+            sample_standard_deviation,
+            standard_error
+        );
     }
 }
 
@@ -240,9 +246,9 @@ fn run(
     let mut stats_writer = BufWriter::new(stats_file);
 
     let stats_csv = "iteration,avg,best\n";
-    stats_writer.write_all(stats_csv.as_bytes()).expect(
-        "Could not write to stats file",
-    );
+    stats_writer
+        .write_all(stats_csv.as_bytes())
+        .expect("Could not write to stats file");
 
 
     let best = {
@@ -254,22 +260,23 @@ fn run(
             .set_max_iters(settings.max_iterations)
             .crossover(settings.crossover)
             .mutate(settings.mutate)
-            .set_step_callback(|iteration: u64,
-             population: &[LsysPhenotype<GenePrimitive>]| {
-                let fitnesses: Vec<_> = population.iter().map(|p| p.fitness().0).collect();
+            .set_step_callback(
+                |iteration: u64, population: &[LsysPhenotype<GenePrimitive>]| {
+                    let fitnesses: Vec<_> = population.iter().map(|p| p.fitness().0).collect();
 
-                let sum: f32 = fitnesses.iter().sum();
-                let average = sum / population.len() as f32;
-                let best = fitnesses
-                    .iter()
-                    .max_by(|a, b| a.partial_cmp(b).unwrap())
-                    .unwrap();
+                    let sum: f32 = fitnesses.iter().sum();
+                    let average = sum / population.len() as f32;
+                    let best = fitnesses
+                        .iter()
+                        .max_by(|a, b| a.partial_cmp(b).unwrap())
+                        .unwrap();
 
-                let stats_csv = format!("{},{},{}\n", iteration, average, best);
-                stats_writer.write_all(stats_csv.as_bytes()).expect(
-                    "Could not write to stats file",
-                );
-            })
+                    let stats_csv = format!("{},{},{}\n", iteration, average, best);
+                    stats_writer
+                        .write_all(stats_csv.as_bytes())
+                        .expect("Could not write to stats file");
+                },
+            )
             .build();
 
         simulator.run();
@@ -278,11 +285,10 @@ fn run(
 
     stats_writer.flush().expect("Could not write to stats file");
 
-    let lsystem =
-        generate_system(
-            grammar,
-            &mut WeightedChromosmeStrategy::new(&best.chromosome, distribution, stack_rule_index),
-        );
+    let lsystem = generate_system(
+        grammar,
+        &mut WeightedChromosmeStrategy::new(&best.chromosome, distribution, stack_rule_index),
+    );
     println!("{}", lsystem);
     println!(
         "Fitness: {} (real: {})",
@@ -311,9 +317,9 @@ impl Eq for LsysFitness {}
 
 impl Ord for LsysFitness {
     fn cmp(&self, other: &LsysFitness) -> Ordering {
-        self.0.partial_cmp(&other.0).expect(
-            "Fitness is NaN and can't be ordered",
-        )
+        self.0
+            .partial_cmp(&other.0)
+            .expect("Fitness is NaN and can't be ordered")
     }
 }
 
@@ -474,7 +480,7 @@ where
         if self.population.is_empty() {
             println!(
                 "Tried to run a simulator without a population, or the \
-                    population was empty."
+                 population was empty."
             );
             return StepResult::Failure;
         }

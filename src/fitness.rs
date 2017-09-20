@@ -1,8 +1,8 @@
 use std::f32;
-use std::f32::consts::{PI, FRAC_PI_2};
+use std::f32::consts::{FRAC_PI_2, PI};
 use std::fmt;
 
-use na::{self, Unit, UnitQuaternion, Point2, Point3, Vector2, Vector3, Translation3, Rotation3};
+use na::{self, Point2, Point3, Rotation3, Translation3, Unit, UnitQuaternion, Vector2, Vector3};
 use ncu;
 use kiss3d::scene::SceneNode;
 use yobun::partial_clamp;
@@ -166,7 +166,10 @@ pub fn build_skeleton(
                 };
                 rotation *= Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * angle);
             }
-            Command::Shrink | Command::Grow | Command::Width | Command::NextColor |
+            Command::Shrink |
+            Command::Grow |
+            Command::Width |
+            Command::NextColor |
             Command::Noop => {}
             Command::Push => {
                 states.push((position, rotation, parent));
@@ -282,7 +285,11 @@ impl Fitness {
 
     /// Punisment of being nothing as either 0 or 1, where 1 is worst.
     pub fn nothing_punishment(&self) -> f32 {
-        if self.is_nothing { 1.0 } else { 0.0 }
+        if self.is_nothing {
+            1.0
+        } else {
+            0.0
+        }
     }
 
     /// Amount of punishment in range [0, 1], where 1 is the worst.
@@ -599,18 +606,12 @@ pub fn add_properties_rendering(node: &mut SceneNode, properties: &Properties) {
         LINE_WIDTH * 1.1,
     );
     center_imbalance.set_color(0.1, 0.8, 0.1);
-    center_imbalance.set_local_translation(Translation3::new(
-        properties.center_spread / 4.0,
-        0.0,
-        0.0,
-    ));
+    center_imbalance
+        .set_local_translation(Translation3::new(properties.center_spread / 4.0, 0.0, 0.0));
 
     let mut center_spread = balance.add_cube(properties.center_spread, LINE_WIDTH, LINE_WIDTH);
-    center_spread.set_local_translation(Translation3::new(
-        properties.center_spread / 2.0,
-        0.0,
-        0.0,
-    ));
+    center_spread
+        .set_local_translation(Translation3::new(properties.center_spread / 2.0, 0.0, 0.0));
 
     node.add_child(balance);
 }

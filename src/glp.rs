@@ -132,7 +132,9 @@ impl Error for ConvertGlpError {
 
 impl<'a> From<&'a str> for ConvertGlpError {
     fn from(msg: &'a str) -> ConvertGlpError {
-        ConvertGlpError { message: msg.to_string() }
+        ConvertGlpError {
+            message: msg.to_string(),
+        }
     }
 }
 
@@ -153,12 +155,10 @@ fn parse_glp(root: &Item) -> Result<param::LSystem, ConvertGlpError> {
         Item::LSystem {
             ref axiom,
             ref rules,
-        } => {
-            Ok(param::LSystem {
-                axiom: parse_glp_stack(axiom)?,
-                productions: parse_glp_rules(rules)?,
-            })
-        }
+        } => Ok(param::LSystem {
+            axiom: parse_glp_stack(axiom)?,
+            productions: parse_glp_rules(rules)?,
+        }),
         _ => Err(ConvertGlpError::from(
             format!("Expected LSystem, got {:?}", root),
         )),
@@ -212,15 +212,13 @@ fn parse_glp_rules(rules: &Item) -> Result<Vec<param::Production>, ConvertGlpErr
 
 fn parse_glp_rule(rule: &Item) -> Result<param::Production, ConvertGlpError> {
     match *rule {
-        Item::LRule { ref pred, ref succ } => {
-            Ok(param::Production::new(
-                parse_glp_letter(&*pred)?.character as char,
-                parse_glp_stack(&*succ)?
-                    .iter()
-                    .map(param::ProductionLetter::from)
-                    .collect(),
-            ))
-        }
+        Item::LRule { ref pred, ref succ } => Ok(param::Production::new(
+            parse_glp_letter(&*pred)?.character as char,
+            parse_glp_stack(&*succ)?
+                .iter()
+                .map(param::ProductionLetter::from)
+                .collect(),
+        )),
         _ => Err(ConvertGlpError::from(
             format!("Expected LRule, got {:?}", rule),
         )),
@@ -232,16 +230,14 @@ fn parse_glp_letter(letter: &Item) -> Result<param::Letter, ConvertGlpError> {
         Item::Letter {
             ref letter,
             ref params,
-        } => {
-            Ok(param::Letter {
-                character: *letter,
-                params: parse_glp_params(params)?
-                    .iter()
-                    .filter_map(|p| *p)
-                    .map(Param::F)
-                    .collect(),
-            })
-        }
+        } => Ok(param::Letter {
+            character: *letter,
+            params: parse_glp_params(params)?
+                .iter()
+                .filter_map(|p| *p)
+                .map(Param::F)
+                .collect(),
+        }),
         _ => Err(ConvertGlpError::from(
             format!("Expected Letter, got {:?}", letter),
         )),

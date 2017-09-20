@@ -128,7 +128,6 @@ fn matches_right_context(word_right: &str, context: u8, ignores: &[u8]) -> bool 
         }
 
         if i < length && searching {
-
             // Parse branch pushing.
             while i < length && bytes[i] == '[' as u8 {
                 // Store branching point.
@@ -190,9 +189,9 @@ fn expand_lsystem(axiom: &str, rules: &[Production], iterations: u32, ignore: &[
         let mut expanded_lword = String::with_capacity(lword.len());
 
         for (i, lchar) in lword.as_bytes().iter().cloned().enumerate() {
-            let prod = rules
-                .iter()
-                .find(|&prod| matches_predecessor(&lword, i, &prod.predecessor, ignore));
+            let prod = rules.iter().find(|&prod| {
+                matches_predecessor(&lword, i, &prod.predecessor, ignore)
+            });
 
             if let Some(prod) = prod {
                 expanded_lword.push_str(&prod.successor.clone());
@@ -355,22 +354,40 @@ mod tests {
     #[test]
     fn matches_left_context_test_ignore() {
         assert!(!super::matches_left_context("AB", 'A' as u8, &vec![]));
-        assert!(super::matches_left_context("AB", 'A' as u8, &vec!['B' as u8]));
-        assert!(super::matches_left_context("ABC", 'A' as u8, &vec!['B' as u8, 'C' as u8]));
+        assert!(super::matches_left_context(
+            "AB",
+            'A' as u8,
+            &vec!['B' as u8]
+        ));
+        assert!(super::matches_left_context(
+            "ABC",
+            'A' as u8,
+            &vec!['B' as u8, 'C' as u8]
+        ));
     }
 
     #[test]
     fn matches_left_context_test_branch() {
         assert!(super::matches_left_context("A[B]", 'A' as u8, &vec![]));
-        assert!(super::matches_left_context("A[[B]C][D[E]]", 'A' as u8, &vec![]));
-        assert!(super::matches_left_context("[[A[[B]C][[[D[E]][", 'A' as u8, &vec![]));
+        assert!(super::matches_left_context(
+            "A[[B]C][D[E]]",
+            'A' as u8,
+            &vec![]
+        ));
+        assert!(super::matches_left_context(
+            "[[A[[B]C][[[D[E]][",
+            'A' as u8,
+            &vec![]
+        ));
     }
 
     #[test]
     fn matches_left_context_test_branch_ignore() {
-        assert!(super::matches_left_context("AF[[B]C]F[D[E]]F",
-                                            'A' as u8,
-                                            &vec!['C' as u8, 'F' as u8]));
+        assert!(super::matches_left_context(
+            "AF[[B]C]F[D[E]]F",
+            'A' as u8,
+            &vec!['C' as u8, 'F' as u8]
+        ));
     }
 
     #[test]
@@ -382,14 +399,26 @@ mod tests {
     #[test]
     fn matches_right_context_test_ignore() {
         assert!(!super::matches_right_context("BA", 'A' as u8, &vec![]));
-        assert!(super::matches_right_context("BA", 'A' as u8, &vec!['B' as u8]));
-        assert!(super::matches_right_context("CBA", 'A' as u8, &vec!['B' as u8, 'C' as u8]));
+        assert!(super::matches_right_context(
+            "BA",
+            'A' as u8,
+            &vec!['B' as u8]
+        ));
+        assert!(super::matches_right_context(
+            "CBA",
+            'A' as u8,
+            &vec!['B' as u8, 'C' as u8]
+        ));
     }
 
     #[test]
     fn matches_right_context_test_branch() {
         assert!(super::matches_right_context("[B]A", 'A' as u8, &vec![]));
-        assert!(super::matches_right_context("[[B]C][D[E]]A", 'A' as u8, &vec![]));
+        assert!(super::matches_right_context(
+            "[[B]C][D[E]]A",
+            'A' as u8,
+            &vec![]
+        ));
         assert!(!super::matches_right_context("[A]", 'A' as u8, &vec![]));
         assert!(!super::matches_right_context("]A", 'A' as u8, &vec![]));
         assert!(!super::matches_right_context("[BC]]A", 'A' as u8, &vec![]));
@@ -397,9 +426,11 @@ mod tests {
 
     #[test]
     fn matches_right_context_test_branch_ignore() {
-        assert!(super::matches_right_context("F[[B]C]F[D[E]]FA",
-                                             'A' as u8,
-                                             &vec!['C' as u8, 'F' as u8]));
+        assert!(super::matches_right_context(
+            "F[[B]C]F[D[E]]FA",
+            'A' as u8,
+            &vec!['C' as u8, 'F' as u8]
+        ));
     }
 
     #[test]

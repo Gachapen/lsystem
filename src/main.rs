@@ -1,27 +1,27 @@
+extern crate bincode;
+extern crate chrono;
+extern crate clap;
+extern crate cpuprofiler;
+extern crate crossbeam;
+extern crate csv;
+extern crate futures;
+extern crate futures_cpupool;
+extern crate glfw;
 extern crate kiss3d;
 extern crate nalgebra as na;
 extern crate ncollide_utils as ncu;
-extern crate rand;
 extern crate num;
-extern crate serde_yaml;
-extern crate glfw;
-extern crate crossbeam;
 extern crate num_cpus;
-extern crate futures;
-extern crate futures_cpupool;
-extern crate bincode;
+extern crate rand;
+extern crate rsgenetic;
 #[macro_use]
 extern crate serde_derive;
-extern crate clap;
-extern crate csv;
-extern crate chrono;
-extern crate cpuprofiler;
-extern crate rsgenetic;
+extern crate serde_yaml;
 
+extern crate abnf;
 #[macro_use]
 extern crate lsys;
 extern crate lsys_kiss3d as lsys3d;
-extern crate abnf;
 
 #[cfg(not(test))]
 extern crate yobun;
@@ -46,15 +46,15 @@ fn main() {
         .version("0.0.1")
         .author("Magnus Bjerke Vik <mbvett@gmail.com>")
         .about("Various L-system generation and visualization experiments")
-        .subcommand(SubCommand::with_name("static").about(
-            "Run visualization of static plant",
-        ))
-        .subcommand(SubCommand::with_name("animated").about(
-            "Run animated visualization of plant growth",
-        ))
-        .subcommand(SubCommand::with_name("generated").about(
-            "Run random generation of plant",
-        ))
+        .subcommand(
+            SubCommand::with_name("static").about("Run visualization of static plant"),
+        )
+        .subcommand(
+            SubCommand::with_name("animated").about("Run animated visualization of plant growth"),
+        )
+        .subcommand(
+            SubCommand::with_name("generated").about("Run random generation of plant"),
+        )
         .subcommand(dgel::get_subcommand())
         .get_matches();
 

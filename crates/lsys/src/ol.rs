@@ -1,7 +1,7 @@
-use std::{mem, ptr, fmt, slice};
+use std::{fmt, mem, ptr, slice};
 use std::ops::{Index, IndexMut};
 
-use serde::{Serialize, Serializer, Deserialize, Deserializer, de};
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde::ser::SerializeMap;
 
 use common::Instruction;
@@ -77,11 +77,13 @@ impl fmt::Display for RuleMap {
         let rules = self.map
             .iter()
             .enumerate()
-            .filter_map(|(pred, succ)| if !(succ.len() == 1 && succ.as_bytes()[0] == pred as u8) {
-                            Some(format!("{} -> {}", pred as u8 as char, succ))
-                        } else {
-                            None
-                        })
+            .filter_map(|(pred, succ)| {
+                if !(succ.len() == 1 && succ.as_bytes()[0] == pred as u8) {
+                    Some(format!("{} -> {}", pred as u8 as char, succ))
+                } else {
+                    None
+                }
+            })
             .collect::<Vec<_>>();
 
         for (i, rule) in rules.iter().enumerate() {
@@ -125,7 +127,8 @@ impl<'de> de::Visitor<'de> for RuleMapVisitor {
     }
 
     fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
-        where M: de::MapAccess<'de>
+    where
+        M: de::MapAccess<'de>,
     {
         let mut values = RuleMap::new();
 
@@ -137,7 +140,8 @@ impl<'de> de::Visitor<'de> for RuleMapVisitor {
     }
 
     fn visit_unit<E>(self) -> Result<Self::Value, E>
-        where E: de::Error
+    where
+        E: de::Error,
     {
         Ok(RuleMap::new())
     }
@@ -197,10 +201,11 @@ impl LSystem {
         expand_lsystem(&self.axiom, &self.productions, iterations)
     }
 
-    pub fn instructions_iter<'a, 'b>(&'a self,
-                                     iterations: u32,
-                                     command_map: &'b CommandMap)
-                                     -> InstructionsIter<'a, 'b> {
+    pub fn instructions_iter<'a, 'b>(
+        &'a self,
+        iterations: u32,
+        command_map: &'b CommandMap,
+    ) -> InstructionsIter<'a, 'b> {
         InstructionsIter::new(self, command_map, iterations)
     }
 }
@@ -243,10 +248,11 @@ pub struct InstructionsIter<'a, 'b> {
 }
 
 impl<'a, 'b> InstructionsIter<'a, 'b> {
-    pub fn new(lsystem: &'a LSystem,
-               command_map: &'b CommandMap,
-               iterations: u32)
-               -> InstructionsIter<'a, 'b> {
+    pub fn new(
+        lsystem: &'a LSystem,
+        command_map: &'b CommandMap,
+        iterations: u32,
+    ) -> InstructionsIter<'a, 'b> {
         let mut iter = InstructionsIter {
             lsystem: lsystem,
             command_map: command_map,
@@ -278,9 +284,8 @@ impl<'a, 'b> Iterator for InstructionsIter<'a, 'b> {
             top = Some((next_lvl, *succ_iter.next().unwrap()));
 
             self.visit_stack.reserve(successor.len() - 1);
-            self.visit_stack.extend(
-                succ_iter.rev().map(|sym| (next_lvl, *sym)),
-            );
+            self.visit_stack
+                .extend(succ_iter.rev().map(|sym| (next_lvl, *sym)));
         }
 
         if let Some((_, sym)) = top {
