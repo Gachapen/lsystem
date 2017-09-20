@@ -3034,7 +3034,7 @@ mod test {
             0,   // variable - "X"
             1,   // "X"
         ];
-        let mut genotype = ChromosmeStrategy::new(chromosome);
+        let mut genotype = ChromosmeStrategy::new(&chromosome);
 
         assert_eq!(expand_grammar(&grammar, "axiom", &mut genotype), "F[FX]X");
     }

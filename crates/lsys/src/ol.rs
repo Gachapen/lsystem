@@ -300,7 +300,7 @@ impl<'a, 'b> Iterator for InstructionsIter<'a, 'b> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use common::create_command_map;
+    use common::CommandMap;
 
     #[test]
     fn test_instructions_iter() {
@@ -309,7 +309,7 @@ mod test {
         lsystem.set_rule('F', "+F");
         lsystem.set_rule('+', "F+");
 
-        let command_map = create_command_map();
+        let command_map = CommandMap::default();
 
         let instructions = lsystem
             .instructions_iter(5, &command_map)
