@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Magnus Bjerke Vik <mbvett@gmail.com>"]
 
 [dependencies]
-kiss3d = "0.10"
+kiss3d = "^0.11.0"
 time = "0.1"
 
 # Dependencies of kiss3d also used by the project.
