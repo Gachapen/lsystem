@@ -154,10 +154,10 @@ pub fn run_ge(matches: &ArgMatches) {
 
         let tasks: Vec<_> = (0..parallel)
             .map(|_| {
-                let grammar = grammar.clone();
-                let distribution = distribution.clone();
-                let lsys_settings = lsys_settings.clone();
-                let settings = settings.clone();
+                let grammar = Arc::clone(&grammar);
+                let distribution = Arc::clone(&distribution);
+                let lsys_settings = Arc::clone(&lsys_settings);
+                let settings = Arc::clone(&settings);
 
                 pool.spawn_fn(move || {
                     let best = run(

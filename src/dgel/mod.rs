@@ -470,9 +470,9 @@ fn run_with_distribution(matches: &ArgMatches) {
                             let mut tasks = Vec::with_capacity(num_samples);
 
                             for _ in 0..num_samples {
-                                let distribution = distribution.clone();
-                                let grammar = grammar.clone();
-                                let settings = settings.clone();
+                                let distribution = Arc::clone(&distribution);
+                                let grammar = Arc::clone(&grammar);
+                                let settings = Arc::clone(&settings);
 
                                 tasks.push(pool.spawn_fn(move || {
                                     let sample =
@@ -725,12 +725,12 @@ fn run_random_sampling(matches: &ArgMatches) {
         let sample_dir = &sample_dir;
 
         for worker_id in 0..num_workers {
-            let distribution = distribution.clone();
-            let grammar = grammar.clone();
-            let settings = settings.clone();
-            let work = work.clone();
-            let num_samples = num_samples.clone();
-            let num_good_samples = num_good_samples.clone();
+            let distribution = Arc::clone(&distribution);
+            let grammar = Arc::clone(&grammar);
+            let settings = Arc::clone(&settings);
+            let work = Arc::clone(&work);
+            let num_samples = Arc::clone(&num_samples);
+            let num_good_samples = Arc::clone(&num_good_samples);
 
             scope.spawn(move || {
                 let dump_samples = |accepted_samples: &[[u32; 4]],
@@ -885,8 +885,8 @@ fn run_sampling_distribution(matches: &ArgMatches) {
     let mut tasks = Vec::with_capacity(accepted_samples.len());
 
     for seed in accepted_samples {
-        let distribution = distribution.clone();
-        let grammar = grammar.clone();
+        let distribution = Arc::clone(&distribution);
+        let grammar = Arc::clone(&grammar);
 
         tasks.push(pool.spawn_fn(move || {
             let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
@@ -2243,9 +2243,9 @@ fn run_stats(matches: &ArgMatches) {
 
         for (d, distribution) in distributions.iter().enumerate() {
             for _ in 0..num_samples {
-                let distribution = distribution.clone();
-                let grammar = grammar.clone();
-                let settings = settings.clone();
+                let distribution = Arc::clone(distribution);
+                let grammar = Arc::clone(&grammar);
+                let settings = Arc::clone(&settings);
 
                 tasks.push(pool.spawn_fn(move || {
                     let sample = generate_sample(&grammar, &distribution, &settings);
@@ -2444,7 +2444,7 @@ fn run_learning(matches: &ArgMatches) {
     let pool = CpuPool::new(num_workers);
     let mut rng = rand::thread_rng();
 
-    let measure_distribution = |distribution: Arc<Distribution>| -> (f32, usize) {
+    let measure_distribution = |distribution: &Arc<Distribution>| -> (f32, usize) {
         let mut error = f32::MAX;
         let mut step_mean = 0.0;
         let mut step_scores = Vec::new();
@@ -2453,9 +2453,9 @@ fn run_learning(matches: &ArgMatches) {
         while error > error_threshold {
             let tasks: Vec<_> = (0..min_samples)
                 .map(|_| {
-                    let grammar = grammar.clone();
-                    let settings = settings.clone();
-                    let distribution = distribution.clone();
+                    let grammar = Arc::clone(&grammar);
+                    let settings = Arc::clone(&settings);
+                    let distribution = Arc::clone(distribution);
                     pool.spawn_fn(move || {
                         let lsystem = generate_sample(&grammar, &distribution);
 
@@ -2493,7 +2493,7 @@ fn run_learning(matches: &ArgMatches) {
 
     println!("Measuring initial distribution.");
 
-    let (mut current_score, mut num_samples) = measure_distribution(distribution.clone());
+    let (mut current_score, mut num_samples) = measure_distribution(&distribution);
     scores.push((num_samples, num_samples, current_score));
 
     println!("Initial distribution has score {}.", current_score);
@@ -2510,8 +2510,8 @@ fn run_learning(matches: &ArgMatches) {
     ));
 
     let mut save_future = {
-        let distribution = distribution.clone();
-        let stats_writer = stats_writer.clone();
+        let distribution = Arc::clone(&distribution);
+        let stats_writer = Arc::clone(&stats_writer);
 
         pool.spawn_fn(move || {
             if dump_distributions {
@@ -2539,14 +2539,14 @@ fn run_learning(matches: &ArgMatches) {
                 .write_all(stats_csv.as_bytes())
                 .expect("Could not write to stats file");
 
-            future::ok::<(),()>(())
+            future::ok::<(), ()>(())
         })
     };
 
     let mut iteration = 0_usize;
     let mut temperature = 1.0_f32;
     let mut best_score = 0.0;
-    let mut best_distribution = distribution.clone();
+    let mut best_distribution = Arc::clone(&distribution);
 
     let status_update_interval = Duration::seconds(4);
     let mut next_status_update = Local::now() + status_update_interval;
@@ -2573,7 +2573,7 @@ fn run_learning(matches: &ArgMatches) {
 
         let new_distribution = Arc::new(new_distribution);
         let old_score = current_score;
-        let (new_score, new_num_samples) = measure_distribution(new_distribution.clone());
+        let (new_score, new_num_samples) = measure_distribution(&new_distribution);
         num_samples += new_num_samples;
 
         let score_diff = (new_score - old_score) * fitness_scale;
@@ -2592,18 +2592,18 @@ fn run_learning(matches: &ArgMatches) {
         };
 
         if accepted {
-            distribution = new_distribution.clone();
+            distribution = Arc::clone(&new_distribution);
             current_score = new_score;
             if new_score > best_score {
                 best_score = new_score;
-                best_distribution = new_distribution.clone();
+                best_distribution = Arc::clone(&new_distribution);
             }
         }
 
         save_future.wait().unwrap();
         save_future = {
-            let distribution = new_distribution.clone();
-            let stats_writer = stats_writer.clone();
+            let distribution = Arc::clone(&new_distribution);
+            let stats_writer = Arc::clone(&stats_writer);
 
             pool.spawn_fn(move || {
                 if dump_distributions {
@@ -2849,7 +2849,9 @@ fn run_sample_weight_space(matches: &ArgMatches) {
 
     let tasks: Vec<_> = (0..num_samples)
         .map(|_| if dividers {
-            pool.spawn_fn(move || future::ok(dividers_from_weights(&generate_weight(dimensions))))
+            pool.spawn_fn(move || {
+                future::ok(dividers_from_weights(&generate_weight(dimensions)))
+            })
         } else {
             pool.spawn_fn(move || future::ok(generate_weight(dimensions)))
         })
