@@ -60,7 +60,10 @@ fn main() {
 
     if matches.subcommand_matches("static").is_some() {
         let (mut window, mut camera) = setup_window();
-        lsys3d::run_static(&mut window, &mut camera, lsystems::make_bush());
+        let (system, settings) = lsystems::make_bush();
+        println!("{}", system);
+        println!("Fitness: {}", fitness::evaluate(&system, &settings).0);
+        lsys3d::run_static(&mut window, &mut camera, (system, settings));
     } else if matches.subcommand_matches("animated").is_some() {
         let (mut window, mut camera) = setup_window();
         lsys3d::run_animated(&mut window, &mut camera, lsystems::make_anim_tree());
