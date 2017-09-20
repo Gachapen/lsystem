@@ -89,6 +89,8 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .takes_value(true)
                 .default_value("0"),
         )
+        .arg(Arg::with_name("no-print").long("no-print"))
+        .arg(Arg::with_name("no-dump").long("no-dump"))
 }
 
 pub fn run_ge(matches: &ArgMatches) {
@@ -114,6 +116,8 @@ pub fn run_ge(matches: &ArgMatches) {
             .unwrap(),
         mutate: !matches.is_present("no-mutate"),
         crossover: !matches.is_present("no-crossover"),
+        print: !matches.is_present("no-print"),
+        dump: !matches.is_present("no-dump"),
     };
 
     let (grammar, distribution, lsys_settings) =
@@ -202,6 +206,7 @@ pub fn run_ge(matches: &ArgMatches) {
     }
 }
 
+/// Settings for GE simulation
 #[derive(Debug)]
 struct Settings {
     population_size: usize,
@@ -211,6 +216,10 @@ struct Settings {
     mutate: bool,
     selection_size: usize,
     tournament_size: usize,
+    /// Print output while running
+    print: bool,
+    /// Dump stats and the resulting model
+    dump: bool,
 }
 
 fn run(
@@ -245,22 +254,25 @@ fn run(
         .expect("Could not create stats file");
     let mut stats_writer = BufWriter::new(stats_file);
 
-    let stats_csv = "iteration,avg,best\n";
-    stats_writer
-        .write_all(stats_csv.as_bytes())
-        .expect("Could not write to stats file");
-
+    if settings.dump {
+        let stats_csv = "iteration,avg,best\n";
+        stats_writer
+            .write_all(stats_csv.as_bytes())
+            .expect("Could not write to stats file");
+    }
 
     let best = {
-        let mut simulator = Simulator::builder(&mut population)
+        let mut builder = Simulator::builder(&mut population)
             .set_selector(Box::new(TournamentSelector::new(
                 settings.selection_size,
                 settings.tournament_size,
             )))
             .set_max_iters(settings.max_iterations)
             .crossover(settings.crossover)
-            .mutate(settings.mutate)
-            .set_step_callback(
+            .mutate(settings.mutate);
+
+        if settings.dump {
+            builder = builder.set_step_callback(
                 |iteration: u64, population: &[LsysPhenotype<GenePrimitive>]| {
                     let fitnesses: Vec<_> = population.iter().map(|p| p.fitness().0).collect();
 
@@ -276,36 +288,35 @@ fn run(
                         .write_all(stats_csv.as_bytes())
                         .expect("Could not write to stats file");
                 },
-            )
-            .build();
+            );
+        }
+
+        let mut simulator = builder.build();
 
         simulator.run();
         simulator.get().unwrap().clone()
     };
 
-    stats_writer.flush().expect("Could not write to stats file");
+    if settings.print {
+        println!("Fitness: {}", best.fitness(),);
+    }
 
-    let lsystem = generate_system(
-        grammar,
-        &mut WeightedChromosmeStrategy::new(&best.chromosome, distribution, stack_rule_index),
-    );
-    println!("{}", lsystem);
-    println!(
-        "Fitness: {} (real: {})",
-        best.fitness(),
-        fitness::evaluate(&lsystem, lsys_settings).0
-    );
+    if settings.dump {
+        let model_dir = Path::new("model");
+        fs::create_dir_all(model_dir).unwrap();
 
-    let model_dir = Path::new("model");
-    fs::create_dir_all(model_dir).unwrap();
+        let filename = format!("{}.yaml", Local::now().to_rfc3339());
+        let path = model_dir.join(filename);
 
-    let filename = format!("{}.yaml", Local::now().to_rfc3339());
-    let path = model_dir.join(filename);
+        let file = File::create(&path).unwrap();
+        let lsystem = generate_system(
+            grammar,
+            &mut WeightedChromosmeStrategy::new(&best.chromosome, distribution, stack_rule_index),
+        );
+        serde_yaml::to_writer(&mut BufWriter::new(file), &lsystem).unwrap();
 
-    let file = File::create(&path).unwrap();
-    serde_yaml::to_writer(&mut BufWriter::new(file), &lsystem).unwrap();
-
-    println!("Saved to {}", path.to_str().unwrap());
+        println!("Saved to {}", path.to_str().unwrap());
+    }
 
     best.fitness()
 }
@@ -432,10 +443,11 @@ impl<'a, G: Gene + Clone> Phenotype<LsysFitness> for LsysPhenotype<'a, G> {
     }
 }
 
+type StepCallback<'a, T> = Box<FnMut(u64, &[T]) + 'a>;
+
 /// A sequential implementation of `::sim::Simulation`.
 /// The genetic algorithm is run in a single thread.
-#[derive(Debug)]
-struct Simulator<'a, T, F, C>
+struct Simulator<'a, T, F>
 where
     T: 'a + Phenotype<F>,
     F: Fitness,
@@ -444,21 +456,20 @@ where
     selector: Box<Selector<T, F>>,
     iteration_limit: u64,
     iteration: u64,
-    step_callback: Option<C>,
+    step_callback: Option<StepCallback<'a, T>>,
     do_crossover: bool,
     mutate: bool,
 }
 
-impl<'a, T, F, C> Simulation<'a, T, F> for Simulator<'a, T, F, C>
+impl<'a, T, F> Simulation<'a, T, F> for Simulator<'a, T, F>
 where
     T: Phenotype<F>,
     F: Fitness,
-    C: FnMut(u64, &[T]),
 {
-    type B = SimulatorBuilder<'a, T, F, C>;
+    type B = SimulatorBuilder<'a, T, F>;
 
     /// Create builder.
-    fn builder(population: &'a mut Vec<T>) -> SimulatorBuilder<'a, T, F, C> {
+    fn builder(population: &'a mut Vec<T>) -> SimulatorBuilder<'a, T, F> {
         SimulatorBuilder {
             sim: Simulator {
                 population: population,
@@ -553,7 +564,7 @@ where
     }
 }
 
-impl<'a, T, F, C> Simulator<'a, T, F, C>
+impl<'a, T, F> Simulator<'a, T, F>
 where
     T: Phenotype<F>,
     F: Fitness,
@@ -574,16 +585,15 @@ where
 }
 
 /// A `Builder` for the `Simulator` type.
-#[derive(Debug)]
-struct SimulatorBuilder<'a, T, F, C>
+struct SimulatorBuilder<'a, T, F>
 where
     T: 'a + Phenotype<F>,
     F: Fitness,
 {
-    sim: Simulator<'a, T, F, C>,
+    sim: Simulator<'a, T, F>,
 }
 
-impl<'a, T, F, C> SimulatorBuilder<'a, T, F, C>
+impl<'a, T, F> SimulatorBuilder<'a, T, F>
 where
     T: Phenotype<F>,
     F: Fitness,
@@ -598,8 +608,11 @@ where
         self
     }
 
-    fn set_step_callback(mut self, callback: C) -> Self {
-        self.sim.step_callback = Some(callback);
+    fn set_step_callback<C>(mut self, callback: C) -> Self
+    where
+        C: FnMut(u64, &[T]) + 'a
+    {
+        self.sim.step_callback = Some(Box::new(callback));
         self
     }
 
@@ -614,12 +627,12 @@ where
     }
 }
 
-impl<'a, T, F, C> Builder<Simulator<'a, T, F, C>> for SimulatorBuilder<'a, T, F, C>
+impl<'a, T, F> Builder<Simulator<'a, T, F>> for SimulatorBuilder<'a, T, F>
 where
     T: Phenotype<F>,
     F: Fitness,
 {
-    fn build(self) -> Simulator<'a, T, F, C> {
+    fn build(self) -> Simulator<'a, T, F> {
         self.sim
     }
 }
