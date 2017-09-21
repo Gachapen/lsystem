@@ -1,4 +1,5 @@
 use std::cell::Cell;
+use std::collections::VecDeque;
 use std::cmp::Ordering;
 use std::fmt::{self, Display, Formatter};
 use std::fs::{self, File, OpenOptions};
@@ -29,68 +30,104 @@ pub const COMMAND_NAME: &'static str = "ge";
 pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
     SubCommand::with_name(COMMAND_NAME)
         .about("Run grammatical evolution")
-        .arg(
-            Arg::with_name("distribution")
-                .short("d")
-                .long("distribution")
-                .takes_value(true)
-                .help(
-                    "Distribution file to use. Otherwise default distribution is used.",
+        .subcommand(
+            SubCommand::with_name("run")
+                .about("Run GE")
+                .arg(
+                    Arg::with_name("distribution")
+                        .short("d")
+                        .long("distribution")
+                        .takes_value(true)
+                        .help(
+                            "Distribution file to use. Otherwise default distribution is used.",
+                        ),
+                )
+                .arg(
+                    Arg::with_name("grammar")
+                        .short("g")
+                        .long("grammar")
+                        .takes_value(true)
+                        .default_value("grammar/lsys2.abnf")
+                        .help("Which ABNF grammar to use"),
+                )
+                .arg(
+                    Arg::with_name("population-size")
+                        .short("p")
+                        .long("population-size")
+                        .takes_value(true)
+                        .default_value("500"),
+                )
+                .arg(
+                    Arg::with_name("selection-size")
+                        .short("s")
+                        .long("selection-size")
+                        .takes_value(true)
+                        .default_value("16"),
+                )
+                .arg(
+                    Arg::with_name("tournament-size")
+                        .short("t")
+                        .long("tournament-size")
+                        .takes_value(true)
+                        .default_value("50"),
+                )
+                .arg(
+                    Arg::with_name("mutation-rate")
+                        .short("m")
+                        .long("mutation-rate")
+                        .takes_value(true)
+                        .default_value("0.1"),
+                )
+                .arg(
+                    Arg::with_name("max-generations")
+                        .long("max-generations")
+                        .takes_value(true)
+                        .default_value("60"),
+                )
+                .arg(Arg::with_name("no-mutate").long("no-mutate"))
+                .arg(Arg::with_name("no-crossover").long("no-crossover"))
+                .arg(
+                    Arg::with_name("parallel")
+                        .short("p")
+                        .long("parallel")
+                        .takes_value(true)
+                        .default_value("0"),
+                )
+                .arg(Arg::with_name("no-print").long("no-print"))
+                .arg(Arg::with_name("no-dump").long("no-dump")),
+        )
+        .subcommand(
+            SubCommand::with_name("size-sampling")
+                .about("Find the best GE population size and number of generations")
+                .arg(
+                    Arg::with_name("distribution")
+                        .short("d")
+                        .long("distribution")
+                        .takes_value(true)
+                        .help(
+                            "Distribution file to use. Otherwise default distribution is used.",
+                        ),
+                )
+                .arg(
+                    Arg::with_name("grammar")
+                        .short("g")
+                        .long("grammar")
+                        .takes_value(true)
+                        .default_value("grammar/lsys2.abnf")
+                        .help("Which ABNF grammar to use"),
                 ),
         )
-        .arg(
-            Arg::with_name("grammar")
-                .short("g")
-                .long("grammar")
-                .takes_value(true)
-                .default_value("grammar/lsys2.abnf")
-                .help("Which ABNF grammar to use"),
-        )
-        .arg(
-            Arg::with_name("population-size")
-                .short("p")
-                .long("population-size")
-                .takes_value(true)
-                .default_value("500"),
-        )
-        .arg(
-            Arg::with_name("selection-size")
-                .short("s")
-                .long("selection-size")
-                .takes_value(true)
-                .default_value("16"),
-        )
-        .arg(
-            Arg::with_name("tournament-size")
-                .short("t")
-                .long("tournament-size")
-                .takes_value(true)
-                .default_value("50"),
-        )
-        .arg(
-            Arg::with_name("mutation-rate")
-                .short("m")
-                .long("mutation-rate")
-                .takes_value(true)
-                .default_value("0.1"),
-        )
-        .arg(
-            Arg::with_name("max-generations")
-                .long("max-generations")
-                .takes_value(true)
-                .default_value("60"),
-        )
-        .arg(Arg::with_name("no-mutate").long("no-mutate"))
-        .arg(Arg::with_name("no-crossover").long("no-crossover"))
-        .arg(
-            Arg::with_name("parallel")
-                .short("p")
-                .long("parallel")
-                .takes_value(true)
-                .default_value("0"),
-        )
-        .arg(Arg::with_name("no-print").long("no-print"))
-        .arg(Arg::with_name("no-dump").long("no-dump"))
+}
+
+pub fn run(matches: &ArgMatches) {
+    if let Some(matches) = matches.subcommand_matches("run") {
+        run_ge(matches)
+    } else if let Some(matches) = matches.subcommand_matches("size-sampling") {
+        run_size_sampling(matches)
+    } else {
+        println!("Unknown command.");
+        return;
+    }
 }
 
 pub fn run_ge(matches: &ArgMatches) {
@@ -122,7 +159,6 @@ pub fn run_ge(matches: &ArgMatches) {
 
     let (grammar, distribution, lsys_settings) =
         get_sample_setup(matches.value_of("grammar").unwrap());
-    let grammar = Arc::new(grammar);
 
     let distribution = match matches.value_of("distribution") {
         Some(filename) => {
@@ -141,7 +177,7 @@ pub fn run_ge(matches: &ArgMatches) {
     let stack_rule_index = grammar.symbol_index("stack").unwrap();
 
     if parallel == 0 {
-        run(
+        evolve(
             &grammar,
             &distribution,
             stack_rule_index,
@@ -164,7 +200,7 @@ pub fn run_ge(matches: &ArgMatches) {
                 let settings = Arc::clone(&settings);
 
                 pool.spawn_fn(move || {
-                    let best = run(
+                    let best = evolve(
                         &grammar,
                         &distribution,
                         stack_rule_index,
@@ -206,6 +242,123 @@ pub fn run_ge(matches: &ArgMatches) {
     }
 }
 
+pub fn run_size_sampling(matches: &ArgMatches) {
+    let (grammar, distribution, lsys_settings) =
+        get_sample_setup(matches.value_of("grammar").unwrap());
+
+    let generations_start = 100_usize;
+    let population_start = 100_usize;
+    let sample_size = 20_usize;
+
+    let settings = Settings {
+        max_iterations: generations_start as u64,
+        population_size: population_start,
+        selection_size: 16,
+        tournament_size: 50,
+        mutation_rate: 0.4,
+        ..Settings::default()
+    };
+
+    let distribution = match matches.value_of("distribution") {
+        Some(filename) => {
+            println!("Using distribution from {}", filename);
+            let file = File::open(filename).unwrap();
+            let d: Distribution =
+                bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite)
+                    .expect("Could not deserialize distribution");
+            Arc::new(d)
+        }
+        None => Arc::new(distribution),
+    };
+
+    let stack_rule_index = grammar.symbol_index("stack").unwrap();
+    let pool = CpuPool::new(num_cpus::get() + 1);
+    let grammar = Arc::new(grammar);
+    let distribution = Arc::new(distribution);
+    let lsys_settings = Arc::new(lsys_settings);
+    let mut settings = Arc::new(settings);
+
+    let mut frontier = VecDeque::with_capacity(1);
+    frontier.push_back((population_start, generations_start, 0.0));
+
+    let mut results = Vec::new();
+
+    while let Some((population_size, num_generations, previous_score)) = frontier.pop_front() {
+        println!(
+            "Examining p={}, g={}",
+            population_size,
+            num_generations,
+        );
+
+        {
+            let settings_mut = Arc::get_mut(&mut settings).unwrap();
+            settings_mut.population_size = population_size;
+            settings_mut.max_iterations = num_generations as u64;
+        }
+
+        let tasks: Vec<_> = (0..sample_size)
+            .map(|_| {
+                let grammar = Arc::clone(&grammar);
+                let distribution = Arc::clone(&distribution);
+                let lsys_settings = Arc::clone(&lsys_settings);
+                let settings = Arc::clone(&settings);
+
+                pool.spawn_fn(move || {
+                    let best = evolve(
+                        &grammar,
+                        &distribution,
+                        stack_rule_index,
+                        &lsys_settings,
+                        &settings,
+                    );
+                    future::ok::<LsysFitness, ()>(best)
+                })
+            })
+            .collect();
+
+        let score: f32 = future::join_all(tasks)
+            .wait()
+            .unwrap()
+            .iter()
+            .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
+            .unwrap()
+            .0;
+
+
+        println!(
+            "Best for p={}, g={} is {}",
+            population_size,
+            num_generations,
+            score
+        );
+
+        if score >= previous_score {
+            println!("Found improvement. Exploring!");
+
+            // Breath first search
+            if population_size > num_generations {
+                frontier.push_back((population_size * 2, num_generations, score));
+            } else if num_generations > population_size {
+                frontier.push_back((population_size, num_generations * 2, score));
+            } else {
+                frontier.push_back((population_size * 2, num_generations * 2, score));
+                frontier.push_back((population_size * 2, num_generations, score));
+                frontier.push_back((population_size, num_generations * 2, score));
+            }
+        } else {
+            println!("Dead end. Giving up this path");
+            results.push((population_size, num_generations, score));
+        }
+    }
+
+    let (best_population_size, best_num_generations, _) = *results
+        .iter()
+        .max_by(|&&(_, _, score_a), &&(_, _, score_b)| score_a.partial_cmp(&score_b).unwrap())
+        .unwrap();
+
+    println!("Best parameters are population_size={}, num_generations={}", best_population_size, best_num_generations);
+}
+
 /// Settings for GE simulation
 #[derive(Debug)]
 struct Settings {
@@ -222,7 +375,23 @@ struct Settings {
     dump: bool,
 }
 
-fn run(
+impl Default for Settings {
+    fn default() -> Settings {
+        Settings {
+            population_size: 100,
+            max_iterations: 100,
+            selection_size: 16,
+            tournament_size: 50,
+            crossover: true,
+            mutate: true,
+            mutation_rate: 0.1,
+            print: false,
+            dump: false,
+        }
+    }
+}
+
+fn evolve(
     grammar: &Grammar,
     distribution: &Distribution,
     stack_rule_index: usize,
@@ -610,7 +779,7 @@ where
 
     fn set_step_callback<C>(mut self, callback: C) -> Self
     where
-        C: FnMut(u64, &[T]) + 'a
+        C: FnMut(u64, &[T]) + 'a,
     {
         self.sim.step_callback = Some(Box::new(callback));
         self

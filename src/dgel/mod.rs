@@ -329,7 +329,7 @@ pub fn run_dgel(matches: &ArgMatches) {
     } else if let Some(matches) = matches.subcommand_matches("sample-weight-space") {
         run_sample_weight_space(matches);
     } else if let Some(matches) = matches.subcommand_matches(ge::COMMAND_NAME) {
-        ge::run_ge(matches);
+        ge::run(matches);
     } else if let Some(matches) = matches.subcommand_matches("bench") {
         run_benchmark(matches);
     } else {
