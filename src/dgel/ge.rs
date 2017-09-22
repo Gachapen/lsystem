@@ -255,6 +255,8 @@ pub fn run_size_sampling(matches: &ArgMatches) {
         selection_size: 16,
         tournament_size: 50,
         mutation_rate: 0.4,
+        dump: false,
+        print: false,
         ..Settings::default()
     };
 
