@@ -18,7 +18,7 @@ serde_yaml = "0.7"
 bincode = "0.8"
 clap = "2"
 csv = "0.15"
-rsgenetic = "^1.7.2"
+rsgenetic = { git = "https://github.com/Gachapen/RsGenetic.git", branch = "features" }
 cpuprofiler = "0.0.3"
 
 # Dependencies of kiss3d also used by the project.

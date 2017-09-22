@@ -208,7 +208,7 @@ dependencies = [
 
 [[package]]
 name = "deflate"
-version = "0.7.16"
+version = "0.7.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "adler32 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -469,7 +469,7 @@ dependencies = [
  "num 0.1.40 (registry+https://github.com/rust-lang/crates.io-index)",
  "num_cpus 1.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.3.16 (registry+https://github.com/rust-lang/crates.io-index)",
- "rsgenetic 1.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rsgenetic 1.7.3 (git+https://github.com/Gachapen/RsGenetic.git?branch=features)",
  "serde 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_yaml 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -710,7 +710,7 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bitflags 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "deflate 0.7.16 (registry+https://github.com/rust-lang/crates.io-index)",
+ "deflate 0.7.17 (registry+https://github.com/rust-lang/crates.io-index)",
  "inflate 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-iter 0.1.34 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -762,8 +762,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "rsgenetic"
-version = "1.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+version = "1.7.3"
+source = "git+https://github.com/Gachapen/RsGenetic.git?branch=features#c72e203298bc00fade903bc3b00981c1811ed8b3"
 dependencies = [
  "rand 0.3.16 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -961,7 +961,7 @@ dependencies = [
 "checksum csv 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)" = "7ef22b37c7a51c564a365892c012dc0271221fdcc64c69b19ba4d6fa8bd96d9c"
 "checksum custom_derive 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)" = "ef8ae57c4978a2acd8b869ce6b9ca1dfe817bff704c220209fdef2c0b75a01b9"
 "checksum dbghelp-sys 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "97590ba53bcb8ac28279161ca943a924d1fd4a8fb3fa63302591647c4fc5b850"
-"checksum deflate 0.7.16 (registry+https://github.com/rust-lang/crates.io-index)" = "c4b2a7e3365fa1e8afd32147b543adaa3390f0115e8af5884abc2f854052792b"
+"checksum deflate 0.7.17 (registry+https://github.com/rust-lang/crates.io-index)" = "4dddda59aaab719767ab11d3efd9a714e95b610c4445d4435765021e9d52dfb1"
 "checksum either 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "18785c1ba806c258137c937e44ada9ee7e69a37e3c72077542cd2f069d78562a"
 "checksum enum_primitive 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "be4551092f4d519593039259a9ed8daedf0da12e5109c5280338073eaeb81180"
 "checksum error-chain 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "bd5c82c815138e278b8dcdeffc49f27ea6ffb528403e9dea4194f2e3dd40b143"
@@ -1019,7 +1019,7 @@ dependencies = [
 "checksum rayon 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)" = "b614fe08b6665cb9a231d07ac1364b0ef3cb3698f1239ee0c4c3a88a524f54c8"
 "checksum rayon-core 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "7febc28567082c345f10cddc3612c6ea020fc3297a1977d472cf9fdb73e6e493"
 "checksum redox_syscall 0.1.31 (registry+https://github.com/rust-lang/crates.io-index)" = "8dde11f18c108289bef24469638a04dce49da56084f2d50618b226e47eb04509"
-"checksum rsgenetic 1.7.2 (registry+https://github.com/rust-lang/crates.io-index)" = "eeef290c8dad32cd48868c54ddf4410eb4772eb52500ef4340e3c39133d92ea1"
+"checksum rsgenetic 1.7.3 (git+https://github.com/Gachapen/RsGenetic.git?branch=features)" = "<none>"
 "checksum rustc-demangle 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "aee45432acc62f7b9a108cc054142dac51f979e69e71ddce7d6fc7adf29e817e"
 "checksum rustc-serialize 0.3.24 (registry+https://github.com/rust-lang/crates.io-index)" = "dcf128d1287d2ea9d80910b5f1120d0b8eede3fbf1abe91c40d39ea7d51e6fda"
 "checksum scoped_threadpool 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)" = "3ef399c8893e8cb7aa9696e895427fab3a6bf265977bb96e126f24ddd2cda85a"
