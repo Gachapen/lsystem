@@ -730,7 +730,7 @@ where
     }
 
     fn population(&self) -> Vec<T> {
-        self.population.clone()
+        unimplemented!()
     }
 }
 
