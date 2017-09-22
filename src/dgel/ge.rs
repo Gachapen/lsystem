@@ -491,7 +491,7 @@ fn evolve(
     best.fitness()
 }
 
-#[derive(PartialEq, PartialOrd, Clone, Copy)]
+#[derive(PartialEq, PartialOrd, Clone, Copy, Debug)]
 struct LsysFitness(f32);
 
 impl Eq for LsysFitness {}
@@ -520,7 +520,7 @@ impl Display for LsysFitness {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct LsysPhenotype<'a, G: 'a> {
     grammar: &'a Grammar,
     distribution: &'a Distribution,
@@ -751,6 +751,24 @@ where
 
             selected += 1;
         }
+    }
+}
+
+impl<'a, T, F> fmt::Debug for Simulator<'a, T, F>
+where
+    T: Phenotype<F> + fmt::Debug,
+    F: Fitness,
+{
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.debug_struct("Simulator")
+            .field("population", self.population)
+            .field("selector", &self.selector)
+            .field("iteration_limit", &self.iteration_limit)
+            .field("iteration", &self.iteration)
+            .field("step_callback", &self.step_callback.is_some())
+            .field("do_crossover", &self.do_crossover)
+            .field("mutate", &self.mutate)
+            .finish()
     }
 }
 
