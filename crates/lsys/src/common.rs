@@ -41,9 +41,7 @@ impl Instruction {
 
 pub const MAX_ALPHABET_SIZE: usize = 128;
 
-pub struct CommandMap {
-    map: [Command; MAX_ALPHABET_SIZE],
-}
+pub struct CommandMap([Command; MAX_ALPHABET_SIZE]);
 
 impl CommandMap {
     pub fn new() -> CommandMap {
@@ -51,11 +49,11 @@ impl CommandMap {
     }
 
     pub fn iter(&self) -> slice::Iter<Command> {
-        self.map.iter()
+        self.0.iter()
     }
 
     pub fn iter_mut(&mut self) -> slice::IterMut<Command> {
-        self.map.iter_mut()
+        self.0.iter_mut()
     }
 }
 
@@ -79,7 +77,7 @@ impl Default for CommandMap {
         map['}' as usize] = Command::EndSurface;
         map['\'' as usize] = Command::NextColor;
 
-        CommandMap { map: map }
+        CommandMap(map)
     }
 }
 
@@ -87,7 +85,7 @@ impl Index<u8> for CommandMap {
     type Output = Command;
 
     fn index(&self, index: u8) -> &Command {
-        &self.map[index as usize]
+        &self.0[index as usize]
     }
 }
 
@@ -95,25 +93,25 @@ impl Index<char> for CommandMap {
     type Output = Command;
 
     fn index(&self, index: char) -> &Command {
-        &self.map[index as usize]
+        &self.0[index as usize]
     }
 }
 
 impl IndexMut<u8> for CommandMap {
     fn index_mut(&mut self, index: u8) -> &mut Command {
-        &mut self.map[index as usize]
+        &mut self.0[index as usize]
     }
 }
 
 impl IndexMut<char> for CommandMap {
     fn index_mut(&mut self, index: char) -> &mut Command {
-        &mut self.map[index as usize]
+        &mut self.0[index as usize]
     }
 }
 
 impl fmt::Display for CommandMap {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let rules = self.map
+        let rules = self.0
             .iter()
             .enumerate()
             .filter_map(|(letter, command)| if *command != Command::Noop {
@@ -134,11 +132,25 @@ impl fmt::Display for CommandMap {
     }
 }
 
+impl fmt::Debug for CommandMap {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.debug_map().entries(self.0
+            .iter()
+            .enumerate()
+            .filter_map(|(letter, command)| if *command != Command::Noop {
+                Some((letter as u8 as char, command))
+            } else {
+                None
+            })
+        ).finish()
+    }
+}
+
 impl Serialize for CommandMap {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut map = serializer.serialize_map(None)?;
 
-        for (letter, command) in self.map.iter().enumerate() {
+        for (letter, command) in self.0.iter().enumerate() {
             if *command != Command::Noop {
                 map.serialize_entry(&(letter as u8 as char), command)?;
             }
@@ -195,7 +207,7 @@ pub fn map_word_to_instructions(word: &str, command_map: &CommandMap) -> Vec<Ins
     instructions
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Settings {
     pub iterations: u32,
     pub angle: f32,
