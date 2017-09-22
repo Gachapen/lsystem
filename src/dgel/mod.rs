@@ -1571,7 +1571,7 @@ fn weighted_selection(weights: &[f32], selector: f32) -> usize {
     selected
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 struct Distribution {
     // [depth][rule][choice][option]
     depths: Vec<Vec<Vec<Vec<f32>>>>,
