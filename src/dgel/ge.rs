@@ -685,8 +685,8 @@ where
                 .map(|&(ref a, ref b)| a.crossover(b))
                 .collect()
         } else {
-            let (parents_a, parents_b): (Vec<T>, Vec<T>) = parents.iter().cloned().unzip();
-            parents_a.iter().chain(parents_b.iter()).cloned().collect()
+            let (parents_a, parents_b): (Vec<T>, Vec<T>) = parents.into_iter().unzip();
+            parents_a.into_iter().chain(parents_b.into_iter()).collect()
         };
 
         if self.mutate {
