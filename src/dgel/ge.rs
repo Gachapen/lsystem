@@ -9,7 +9,7 @@ use std::sync::Arc;
 use bincode;
 use chrono::prelude::*;
 use clap::{App, Arg, ArgMatches, SubCommand};
-use rand::{self, Rng, SeedableRng, XorShiftRng};
+use rand::{self, thread_rng, Rng, SeedableRng, XorShiftRng};
 use rand::distributions::{IndependentSample, Range};
 use serde_yaml;
 use rsgenetic::pheno::{Fitness, Phenotype};
@@ -742,14 +742,10 @@ where
     /// Kill off phenotypes using stochastic universal sampling.
     fn kill_off(&mut self, count: usize) {
         let ratio = self.population.len() / count;
-        let mut i = ::rand::thread_rng().gen_range::<usize>(0, self.population.len());
-        let mut selected = 0;
-        while selected < count {
-            self.population.remove(i);
-            i += ratio - 1;
-            i %= self.population.len();
-
-            selected += 1;
+        let mut i = thread_rng().gen_range::<usize>(0, self.population.len());
+        for _ in 0..count {
+            self.population.swap_remove(i);
+            i = (i + ratio) % self.population.len();
         }
     }
 }
