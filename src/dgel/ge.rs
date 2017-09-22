@@ -342,9 +342,9 @@ pub fn run_size_sampling(matches: &ArgMatches) {
             } else if num_generations > population_size {
                 frontier.push_back((population_size, num_generations * 2, score));
             } else {
-                frontier.push_back((population_size * 2, num_generations * 2, score));
                 frontier.push_back((population_size * 2, num_generations, score));
                 frontier.push_back((population_size, num_generations * 2, score));
+                frontier.push_back((population_size * 2, num_generations * 2, score));
             }
         } else {
             println!("Dead end. Giving up this path");
