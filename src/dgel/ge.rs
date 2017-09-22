@@ -88,7 +88,6 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .arg(Arg::with_name("no-crossover").long("no-crossover"))
                 .arg(
                     Arg::with_name("parallel")
-                        .short("p")
                         .long("parallel")
                         .takes_value(true)
                         .default_value("0"),
