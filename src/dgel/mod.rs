@@ -1771,10 +1771,12 @@ impl Distribution {
     }
 
     fn from_csv(csv: &str) -> Distribution {
-        let mut reader = csv::Reader::from_string(csv).has_headers(true);
+        let mut reader = csv::ReaderBuilder::new()
+            .has_headers(true)
+            .from_reader(BufReader::new(csv.as_bytes()));
         let mut dist = Distribution::new();
 
-        for row in reader.decode() {
+        for row in reader.deserialize() {
             let (depth, rule, choice, alternative, weight): (
                 usize,
                 usize,
@@ -1789,10 +1791,12 @@ impl Distribution {
     }
 
     fn from_csv_v1(csv: &str, grammar: &Grammar) -> Distribution {
-        let mut reader = csv::Reader::from_string(csv).has_headers(true);
+        let mut reader = csv::ReaderBuilder::new()
+            .has_headers(true)
+            .from_reader(BufReader::new(csv.as_bytes()));
         let mut dist = Distribution::new();
 
-        for row in reader.decode() {
+        for row in reader.deserialize() {
             let (depth, rule, choice, alternative, weight): (
                 usize,
                 String,

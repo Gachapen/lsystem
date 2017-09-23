@@ -17,7 +17,7 @@ serde_derive = "1"
 serde_yaml = "0.7"
 bincode = "0.8"
 clap = "2"
-csv = "0.15"
+csv = "1.0.0-beta.4"
 rsgenetic = { git = "https://github.com/Gachapen/RsGenetic.git", branch = "features" }
 cpuprofiler = "0.0.3"
 
