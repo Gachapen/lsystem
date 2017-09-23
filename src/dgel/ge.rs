@@ -18,6 +18,7 @@ use rsgenetic::sim::select::{MaximizeSelector, Selector, TournamentSelector};
 use futures::future::{self, Future};
 use futures_cpupool::CpuPool;
 use num_cpus;
+use csv;
 
 use lsys;
 
@@ -242,6 +243,22 @@ pub fn run_ge(matches: &ArgMatches) {
 }
 
 pub fn run_size_sampling(matches: &ArgMatches) {
+    #[derive(Serialize)]
+    #[serde(rename_all = "snake_case")]
+    enum Decision {
+        Continue,
+        End,
+    }
+
+    #[derive(Serialize)]
+    struct DataPoint {
+        generations: usize,
+        population: usize,
+        decision: Decision,
+        average: f32,
+        max: f32,
+    }
+
     let (grammar, distribution, lsys_settings) =
         get_sample_setup(matches.value_of("grammar").unwrap());
 
@@ -278,17 +295,23 @@ pub fn run_size_sampling(matches: &ArgMatches) {
     let distribution = Arc::new(distribution);
     let lsys_settings = Arc::new(lsys_settings);
 
+    let data_file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open("ge-size-sampling.csv")
+        .expect("Could not create data file");
+    let mut data_writer = csv::Writer::from_writer(
+        BufWriter::with_capacity(1024 * 512, data_file)
+    );
+
     let mut frontier = VecDeque::with_capacity(1);
     frontier.push_back((population_start, generations_start, 0.0));
 
     let mut results = Vec::new();
 
     while let Some((population_size, num_generations, previous_score)) = frontier.pop_front() {
-        println!(
-            "Examining p={}, g={}",
-            population_size,
-            num_generations,
-        );
+        println!("Examining p={}, g={}", population_size, num_generations,);
 
         let settings = Arc::new(Settings {
             population_size: population_size,
@@ -316,17 +339,20 @@ pub fn run_size_sampling(matches: &ArgMatches) {
             })
             .collect();
 
-        let score: f32 = future::join_all(tasks)
-            .wait()
-            .unwrap()
+        let scores = future::join_all(tasks).wait().unwrap();
+
+        let best: f32 = scores
             .iter()
             .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
             .unwrap()
             .0;
 
+        let avg: f32 = scores.iter().map(|f| f.0).sum::<f32>() / scores.len() as f32;
+
+        let score = avg;
 
         println!(
-            "Best for p={}, g={} is {}",
+            "Score for p={}, g={} is {}",
             population_size,
             num_generations,
             score
@@ -334,6 +360,16 @@ pub fn run_size_sampling(matches: &ArgMatches) {
 
         if score >= previous_score {
             println!("Found improvement. Exploring!");
+
+            data_writer
+                .serialize(DataPoint {
+                    generations: num_generations,
+                    population: population_size,
+                    decision: Decision::Continue,
+                    average: avg,
+                    max: best,
+                })
+                .expect("Could not write to data file");
 
             // Breath first search
             if population_size > num_generations {
@@ -347,16 +383,33 @@ pub fn run_size_sampling(matches: &ArgMatches) {
             }
         } else {
             println!("Dead end. Giving up this path");
+
+            data_writer
+                .serialize(DataPoint {
+                    generations: num_generations,
+                    population: population_size,
+                    decision: Decision::End,
+                    average: avg,
+                    max: best,
+                })
+                .expect("Could not write to data file");
+
             results.push((population_size, num_generations, score));
         }
     }
 
     let (best_population_size, best_num_generations, _) = *results
         .iter()
-        .max_by(|&&(_, _, score_a), &&(_, _, score_b)| score_a.partial_cmp(&score_b).unwrap())
+        .max_by(|&&(_, _, score_a), &&(_, _, score_b)| {
+            score_a.partial_cmp(&score_b).unwrap()
+        })
         .unwrap();
 
-    println!("Best parameters are population_size={}, num_generations={}", best_population_size, best_num_generations);
+    println!(
+        "Best parameters are population_size={}, num_generations={}",
+        best_population_size,
+        best_num_generations
+    );
 }
 
 /// Settings for GE simulation
@@ -696,7 +749,11 @@ where
                     .map(|(a, b)| a.crossover(b))
                     .collect()
             } else if self.mutate {
-                parents.into_iter().take(num_children).map(|c| c.mutate()).collect()
+                parents
+                    .into_iter()
+                    .take(num_children)
+                    .map(|c| c.mutate())
+                    .collect()
             } else {
                 parents.into_iter().take(num_children).cloned().collect()
             };
