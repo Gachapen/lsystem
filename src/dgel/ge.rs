@@ -249,7 +249,7 @@ pub fn run_size_sampling(matches: &ArgMatches) {
     let population_start = 100_usize;
     let sample_size = 20_usize;
 
-    let settings = Settings {
+    let base_settings = Settings {
         max_iterations: generations_start as u64,
         population_size: population_start,
         selection_size: 16,
@@ -277,7 +277,6 @@ pub fn run_size_sampling(matches: &ArgMatches) {
     let grammar = Arc::new(grammar);
     let distribution = Arc::new(distribution);
     let lsys_settings = Arc::new(lsys_settings);
-    let mut settings = Arc::new(settings);
 
     let mut frontier = VecDeque::with_capacity(1);
     frontier.push_back((population_start, generations_start, 0.0));
@@ -291,11 +290,11 @@ pub fn run_size_sampling(matches: &ArgMatches) {
             num_generations,
         );
 
-        {
-            let settings_mut = Arc::get_mut(&mut settings).unwrap();
-            settings_mut.population_size = population_size;
-            settings_mut.max_iterations = num_generations as u64;
-        }
+        let settings = Arc::new(Settings {
+            population_size: population_size,
+            max_iterations: num_generations as u64,
+            ..base_settings
+        });
 
         let tasks: Vec<_> = (0..sample_size)
             .map(|_| {
