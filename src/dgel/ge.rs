@@ -404,6 +404,9 @@ pub fn run_size_sampling(matches: &ArgMatches) {
 
             results.push((population_size, num_generations, score));
         }
+
+        // Make sure that data is written, in case the program is aborted.
+        data_writer.flush().expect("Could not write data file");
     }
 
     let (best_population_size, best_num_generations, _) = *results
