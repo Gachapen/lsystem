@@ -6,6 +6,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Instant;
 use bincode;
 use chrono::prelude::*;
 use clap::{App, Arg, ArgMatches, SubCommand};
@@ -255,6 +256,7 @@ pub fn run_size_sampling(matches: &ArgMatches) {
         generations: usize,
         population: usize,
         decision: Decision,
+        duration: f32,
         average: f32,
         max: f32,
     }
@@ -339,14 +341,18 @@ pub fn run_size_sampling(matches: &ArgMatches) {
             })
             .collect();
 
+        let start_time = Instant::now();
+
         let scores = future::join_all(tasks).wait().unwrap();
+
+        let duration = start_time.elapsed();
+        let duration_secs = duration.as_secs() as f32 + duration.subsec_nanos() as f32 / 1_000_000_000.0;
 
         let best: f32 = scores
             .iter()
             .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
             .unwrap()
             .0;
-
         let avg: f32 = scores.iter().map(|f| f.0).sum::<f32>() / scores.len() as f32;
 
         let score = avg;
@@ -366,6 +372,7 @@ pub fn run_size_sampling(matches: &ArgMatches) {
                     generations: num_generations,
                     population: population_size,
                     decision: Decision::Continue,
+                    duration: duration_secs,
                     average: avg,
                     max: best,
                 })
@@ -389,6 +396,7 @@ pub fn run_size_sampling(matches: &ArgMatches) {
                     generations: num_generations,
                     population: population_size,
                     decision: Decision::End,
+                    duration: duration_secs,
                     average: avg,
                     max: best,
                 })
