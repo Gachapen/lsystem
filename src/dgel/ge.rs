@@ -178,6 +178,8 @@ pub fn run_ge(matches: &ArgMatches) {
 
     let stack_rule_index = grammar.symbol_index("stack").unwrap();
 
+    let start_time = Instant::now();
+
     if parallel == 0 {
         evolve(
             &grammar,
@@ -242,6 +244,9 @@ pub fn run_ge(matches: &ArgMatches) {
             standard_error
         );
     }
+
+    let duration: f32 = start_time.elapsed().to_seconds();
+    println!("Duration: {}", duration);
 }
 
 pub fn run_size_sampling(matches: &ArgMatches) {
