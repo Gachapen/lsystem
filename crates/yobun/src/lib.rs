@@ -10,6 +10,7 @@ use std::{fs, io, str};
 use std::time::Duration;
 use std::cmp::Ordering;
 use num::Float;
+use num::cast::cast;
 
 use na::Unit;
 use alga::general::Real;
@@ -263,6 +264,18 @@ where
     }
 
     equal
+}
+
+pub trait ToSeconds<T> {
+    fn to_seconds(&self) -> T;
+}
+
+impl<T: Float> ToSeconds<T> for Duration {
+    fn to_seconds(&self) -> T {
+        let seconds: T = cast(self.as_secs()).unwrap();
+        let nanoseconds: T = cast(self.subsec_nanos()).unwrap();
+        seconds + nanoseconds / T::from(1_000_000_000.0).unwrap()
+    }
 }
 
 #[macro_export]

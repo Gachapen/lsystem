@@ -22,6 +22,7 @@ use num_cpus;
 use csv;
 
 use lsys;
+use yobun::ToSeconds;
 
 use super::fitness;
 use dgel::{generate_chromosome, generate_system, get_sample_setup, random_seed, Distribution,
@@ -345,8 +346,7 @@ pub fn run_size_sampling(matches: &ArgMatches) {
 
         let scores = future::join_all(tasks).wait().unwrap();
 
-        let duration = start_time.elapsed();
-        let duration_secs = duration.as_secs() as f32 + duration.subsec_nanos() as f32 / 1_000_000_000.0;
+        let duration = start_time.elapsed().to_seconds();
 
         let best: f32 = scores
             .iter()
@@ -372,7 +372,7 @@ pub fn run_size_sampling(matches: &ArgMatches) {
                     generations: num_generations,
                     population: population_size,
                     decision: Decision::Continue,
-                    duration: duration_secs,
+                    duration: duration,
                     average: avg,
                     max: best,
                 })
@@ -396,7 +396,7 @@ pub fn run_size_sampling(matches: &ArgMatches) {
                     generations: num_generations,
                     population: population_size,
                     decision: Decision::End,
-                    duration: duration_secs,
+                    duration: duration,
                     average: avg,
                     max: best,
                 })
