@@ -10,7 +10,7 @@ use std::time::Instant;
 use bincode;
 use chrono::prelude::*;
 use clap::{App, Arg, ArgMatches, SubCommand};
-use rand::{self, thread_rng, SeedableRng, XorShiftRng};
+use rand::{self, SeedableRng, XorShiftRng};
 use rand::distributions::{IndependentSample, Range};
 use serde_yaml;
 use rsgenetic::pheno::{Fitness, Phenotype};
@@ -502,7 +502,7 @@ fn evolve(
     let best = {
         let mutation_rate = settings.mutation_rate;
         let crossover_rate = settings.crossover_rate;
-        let rng = thread_rng();
+        let rng = XorShiftRng::from_seed(random_seed());
 
         let mut builder = Simulator::builder(population)
             .set_selector(Box::new(TournamentSelector::new(settings.tournament_size)))
