@@ -37,7 +37,7 @@ use abnf::expand::{expand_grammar, Rulechain, SelectionStrategy};
 use lsys::{self, ol};
 use lsys3d;
 use lsystems;
-use yobun::read_dir_all;
+use yobun::{mean, read_dir_all, unbiased_sample_variance};
 use super::setup_window;
 use super::fitness::{self, Fitness};
 
@@ -2481,15 +2481,11 @@ fn run_learning(matches: &ArgMatches) {
 
             step_scores.extend(batch_scores);
 
-            let score_sum: f32 = step_scores.iter().sum();
-            let size = step_scores.len() as f32;
-            let unbiased_size = (step_scores.len() - 1) as f32;
-            let mean = score_sum / size;
-            let unbiased_sample_variance =
-                step_scores.iter().map(|s| (s - mean).powi(2)).sum::<f32>() / unbiased_size;
-            let sample_standard_deviation = unbiased_sample_variance.sqrt();
+            let mean = mean(&step_scores);
+            let variance = unbiased_sample_variance(&step_scores, mean);
+            let sample_standard_deviation = variance.sqrt();
 
-            error = sample_standard_deviation / size.sqrt();
+            error = sample_standard_deviation / (step_scores.len() as f32).sqrt();
             step_mean = mean;
         }
 

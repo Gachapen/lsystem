@@ -6,6 +6,7 @@ extern crate num;
 extern crate rand;
 
 use std::f32::consts::{E, PI};
+use std::iter::Sum;
 use std::path::Path;
 use std::{fs, io, str};
 use std::time::Duration;
@@ -322,6 +323,20 @@ where
             list.swap_remove(index)
         })
         .collect()
+}
+
+pub fn mean<'a, T>(list: &'a [T]) -> T
+where
+    T: Float + Sum<&'a T>,
+{
+    list.iter().sum::<T>() / cast(list.len()).unwrap()
+}
+
+pub fn unbiased_sample_variance<'a, T>(list: &'a [T], mean: T) -> T
+where
+    T: Float + Sum<T>,
+{
+    list.iter().map(|s| (*s - mean).powi(2)).sum::<T>() / cast(list.len() - 1).unwrap()
 }
 
 #[macro_export]
