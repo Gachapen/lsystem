@@ -10,11 +10,11 @@ use std::time::Instant;
 use bincode;
 use chrono::prelude::*;
 use clap::{App, Arg, ArgMatches, SubCommand};
-use rand::{self, thread_rng, Rng, SeedableRng, XorShiftRng};
+use rand::{self, thread_rng, SeedableRng, XorShiftRng};
 use rand::distributions::{IndependentSample, Range};
 use serde_yaml;
 use rsgenetic::pheno::{Fitness, Phenotype};
-use rsgenetic::sim::{Builder, NanoSecond, RunResult, SimResult, Simulation, StepResult};
+use rsgenetic::sim::{Builder, RunResult, SimResult, StepResult};
 use rsgenetic::sim::select::{MaximizeSelector, Selector, TournamentSelector};
 use futures::future::{self, Future};
 use futures_cpupool::CpuPool;
@@ -22,7 +22,7 @@ use num_cpus;
 use csv;
 
 use lsys;
-use yobun::ToSeconds;
+use yobun::{rand_remove, ToSeconds};
 
 use super::fitness;
 use dgel::{generate_chromosome, generate_system, get_sample_setup, random_seed, Distribution,
@@ -61,13 +61,6 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                         .default_value("500"),
                 )
                 .arg(
-                    Arg::with_name("selection-size")
-                        .short("s")
-                        .long("selection-size")
-                        .takes_value(true)
-                        .default_value("16"),
-                )
-                .arg(
                     Arg::with_name("tournament-size")
                         .short("t")
                         .long("tournament-size")
@@ -82,13 +75,18 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                         .default_value("0.1"),
                 )
                 .arg(
+                    Arg::with_name("crossover-rate")
+                        .short("c")
+                        .long("crossover-rate")
+                        .takes_value(true)
+                        .default_value("0.5"),
+                )
+                .arg(
                     Arg::with_name("max-generations")
                         .long("max-generations")
                         .takes_value(true)
                         .default_value("60"),
                 )
-                .arg(Arg::with_name("no-mutate").long("no-mutate"))
-                .arg(Arg::with_name("no-crossover").long("no-crossover"))
                 .arg(
                     Arg::with_name("parallel")
                         .long("parallel")
@@ -141,20 +139,18 @@ pub fn run_ge(matches: &ArgMatches) {
             .unwrap()
             .parse()
             .unwrap(),
-        selection_size: matches.value_of("selection-size").unwrap().parse().unwrap(),
         tournament_size: matches
             .value_of("tournament-size")
             .unwrap()
             .parse()
             .unwrap(),
         mutation_rate: matches.value_of("mutation-rate").unwrap().parse().unwrap(),
+        crossover_rate: matches.value_of("crossover-rate").unwrap().parse().unwrap(),
         max_iterations: matches
             .value_of("max-generations")
             .unwrap()
             .parse()
             .unwrap(),
-        mutate: !matches.is_present("no-mutate"),
-        crossover: !matches.is_present("no-crossover"),
         print: !matches.is_present("no-print"),
         dump: !matches.is_present("no-dump"),
     };
@@ -277,7 +273,6 @@ pub fn run_size_sampling(matches: &ArgMatches) {
     let base_settings = Settings {
         max_iterations: generations_start as u64,
         population_size: population_start,
-        selection_size: 16,
         tournament_size: 50,
         mutation_rate: 0.4,
         dump: false,
@@ -309,9 +304,7 @@ pub fn run_size_sampling(matches: &ArgMatches) {
         .truncate(true)
         .open("ge-size-sampling.csv")
         .expect("Could not create data file");
-    let mut data_writer = csv::Writer::from_writer(
-        BufWriter::with_capacity(1024 * 512, data_file)
-    );
+    let mut data_writer = csv::Writer::from_writer(BufWriter::with_capacity(1024 * 512, data_file));
 
     let mut frontier = VecDeque::with_capacity(1);
     frontier.push_back((population_start, generations_start, 0.0));
@@ -433,10 +426,8 @@ pub fn run_size_sampling(matches: &ArgMatches) {
 struct Settings {
     population_size: usize,
     mutation_rate: f32,
+    crossover_rate: f32,
     max_iterations: u64,
-    crossover: bool,
-    mutate: bool,
-    selection_size: usize,
     tournament_size: usize,
     /// Print output while running
     print: bool,
@@ -449,10 +440,8 @@ impl Default for Settings {
         Settings {
             population_size: 100,
             max_iterations: 100,
-            selection_size: 16,
             tournament_size: 50,
-            crossover: true,
-            mutate: true,
+            crossover_rate: 0.5,
             mutation_rate: 0.1,
             print: false,
             dump: false,
@@ -472,11 +461,10 @@ fn evolve(
         distribution,
         stack_rule_index,
         lsys_settings,
-        settings.mutation_rate,
         Vec::new(),
     );
 
-    let mut population = (0..settings.population_size)
+    let population = (0..settings.population_size)
         .map(|_| {
             let seed = random_seed();
             let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
@@ -500,14 +488,54 @@ fn evolve(
     }
 
     let best = {
-        let mut builder = Simulator::builder(&mut population)
-            .set_selector(Box::new(TournamentSelector::new(
-                settings.selection_size,
-                settings.tournament_size,
-            )))
-            .set_max_iters(settings.max_iterations)
-            .crossover(settings.crossover)
-            .mutate(settings.mutate);
+        let mutation_rate = settings.mutation_rate;
+        let crossover_rate = settings.crossover_rate;
+        let rng = thread_rng();
+
+        let mut builder = Simulator::builder(population)
+            .set_selector(Box::new(TournamentSelector::new(settings.tournament_size)))
+            .set_max_iters(settings.max_iterations);
+
+        if settings.crossover_rate > 0.0 {
+            let mut rng = rng.clone();
+            builder = builder.chain_operator(move |mut population| {
+                let num_individuals = population.len();
+                let num_children = (num_individuals as f32 * crossover_rate) as usize;
+                let range = Range::new(0, population.len());
+
+                let mut children: Vec<_> = (0..num_children)
+                    .map(|_| {
+                        let i = range.ind_sample(&mut rng);
+                        let j = range.ind_sample(&mut rng);
+                        let a = &population[i];
+                        let b = &population[j];
+                        a.crossover(b)
+                    })
+                    .collect();
+
+                let num_survivors = num_individuals - num_children;
+                let mut survivors = rand_remove(&mut rng, &mut population, num_survivors);
+                children.append(&mut survivors);
+
+                children
+            });
+        }
+
+        if settings.mutation_rate > 0.0 {
+            let mut rng = rng.clone();
+            builder = builder.chain_operator(move |population| {
+                population
+                    .into_iter()
+                    .map(|x| {
+                        if Range::new(0.0, 1.0).ind_sample(&mut rng) > mutation_rate {
+                            x
+                        } else {
+                            x.mutate()
+                        }
+                    })
+                    .collect()
+            });
+        }
 
         if settings.dump {
             builder = builder.set_step_callback(
@@ -595,7 +623,6 @@ struct LsysPhenotype<'a, G: 'a> {
     stack_rule_index: usize,
     settings: &'a lsys::Settings,
     chromosome: Vec<G>,
-    mutation_probability: f32,
     fitness: Cell<Option<LsysFitness>>,
 }
 
@@ -605,7 +632,6 @@ impl<'a, G: Gene> LsysPhenotype<'a, G> {
         distribution: &'a Distribution,
         stack_rule_index: usize,
         settings: &'a lsys::Settings,
-        mutation_probability: f32,
         chromosome: Vec<G>,
     ) -> Self {
         LsysPhenotype {
@@ -615,7 +641,6 @@ impl<'a, G: Gene> LsysPhenotype<'a, G> {
             settings: settings,
             chromosome: chromosome,
             fitness: Cell::new(None),
-            mutation_probability: mutation_probability,
         }
     }
 
@@ -625,7 +650,6 @@ impl<'a, G: Gene> LsysPhenotype<'a, G> {
             self.distribution,
             self.stack_rule_index,
             self.settings,
-            self.mutation_probability,
             chromosome,
         )
     }
@@ -667,65 +691,53 @@ impl<'a, G: Gene + Clone> Phenotype<LsysFitness> for LsysPhenotype<'a, G> {
     fn mutate(&self) -> Self {
         let mut rng = rand::thread_rng();
 
-        if Range::new(0.0, 1.0).ind_sample(&mut rng) > self.mutation_probability {
-            self.clone()
-        } else {
-            let mut chromosome = self.chromosome.clone();
-            let mutation_index =
-                Range::new(0, chromosome.len()).ind_sample(&mut rand::thread_rng());
-            chromosome[mutation_index] =
-                Range::new(G::min_value(), G::max_value()).ind_sample(&mut rng);
+        let mut chromosome = self.chromosome.clone();
+        let mutation_index = Range::new(0, chromosome.len()).ind_sample(&mut rand::thread_rng());
+        chromosome[mutation_index] =
+            Range::new(G::min_value(), G::max_value()).ind_sample(&mut rng);
 
-            self.clone_with_chromosome(chromosome)
-        }
+        self.clone_with_chromosome(chromosome)
     }
 }
 
 type StepCallback<'a, T> = Box<FnMut(u64, &[T]) + 'a>;
+type Operator<'a, T> = Box<FnMut(Vec<T>) -> Vec<T> + 'a>;
 
-/// A sequential implementation of `::sim::Simulation`.
-/// The genetic algorithm is run in a single thread.
-struct Simulator<'a, T, F>
-where
-    T: 'a + Phenotype<F>,
-    F: Fitness,
-{
-    population: &'a mut Vec<T>,
+/// A genetic algorithm implementation, designed after "A Comparison of Selection Schemes used
+/// in Genetic Algorithms", Tobias Blickle and Lothar Thiele, 1995. It is a modification of
+/// `rsgenetic::sim::seq::Simulator`.
+///
+/// By default it has no genetic operators (`operators`). To add one, use
+/// `SimulatorBuilder::chain_operator`.
+struct Simulator<'a, T, F> {
+    population: Vec<T>,
     selector: Box<Selector<T, F>>,
     iteration_limit: u64,
     iteration: u64,
     step_callback: Option<StepCallback<'a, T>>,
-    do_crossover: bool,
-    mutate: bool,
+    operators: Vec<Operator<'a, T>>,
 }
 
-impl<'a, T, F> Simulation<'a, T, F> for Simulator<'a, T, F>
+impl<'a, T, F> Simulator<'a, T, F>
 where
     T: Phenotype<F>,
     F: Fitness,
 {
-    type B = SimulatorBuilder<'a, T, F>;
-
     /// Create builder.
-    fn builder(population: &'a mut Vec<T>) -> SimulatorBuilder<'a, T, F> {
-        SimulatorBuilder {
-            sim: Simulator {
-                population: population,
-                selector: Box::new(MaximizeSelector::new(3)),
-                iteration_limit: 100,
-                iteration: 0,
-                step_callback: None,
-                do_crossover: true,
-                mutate: true,
-            },
-        }
+    fn builder(population: Vec<T>) -> SimulatorBuilder<'a, T, F> {
+        let sim = Simulator {
+            population: population,
+            selector: Box::new(MaximizeSelector::new(3)),
+            iteration_limit: 100,
+            iteration: 0,
+            step_callback: None,
+            operators: Vec::new(),
+        };
+
+        SimulatorBuilder { sim: sim }
     }
 
     fn step(&mut self) -> StepResult {
-        self.checked_step()
-    }
-
-    fn checked_step(&mut self) -> StepResult {
         if self.population.is_empty() {
             println!(
                 "Tried to run a simulator without a population, or the \
@@ -738,9 +750,8 @@ where
             return StepResult::Done;
         }
 
-        let mut children: Vec<T> = {
-            // Perform selection
-            let parents = match self.selector.select(self.population) {
+        let next_population: Vec<T> = {
+            let parents = match self.selector.select(&self.population) {
                 Ok(parents) => parents,
                 Err(e) => {
                     println!("Error selecting parents: {}", e);
@@ -748,43 +759,22 @@ where
                 }
             };
 
-            let num_children = parents.len() / 2;
-            let children: Vec<T> = if self.do_crossover && self.mutate {
-                parents
-                    .iter()
-                    .take(num_children)
-                    .zip(parents.iter().skip(num_children))
-                    .map(|(a, b)| a.crossover(b))
-                    .map(|c| c.mutate())
-                    .collect()
-            } else if self.do_crossover {
-                parents
-                    .iter()
-                    .take(num_children)
-                    .zip(parents.iter().skip(num_children))
-                    .map(|(a, b)| a.crossover(b))
-                    .collect()
-            } else if self.mutate {
-                parents
-                    .into_iter()
-                    .take(num_children)
-                    .map(|c| c.mutate())
-                    .collect()
-            } else {
-                parents.into_iter().take(num_children).cloned().collect()
-            };
+            let population_size = self.population.len();
 
-            children
+            let recombined: Vec<T> = self.operators.iter_mut().fold(
+                parents.into_iter().cloned().collect(),
+                |population, operator| operator(population),
+            );
+            assert_eq!(recombined.len(), population_size);
+
+            recombined
         };
 
-        // Kill off parts of the population at random to make room for the children
-        self.kill_off(children.len());
-        self.population.append(&mut children);
-
+        self.population = next_population;
         self.iteration += 1;
 
         if let Some(ref mut callback) = self.step_callback {
-            callback(self.iteration, self.population);
+            callback(self.iteration, &self.population);
         }
 
         StepResult::Success // Not done yet, but successful
@@ -793,7 +783,7 @@ where
     fn run(&mut self) -> RunResult {
         // Loop until Failure or Done.
         loop {
-            match self.checked_step() {
+            match self.step() {
                 StepResult::Success => {}
                 StepResult::Failure => return RunResult::Failure,
                 StepResult::Done => return RunResult::Done,
@@ -801,36 +791,8 @@ where
         }
     }
 
-    fn get(&'a self) -> SimResult<'a, T> {
+    fn get(&self) -> SimResult<T> {
         Ok(self.population.iter().max_by_key(|x| x.fitness()).unwrap())
-    }
-
-    fn iterations(&self) -> u64 {
-        self.iteration
-    }
-
-    fn time(&self) -> Option<NanoSecond> {
-        unimplemented!()
-    }
-
-    fn population(&self) -> Vec<T> {
-        unimplemented!()
-    }
-}
-
-impl<'a, T, F> Simulator<'a, T, F>
-where
-    T: Phenotype<F>,
-    F: Fitness,
-{
-    /// Kill off phenotypes using stochastic universal sampling.
-    fn kill_off(&mut self, count: usize) {
-        let ratio = self.population.len() / count;
-        let mut i = thread_rng().gen_range::<usize>(0, self.population.len());
-        for _ in 0..count {
-            self.population.swap_remove(i);
-            i = (i + ratio) % self.population.len();
-        }
     }
 }
 
@@ -841,13 +803,11 @@ where
 {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("Simulator")
-            .field("population", self.population)
+            .field("population", &self.population)
             .field("selector", &self.selector)
             .field("iteration_limit", &self.iteration_limit)
             .field("iteration", &self.iteration)
             .field("step_callback", &self.step_callback.is_some())
-            .field("do_crossover", &self.do_crossover)
-            .field("mutate", &self.mutate)
             .finish()
     }
 }
@@ -855,7 +815,7 @@ where
 /// A `Builder` for the `Simulator` type.
 struct SimulatorBuilder<'a, T, F>
 where
-    T: 'a + Phenotype<F>,
+    T: Phenotype<F>,
     F: Fitness,
 {
     sim: Simulator<'a, T, F>,
@@ -884,13 +844,16 @@ where
         self
     }
 
-    fn crossover(mut self, crossover: bool) -> Self {
-        self.sim.do_crossover = crossover;
-        self
-    }
-
-    fn mutate(mut self, mutate: bool) -> Self {
-        self.sim.mutate = mutate;
+    /// Chain an `operator` in the operator chain used for creating the new population from the
+    /// current population. An `operator` gets the current population as the parameter,
+    /// and uses it to produce a new population as the return value. The last `operator` in the
+    /// chain **must** return a population of size equal to the input population of the first
+    /// `operator`.
+    fn chain_operator<O>(mut self, operator: O) -> Self
+    where
+        O: FnMut(Vec<T>) -> Vec<T> + 'a,
+    {
+        self.sim.operators.push(Box::new(operator));
         self
     }
 }
