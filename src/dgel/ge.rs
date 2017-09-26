@@ -170,7 +170,10 @@ pub fn run_ge(matches: &ArgMatches) {
         None => Arc::new(distribution),
     };
 
+    println!("Settings");
+    println!("----------");
     println!("{}", settings);
+    println!("");
 
     let stack_rule_index = grammar.symbol_index("stack").unwrap();
 
@@ -279,6 +282,11 @@ pub fn run_size_sampling(matches: &ArgMatches) {
         print: false,
         ..Settings::default()
     };
+
+    println!("Settings");
+    println!("----------");
+    println!("{}", base_settings);
+    println!("");
 
     let distribution = match matches.value_of("distribution") {
         Some(filename) => {
@@ -476,6 +484,13 @@ fn evolve(
         Vec::new(),
     );
 
+    if settings.print {
+        println!(
+            "Generating initial population of {} individuals.",
+            settings.population_size
+        );
+    }
+
     let population = (0..settings.population_size)
         .map(|_| {
             let seed = random_seed();
@@ -483,6 +498,10 @@ fn evolve(
             base_phenotype.clone_with_chromosome(chromosome)
         })
         .collect();
+
+    if settings.print {
+        println!("Building simulator.");
+    }
 
     let stats_file = OpenOptions::new()
         .write(true)
@@ -571,12 +590,17 @@ fn evolve(
 
         let mut simulator = builder.build();
 
+        if settings.print {
+            println!("Evolving...");
+        }
+
         simulator.run();
         simulator.get().unwrap().clone()
     };
 
     if settings.print {
-        println!("Fitness: {}", best.fitness(),);
+        println!("Done.");
+        println!("Fitness: {}", best.fitness());
     }
 
     if settings.dump {
