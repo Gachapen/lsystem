@@ -22,7 +22,7 @@ use num_cpus;
 use csv;
 
 use lsys;
-use yobun::{rand_remove, ToSeconds};
+use yobun::{mean, rand_remove, unbiased_sample_variance, ToSeconds};
 
 use super::fitness;
 use dgel::{generate_chromosome, generate_system, get_sample_setup, random_seed, Distribution,
@@ -263,6 +263,8 @@ pub fn run_size_sampling(matches: &ArgMatches) {
         decision: Decision,
         duration: f32,
         average: f32,
+        variance: f32,
+        min: f32,
         max: f32,
     }
 
@@ -349,19 +351,26 @@ pub fn run_size_sampling(matches: &ArgMatches) {
             .collect();
 
         let start_time = Instant::now();
-
-        let scores = future::join_all(tasks).wait().unwrap();
-
+        let scores: Vec<f32> = future::join_all(tasks)
+            .wait()
+            .unwrap()
+            .iter()
+            .map(|f| f.0)
+            .collect();
         let duration = start_time.elapsed().to_seconds();
 
-        let best: f32 = scores
+        let mean = mean(&scores);
+        let variance = unbiased_sample_variance(&scores, mean);
+        let min: f32 = *scores
             .iter()
-            .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
-            .unwrap()
-            .0;
-        let avg: f32 = scores.iter().map(|f| f.0).sum::<f32>() / scores.len() as f32;
+            .min_by(|a, b| a.partial_cmp(&b).unwrap())
+            .unwrap();
+        let max: f32 = *scores
+            .iter()
+            .max_by(|a, b| a.partial_cmp(&b).unwrap())
+            .unwrap();
 
-        let score = avg;
+        let score = mean;
 
         println!(
             "Score for p={}, g={} is {}",
@@ -379,8 +388,10 @@ pub fn run_size_sampling(matches: &ArgMatches) {
                     population: population_size,
                     decision: Decision::Continue,
                     duration: duration,
-                    average: avg,
-                    max: best,
+                    average: mean,
+                    max: max,
+                    min: min,
+                    variance: variance,
                 })
                 .expect("Could not write to data file");
 
@@ -403,8 +414,10 @@ pub fn run_size_sampling(matches: &ArgMatches) {
                     population: population_size,
                     decision: Decision::End,
                     duration: duration,
-                    average: avg,
-                    max: best,
+                    average: mean,
+                    max: max,
+                    min: min,
+                    variance: variance,
                 })
                 .expect("Could not write to data file");
 
