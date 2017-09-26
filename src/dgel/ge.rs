@@ -276,11 +276,11 @@ pub fn run_size_sampling(matches: &ArgMatches) {
     let base_settings = Settings {
         max_iterations: generations_start as u64,
         population_size: population_start,
-        tournament_size: 50,
-        mutation_rate: 0.4,
+        tournament_size: 5,
+        crossover_rate: 0.5,
+        mutation_rate: 0.1,
         dump: false,
         print: false,
-        ..Settings::default()
     };
 
     println!("Settings");
