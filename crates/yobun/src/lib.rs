@@ -3,6 +3,7 @@ extern crate nalgebra as na;
 #[macro_use]
 extern crate nom;
 extern crate num;
+extern crate rand;
 
 use std::f32::consts::{E, PI};
 use std::path::Path;
@@ -11,6 +12,8 @@ use std::time::Duration;
 use std::cmp::Ordering;
 use num::Float;
 use num::cast::cast;
+use rand::distributions::{IndependentSample, Range};
+use rand::Rng;
 
 use na::Unit;
 use alga::general::Real;
@@ -276,6 +279,49 @@ impl<T: Float> ToSeconds<T> for Duration {
         let nanoseconds: T = cast(self.subsec_nanos()).unwrap();
         seconds + nanoseconds / T::from(1_000_000_000.0).unwrap()
     }
+}
+
+/// Randomly select `num` elements from a list and return them.
+///
+/// An element can not be selected twice. If there are less than `num` elements,
+// the whole `list` will be returned.
+pub fn rand_select<'l, R, T>(rng: &mut R, list: &'l [T], num: usize) -> Vec<&'l T>
+where
+    R: Rng,
+{
+    if list.len() <= num {
+        return list.iter().collect();
+    }
+
+    let mut bucket: Vec<&T> = list.iter().collect();
+
+    (0..num)
+        .map(|_| {
+            let index = Range::new(0, list.len()).ind_sample(rng);
+            bucket.swap_remove(index)
+        })
+        .collect()
+}
+
+/// Randomly remove `num` elements from a list and return them.
+///
+/// If there are less than `num` elements, all elements are removed.
+pub fn rand_remove<R, T>(rng: &mut R, list: &mut Vec<T>, num: usize) -> Vec<T>
+where
+    R: Rng,
+{
+    if list.len() <= num {
+        let mut result = Vec::new();
+        result.append(list);
+        return result;
+    }
+
+    (0..num)
+        .map(|_| {
+            let index = Range::new(0, list.len()).ind_sample(rng);
+            list.swap_remove(index)
+        })
+        .collect()
 }
 
 #[macro_export]
