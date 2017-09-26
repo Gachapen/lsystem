@@ -170,7 +170,7 @@ pub fn run_ge(matches: &ArgMatches) {
         None => Arc::new(distribution),
     };
 
-    println!("{:#?}", settings);
+    println!("{}", settings);
 
     let stack_rule_index = grammar.symbol_index("stack").unwrap();
 
@@ -446,6 +446,18 @@ impl Default for Settings {
             print: false,
             dump: false,
         }
+    }
+}
+
+impl Display for Settings {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        writeln!(f, "Population size: {}", self.population_size)?;
+        writeln!(f, "Max iterations: {}", self.max_iterations)?;
+        writeln!(f, "Tournament size: {}", self.tournament_size)?;
+        writeln!(f, "Crossover rate: {}", self.crossover_rate)?;
+        writeln!(f, "Mutation rate: {}", self.mutation_rate)?;
+        writeln!(f, "Print: {}", self.print)?;
+        write!(f, "Dump: {}", self.dump)
     }
 }
 
