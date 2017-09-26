@@ -1,5 +1,7 @@
 extern crate fnv;
 #[macro_use]
+extern crate lazy_static;
+#[macro_use]
 extern crate nom;
 
 use std::{error, fmt, io};

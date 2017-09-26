@@ -306,6 +306,9 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
 }
 
 pub fn run_dgel(matches: &ArgMatches) {
+    // Initialize the ABNF core rules as to not create a lag spike in the first usage of it.
+    abnf::core::initialize();
+
     if matches.subcommand_matches("abnf").is_some() {
         run_print_abnf();
     } else if matches.subcommand_matches("random").is_some() {

@@ -6,3 +6,4 @@ authors = ["Magnus Bjerke Vik <mbvett@gmail.com>"]
 [dependencies]
 nom = "^3.0.0"
 fnv = "^1.0.5"
+lazy_static = "^0.2.8"

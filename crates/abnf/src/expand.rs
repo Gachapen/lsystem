@@ -20,7 +20,7 @@ pub fn expand_grammar<S>(grammar: &Grammar, root: &str, strategy: &mut S) -> Str
 where
     S: SelectionStrategy,
 {
-    let core_rules = core::rules();
+    let core_grammar: &Grammar = &core::GRAMMAR;
     let root_symbol = grammar.symbol(root);
 
     let mut string = String::new();
@@ -71,7 +71,7 @@ where
                         Content::Symbol(ref symbol) => {
                             let list = if let Some(list) = grammar.map_rule(symbol) {
                                 list
-                            } else if let Some(list) = core_rules.map_rule(symbol) {
+                            } else if let Some(list) = core_grammar.map_rule(symbol) {
                                 list
                             } else {
                                 // TODO: Return Result instead of panicing.
