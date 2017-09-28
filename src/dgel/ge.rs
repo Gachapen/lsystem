@@ -409,11 +409,11 @@ pub fn run_size_sampling(matches: &ArgMatches) {
         let variance = unbiased_sample_variance(&scores, mean);
         let min: f32 = *scores
             .iter()
-            .min_by(|a, b| a.partial_cmp(&b).unwrap())
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap();
         let max: f32 = *scores
             .iter()
-            .max_by(|a, b| a.partial_cmp(&b).unwrap())
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap();
 
         let score = mean;
@@ -598,11 +598,11 @@ pub fn run_tournament_sampling(matches: &ArgMatches) {
         let variance = unbiased_sample_variance(&scores, mean);
         let min: f32 = *scores
             .iter()
-            .min_by(|a, b| a.partial_cmp(&b).unwrap())
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap();
         let max: f32 = *scores
             .iter()
-            .max_by(|a, b| a.partial_cmp(&b).unwrap())
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap();
 
         let score = mean;
