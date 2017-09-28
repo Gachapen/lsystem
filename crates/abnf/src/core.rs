@@ -8,6 +8,8 @@
 //!   reference to the variable if it is used multiple times in the same scope:
 //!
 //! ```
+//! use abnf::Grammar;
+//!
 //! // It is important to specify the &Grammar type, otherwise it will be a reference to the
 //! // `LazyStatic` struct, which will still require the atomic check when it is dereferenced.
 //! let grammar: &Grammar = &abnf::core::GRAMMAR;
