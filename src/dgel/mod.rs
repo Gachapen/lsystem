@@ -1514,31 +1514,46 @@ struct ChromosmeStrategy<'a, G: 'a> {
 }
 
 impl<'a, G: Gene> ChromosmeStrategy<'a, G> {
-    fn new(chromosome: &'a [G]) -> Self {
+    pub fn new(chromosome: &'a [G]) -> Self {
         ChromosmeStrategy {
             chromosome: chromosome,
             index: 0,
         }
     }
 
-    fn use_next_gene(&mut self) -> G {
-        assert!(
-            self.index < self.chromosome.len(),
-            "ChromosmeStrategy index overflows gene list"
-        );
-
-        let gene = self.chromosome[self.index];
-        self.index = (self.index + 1) % self.chromosome.len();
+    pub fn use_next_gene(&mut self) -> G {
+        let gene = self.chromosome[self.position()];
+        self.index += 1;
 
         gene
     }
 
-    fn max_selection_value<T: Gene>(num: T) -> G {
+    pub fn max_selection_value<T: Gene>(num: T) -> G {
         let rep_max_value = num::cast::<_, u64>(G::max_value()).unwrap();
         let res_max_value = num::cast::<_, u64>(T::max_value()).unwrap();
         let max_value = num::cast::<_, G>(cmp::min(rep_max_value, res_max_value)).unwrap();
 
         num::cast::<_, G>(num).unwrap() % max_value
+    }
+
+    /// How many times the chromosome was wrapped around.
+    pub fn wraps(&self) -> usize {
+        self.index / self.chromosome.len()
+    }
+
+    /// If the chromosome was completely used and wrapped around.
+    pub fn has_wrapped(&self) -> bool {
+        self.index >= self.chromosome.len()
+    }
+
+    /// How many total genes that were used, including wraps.
+    pub fn genes_used(&self) -> usize {
+        self.index
+    }
+
+    /// The current position in the chromosome.
+    pub fn position(&self) -> usize {
+        self.index % self.chromosome.len()
     }
 }
 

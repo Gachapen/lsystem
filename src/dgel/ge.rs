@@ -1,10 +1,11 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 use std::cmp::Ordering;
 use std::fmt::{self, Display, Formatter};
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Instant;
 use bincode;
@@ -21,7 +22,7 @@ use futures_cpupool::CpuPool;
 use num_cpus;
 use csv;
 
-use lsys;
+use lsys::{self, ol};
 use yobun::{mean, rand_remove, unbiased_sample_variance, ToSeconds};
 
 use super::fitness;
@@ -93,6 +94,7 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                         .takes_value(true)
                         .default_value("0"),
                 )
+                .arg(Arg::with_name("no-prune").long("no-prune"))
                 .arg(Arg::with_name("no-print").long("no-print"))
                 .arg(Arg::with_name("no-dump").long("no-dump")),
         )
@@ -197,6 +199,7 @@ pub fn run_ge(matches: &ArgMatches) {
             .unwrap()
             .parse()
             .unwrap(),
+        prune: !matches.is_present("no-prune"),
         print: !matches.is_present("no-print"),
         dump: !matches.is_present("no-dump"),
     };
@@ -325,6 +328,7 @@ pub fn run_size_sampling(matches: &ArgMatches) {
         tournament_size: 5,
         crossover_rate: 0.5,
         mutation_rate: 0.1,
+        prune: false,
         dump: false,
         print: false,
     };
@@ -516,6 +520,7 @@ pub fn run_tournament_sampling(matches: &ArgMatches) {
         tournament_size: tournament_size_start,
         crossover_rate: 0.5,
         mutation_rate: 0.1,
+        prune: false,
         dump: false,
         print: false,
     };
@@ -677,6 +682,7 @@ pub fn run_recombination_sampling(matches: &ArgMatches) {
         max_iterations: 200,
         population_size: 800,
         tournament_size: 2,
+        prune: false,
         dump: false,
         print: false,
         ..Settings::default()
@@ -847,6 +853,7 @@ struct Settings {
     crossover_rate: f32,
     max_iterations: u64,
     tournament_size: usize,
+    prune: bool,
     /// Print output while running
     print: bool,
     /// Dump stats and the resulting model
@@ -861,6 +868,7 @@ impl Default for Settings {
             tournament_size: 50,
             crossover_rate: 0.5,
             mutation_rate: 0.1,
+            prune: true,
             print: false,
             dump: false,
         }
@@ -874,6 +882,7 @@ impl Display for Settings {
         writeln!(f, "Tournament size: {}", self.tournament_size)?;
         writeln!(f, "Crossover rate: {}", self.crossover_rate)?;
         writeln!(f, "Mutation rate: {}", self.mutation_rate)?;
+        writeln!(f, "Prune: {}", self.prune)?;
         writeln!(f, "Print: {}", self.print)?;
         write!(f, "Dump: {}", self.dump)
     }
@@ -936,6 +945,17 @@ fn evolve(
         let mut builder = Simulator::builder(population)
             .set_selector(Box::new(TournamentSelector::new(settings.tournament_size)))
             .set_max_iters(settings.max_iterations);
+
+        if settings.prune {
+            builder = builder.chain_operator(move |population| {
+                population
+                    .into_iter()
+                    .map(|x| {
+                        x.prune()
+                    })
+                    .collect()
+            });
+        }
 
         if settings.crossover_rate > 0.0 {
             let mut rng = rng.clone();
@@ -1069,11 +1089,12 @@ struct LsysPhenotype<'a, G: 'a> {
     stack_rule_index: usize,
     settings: &'a lsys::Settings,
     chromosome: Vec<G>,
+    lsystem: RefCell<Option<(Rc<ol::LSystem>, usize)>>,
     fitness: Cell<Option<LsysFitness>>,
 }
 
 impl<'a, G: Gene> LsysPhenotype<'a, G> {
-    fn new(
+    pub fn new(
         grammar: &'a Grammar,
         distribution: &'a Distribution,
         stack_rule_index: usize,
@@ -1086,11 +1107,12 @@ impl<'a, G: Gene> LsysPhenotype<'a, G> {
             stack_rule_index: stack_rule_index,
             settings: settings,
             chromosome: chromosome,
+            lsystem: RefCell::new(None),
             fitness: Cell::new(None),
         }
     }
 
-    fn clone_with_chromosome(&self, chromosome: Vec<G>) -> Self {
+    pub fn clone_with_chromosome(&self, chromosome: Vec<G>) -> Self {
         LsysPhenotype::new(
             self.grammar,
             self.distribution,
@@ -1099,6 +1121,62 @@ impl<'a, G: Gene> LsysPhenotype<'a, G> {
             chromosome,
         )
     }
+
+    fn generate_lsystem(&self) -> (ol::LSystem, usize) {
+        let mut strategy = WeightedChromosmeStrategy::new(
+            &self.chromosome,
+            self.distribution,
+            self.stack_rule_index,
+        );
+        let lsystem = generate_system(self.grammar, &mut strategy);
+        let genes_used = strategy.genotype.genes_used();
+
+        (lsystem, genes_used)
+    }
+
+    pub fn lsystem(&self) -> Rc<ol::LSystem> {
+        if let Some((ref lsystem, _)) = *self.lsystem.borrow() {
+            return Rc::clone(lsystem);
+        }
+
+        let (lsystem, genes_used) = self.generate_lsystem();
+        let lsystem = Rc::new(lsystem);
+        *self.lsystem.borrow_mut() = Some((Rc::clone(&lsystem), genes_used));
+
+        lsystem
+    }
+
+    pub fn genes_used(&self) -> usize {
+        if let Some((_, genes_used)) = *self.lsystem.borrow() {
+            return genes_used;
+        }
+
+        let (lsystem, genes_used) = self.generate_lsystem();
+        let lsystem = Rc::new(lsystem);
+        *self.lsystem.borrow_mut() = Some((lsystem, genes_used));
+
+        genes_used
+    }
+
+    /// How many introns (unused genes) there are in the chromosome.
+    pub fn introns(&self) -> usize {
+        let genes_used = self.genes_used();
+        if genes_used < self.chromosome.len() {
+            self.chromosome.len() - genes_used
+        } else {
+            0
+        }
+    }
+
+    /// Remove introns (unused genes)
+    pub fn prune(mut self) -> Self {
+        let genes_used = self.genes_used();
+        if genes_used < self.chromosome.len() {
+            self.chromosome.truncate(genes_used);
+        }
+
+        self
+    }
 }
 
 impl<'a, G: Gene + Clone> Phenotype<LsysFitness> for LsysPhenotype<'a, G> {
@@ -1106,17 +1184,8 @@ impl<'a, G: Gene + Clone> Phenotype<LsysFitness> for LsysPhenotype<'a, G> {
         if let Some(ref fitness) = self.fitness.get() {
             *fitness
         } else {
-            let lsystem = generate_system(
-                self.grammar,
-                &mut WeightedChromosmeStrategy::new(
-                    &self.chromosome,
-                    self.distribution,
-                    self.stack_rule_index,
-                ),
-            );
-            let fitness = fitness::evaluate(&lsystem, self.settings);
+            let fitness = fitness::evaluate(&self.lsystem(), self.settings);
             let fitness = LsysFitness(fitness.0.score());
-
             self.fitness.set(Some(fitness));
 
             fitness
@@ -1311,5 +1380,47 @@ where
 {
     fn build(self) -> Simulator<'a, T, F> {
         self.sim
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_prune() {
+        let (grammar, distribution, lsys_settings, stack_rule_index) =
+            get_sample_setup("grammar/lsys2.abnf");
+        let phenotype = LsysPhenotype::new(
+            &grammar,
+            &distribution,
+            stack_rule_index,
+            &lsys_settings,
+            vec![
+                // Axiom
+                0_u32, // string len 1
+                0, // symbol
+                0, // variable
+                0, // x41
+                // Productions
+                0, // 1 production
+                // Predecessor
+                0, // x41
+                // Successor
+                0, // string len 1
+                0, // symbol
+                0, // variable
+                0, // x41
+                // 4 Introns
+                0,
+                0,
+                0,
+                0,
+            ]
+        );
+
+        let chromosome_len = phenotype.chromosome.len();
+        let pruned = phenotype.prune();
+        assert_eq!(pruned.chromosome.len(), chromosome_len - 4);
     }
 }
