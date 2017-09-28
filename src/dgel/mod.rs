@@ -1891,15 +1891,9 @@ impl<'a, G: Gene> WeightedChromosmeStrategy<'a, G> {
     fn find_depth(&self, rulechain: &Rulechain) -> usize {
         rulechain
             .iter()
-            .fold(0, |acc, r| if let Some(index) = r.index {
-                if index == self.stack_rule_index {
-                    acc + 1
-                } else {
-                    acc
-                }
-            } else {
-                acc
-            })
+            .filter_map(|rule| rule.index)
+            .filter(|index| *index == self.stack_rule_index)
+            .count()
     }
 }
 
