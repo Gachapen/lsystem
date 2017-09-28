@@ -380,7 +380,7 @@ fn random_seed() -> [u32; 4] {
 fn run_with_distribution(matches: &ArgMatches) {
     let (mut window, _) = setup_window();
 
-    let (grammar, distribution, settings) = get_sample_setup(matches.value_of("grammar").unwrap());
+    let (grammar, distribution, settings, _) = get_sample_setup(matches.value_of("grammar").unwrap());
     let grammar = Arc::new(grammar);
 
     let distribution = match matches.value_of("distribution") {
@@ -617,7 +617,7 @@ fn get_sample_settings() -> lsys::Settings {
     }
 }
 
-fn get_sample_setup(grammar_path: &str) -> (abnf::Grammar, Distribution, lsys::Settings) {
+fn get_sample_setup(grammar_path: &str) -> (abnf::Grammar, Distribution, lsys::Settings, usize) {
     let grammar_path = Path::new(grammar_path);
     let grammar = abnf::parse_file(&grammar_path).expect("Could not parse ABNF file");
 
@@ -649,7 +649,9 @@ fn get_sample_setup(grammar_path: &str) -> (abnf::Grammar, Distribution, lsys::S
         get_sample_settings()
     };
 
-    (grammar, distribution, settings)
+    let stack_rule_index = grammar.symbol_index("stack").unwrap();
+
+    (grammar, distribution, settings, stack_rule_index)
 }
 
 fn run_random_sampling(matches: &ArgMatches) {
@@ -691,7 +693,7 @@ fn run_random_sampling(matches: &ArgMatches) {
         }
     };
 
-    let (grammar, distribution, settings) = get_sample_setup("grammar/lsys2.abnf");
+    let (grammar, distribution, settings, _) = get_sample_setup("grammar/lsys2.abnf");
 
     let grammar = Arc::new(grammar);
     let distribution = match matches.value_of("distribution") {
@@ -870,7 +872,7 @@ fn run_sampling_distribution(matches: &ArgMatches) {
         sample_count
     );
 
-    let (grammar, distribution, _) = get_sample_setup("grammar/lsys2.abnf");
+    let (grammar, distribution, _, _) = get_sample_setup("grammar/lsys2.abnf");
     let grammar = Arc::new(grammar);
     let distribution = match matches.value_of("distribution") {
         Some(filename) => {
@@ -2334,7 +2336,7 @@ fn run_learning(matches: &ArgMatches) {
         generate_system(grammar, &mut genotype)
     }
 
-    let (grammar, distribution, settings) = get_sample_setup("grammar/lsys2.abnf");
+    let (grammar, distribution, settings, _) = get_sample_setup("grammar/lsys2.abnf");
 
     let grammar = Arc::new(grammar);
     let distribution = match matches.value_of("distribution") {
@@ -2746,7 +2748,7 @@ fn run_dump_default_dist(matches: &ArgMatches) {
     let output_path = PathBuf::from(matches.value_of("output").unwrap());
     let grammar_path = matches.value_of("grammar").unwrap();
 
-    let (_, distribution, _) = get_sample_setup(grammar_path);
+    let (_, distribution, _, _) = get_sample_setup(grammar_path);
 
     let bin_path = output_path.with_extension("bin");
     let bin_file = File::create(&bin_path).unwrap();
@@ -2894,7 +2896,7 @@ fn run_benchmark(_: &ArgMatches) {
         generate_system(grammar, &mut genotype)
     }
 
-    let (grammar, distribution, settings) = get_sample_setup("grammar/lsys2.abnf");
+    let (grammar, distribution, settings, _) = get_sample_setup("grammar/lsys2.abnf");
 
     PROFILER.lock().unwrap().start("./bench.profile").unwrap();
 

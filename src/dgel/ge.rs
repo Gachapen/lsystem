@@ -201,7 +201,7 @@ pub fn run_ge(matches: &ArgMatches) {
         dump: !matches.is_present("no-dump"),
     };
 
-    let (grammar, distribution, lsys_settings) =
+    let (grammar, distribution, lsys_settings, stack_rule_index) =
         get_sample_setup(matches.value_of("grammar").unwrap());
 
     let distribution = match matches.value_of("distribution") {
@@ -220,8 +220,6 @@ pub fn run_ge(matches: &ArgMatches) {
     println!("----------");
     println!("{}", settings);
     println!("");
-
-    let stack_rule_index = grammar.symbol_index("stack").unwrap();
 
     let start_time = Instant::now();
 
@@ -314,7 +312,7 @@ pub fn run_size_sampling(matches: &ArgMatches) {
         max: f32,
     }
 
-    let (grammar, distribution, lsys_settings) =
+    let (grammar, distribution, lsys_settings, stack_rule_index) =
         get_sample_setup(matches.value_of("grammar").unwrap());
 
     let generations_start = 100_usize;
@@ -348,7 +346,6 @@ pub fn run_size_sampling(matches: &ArgMatches) {
         None => Arc::new(distribution),
     };
 
-    let stack_rule_index = grammar.symbol_index("stack").unwrap();
     let pool = CpuPool::new(num_cpus::get() + 1);
     let grammar = Arc::new(grammar);
     let distribution = Arc::new(distribution);
@@ -507,7 +504,7 @@ pub fn run_tournament_sampling(matches: &ArgMatches) {
         max: f32,
     }
 
-    let (grammar, distribution, lsys_settings) =
+    let (grammar, distribution, lsys_settings, stack_rule_index) =
         get_sample_setup(matches.value_of("grammar").unwrap());
 
     let tournament_size_start = 2_usize;
@@ -540,7 +537,6 @@ pub fn run_tournament_sampling(matches: &ArgMatches) {
         None => Arc::new(distribution),
     };
 
-    let stack_rule_index = grammar.symbol_index("stack").unwrap();
     let pool = CpuPool::new(num_cpus::get() + 1);
     let grammar = Arc::new(grammar);
     let distribution = Arc::new(distribution);
@@ -671,7 +667,7 @@ pub fn run_recombination_sampling(matches: &ArgMatches) {
         max: f32,
     }
 
-    let (grammar, distribution, lsys_settings) =
+    let (grammar, distribution, lsys_settings, stack_rule_index) =
         get_sample_setup(matches.value_of("grammar").unwrap());
 
     let sample_size = 20_usize;
@@ -703,7 +699,6 @@ pub fn run_recombination_sampling(matches: &ArgMatches) {
         None => Arc::new(distribution),
     };
 
-    let stack_rule_index = grammar.symbol_index("stack").unwrap();
     let pool = CpuPool::new(num_cpus::get() + 1);
     let grammar = Arc::new(grammar);
     let distribution = Arc::new(distribution);
