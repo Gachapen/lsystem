@@ -10,9 +10,8 @@ use common::map_word_to_instructions;
 use common::MAX_ALPHABET_SIZE;
 use common::Rewriter;
 
-pub struct RuleMap {
-    map: [String; MAX_ALPHABET_SIZE],
-}
+#[derive(Clone)]
+pub struct RuleMap([String; MAX_ALPHABET_SIZE]);
 
 impl RuleMap {
     pub fn new() -> RuleMap {
@@ -20,11 +19,11 @@ impl RuleMap {
     }
 
     pub fn iter(&self) -> slice::Iter<String> {
-        self.map.iter()
+        self.0.iter()
     }
 
     pub fn iter_mut(&mut self) -> slice::IterMut<String> {
-        self.map.iter_mut()
+        self.0.iter_mut()
     }
 }
 
@@ -40,7 +39,7 @@ impl Default for RuleMap {
             }
         }
 
-        RuleMap { map: rules }
+        RuleMap(rules)
     }
 }
 
@@ -48,7 +47,7 @@ impl Index<u8> for RuleMap {
     type Output = String;
 
     fn index(&self, index: u8) -> &String {
-        &self.map[index as usize]
+        &self.0[index as usize]
     }
 }
 
@@ -56,25 +55,25 @@ impl Index<char> for RuleMap {
     type Output = String;
 
     fn index(&self, index: char) -> &String {
-        &self.map[index as usize]
+        &self.0[index as usize]
     }
 }
 
 impl IndexMut<u8> for RuleMap {
     fn index_mut(&mut self, index: u8) -> &mut String {
-        &mut self.map[index as usize]
+        &mut self.0[index as usize]
     }
 }
 
 impl IndexMut<char> for RuleMap {
     fn index_mut(&mut self, index: char) -> &mut String {
-        &mut self.map[index as usize]
+        &mut self.0[index as usize]
     }
 }
 
 impl fmt::Display for RuleMap {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let rules = self.map
+        let rules = self.0
             .iter()
             .enumerate()
             .filter_map(|(pred, succ)| {
@@ -97,11 +96,25 @@ impl fmt::Display for RuleMap {
     }
 }
 
+impl fmt::Debug for RuleMap {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_map().entries(self.0
+            .iter()
+            .enumerate()
+            .filter_map(|(letter, word)| if word.len() != 1 || word.as_bytes()[0] != letter as u8 {
+                Some((letter as u8 as char, word))
+            } else {
+                None
+            })
+        ).finish()
+    }
+}
+
 impl Serialize for RuleMap {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut map = serializer.serialize_map(None)?;
 
-        for (pred, succ) in self.map.iter().enumerate() {
+        for (pred, succ) in self.0.iter().enumerate() {
             if !(succ.len() == 1 && succ.as_bytes()[0] == pred as u8) {
                 map.serialize_entry(&(pred as u8 as char), succ)?;
             }
@@ -174,7 +187,7 @@ fn remove_redundancy(from: &str) -> String {
     trimmed
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LSystem {
     pub productions: RuleMap,
     pub axiom: String,
