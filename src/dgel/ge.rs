@@ -69,6 +69,12 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                         .default_value("50"),
                 )
                 .arg(
+                    Arg::with_name("duplication-rate")
+                        .long("duplication-rate")
+                        .takes_value(true)
+                        .default_value("0.1"),
+                )
+                .arg(
                     Arg::with_name("mutation-rate")
                         .short("m")
                         .long("mutation-rate")
@@ -192,6 +198,7 @@ pub fn run_ge(matches: &ArgMatches) {
             .unwrap()
             .parse()
             .unwrap(),
+        duplication_rate: matches.value_of("duplication-rate").unwrap().parse().unwrap(),
         mutation_rate: matches.value_of("mutation-rate").unwrap().parse().unwrap(),
         crossover_rate: matches.value_of("crossover-rate").unwrap().parse().unwrap(),
         max_iterations: matches
@@ -326,6 +333,7 @@ pub fn run_size_sampling(matches: &ArgMatches) {
         max_iterations: generations_start as u64,
         population_size: population_start,
         tournament_size: 5,
+        duplication_rate: 0.0,
         crossover_rate: 0.5,
         mutation_rate: 0.1,
         prune: false,
@@ -518,6 +526,7 @@ pub fn run_tournament_sampling(matches: &ArgMatches) {
         max_iterations: 200,
         population_size: 800,
         tournament_size: tournament_size_start,
+        duplication_rate: 0.0,
         crossover_rate: 0.5,
         mutation_rate: 0.1,
         prune: false,
@@ -682,6 +691,7 @@ pub fn run_recombination_sampling(matches: &ArgMatches) {
         max_iterations: 200,
         population_size: 800,
         tournament_size: 2,
+        duplication_rate: 0.0,
         prune: false,
         dump: false,
         print: false,
@@ -849,6 +859,7 @@ pub fn run_recombination_sampling(matches: &ArgMatches) {
 #[derive(Debug)]
 struct Settings {
     population_size: usize,
+    duplication_rate: f32,
     mutation_rate: f32,
     crossover_rate: f32,
     max_iterations: u64,
@@ -866,6 +877,7 @@ impl Default for Settings {
             population_size: 100,
             max_iterations: 100,
             tournament_size: 50,
+            duplication_rate: 0.1,
             crossover_rate: 0.5,
             mutation_rate: 0.1,
             prune: true,
@@ -880,6 +892,7 @@ impl Display for Settings {
         writeln!(f, "Population size: {}", self.population_size)?;
         writeln!(f, "Max iterations: {}", self.max_iterations)?;
         writeln!(f, "Tournament size: {}", self.tournament_size)?;
+        writeln!(f, "Duplication rate: {}", self.duplication_rate)?;
         writeln!(f, "Crossover rate: {}", self.crossover_rate)?;
         writeln!(f, "Mutation rate: {}", self.mutation_rate)?;
         writeln!(f, "Prune: {}", self.prune)?;
@@ -938,8 +951,6 @@ fn evolve(
     }
 
     let best = {
-        let mutation_rate = settings.mutation_rate;
-        let crossover_rate = settings.crossover_rate;
         let rng = XorShiftRng::from_seed(random_seed());
 
         let mut builder = Simulator::builder(population)
@@ -957,8 +968,26 @@ fn evolve(
             });
         }
 
+        if settings.duplication_rate > 0.0 {
+            let mut rng = rng.clone();
+            let duplication_rate = settings.duplication_rate;
+            builder = builder.chain_operator(move |population| {
+                population
+                    .into_iter()
+                    .map(|x| {
+                        if Range::new(0.0, 1.0).ind_sample(&mut rng) > duplication_rate {
+                            x
+                        } else {
+                            x.duplicate()
+                        }
+                    })
+                    .collect()
+            });
+        }
+
         if settings.crossover_rate > 0.0 {
             let mut rng = rng.clone();
+            let crossover_rate = settings.crossover_rate;
             builder = builder.chain_operator(move |mut population| {
                 let num_individuals = population.len();
                 let num_children = (num_individuals as f32 * crossover_rate) as usize;
@@ -984,6 +1013,7 @@ fn evolve(
 
         if settings.mutation_rate > 0.0 {
             let mut rng = rng.clone();
+            let mutation_rate = settings.mutation_rate;
             builder = builder.chain_operator(move |population| {
                 population
                     .into_iter()
@@ -1174,6 +1204,20 @@ impl<'a, G: Gene> LsysPhenotype<'a, G> {
         if genes_used < self.chromosome.len() {
             self.chromosome.truncate(genes_used);
         }
+
+        self
+    }
+
+    /// Duplicate genes
+    pub fn duplicate(mut self) -> Self {
+        let mut rng = rand::thread_rng();
+
+        let num_genes = Range::new(1, self.chromosome.len() + 1).ind_sample(&mut rng);
+        let start = Range::new(0, self.chromosome.len() - num_genes + 1).ind_sample(&mut rng);
+        let end = start + num_genes;
+
+        let mut duplicate = self.chromosome[start..end].to_vec();
+        self.chromosome.append(&mut duplicate);
 
         self
     }
