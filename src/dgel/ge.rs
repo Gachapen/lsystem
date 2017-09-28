@@ -138,6 +138,27 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                         .help("Which ABNF grammar to use"),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("recombination-sampling")
+                .about("Find the best GE crossover and mutation rates")
+                .arg(
+                    Arg::with_name("distribution")
+                        .short("d")
+                        .long("distribution")
+                        .takes_value(true)
+                        .help(
+                            "Distribution file to use. Otherwise default distribution is used.",
+                        ),
+                )
+                .arg(
+                    Arg::with_name("grammar")
+                        .short("g")
+                        .long("grammar")
+                        .takes_value(true)
+                        .default_value("grammar/lsys2.abnf")
+                        .help("Which ABNF grammar to use"),
+                ),
+        )
 }
 
 pub fn run(matches: &ArgMatches) {
@@ -147,6 +168,8 @@ pub fn run(matches: &ArgMatches) {
         run_size_sampling(matches)
     } else if let Some(matches) = matches.subcommand_matches("tournament-sampling") {
         run_tournament_sampling(matches)
+    } else if let Some(matches) = matches.subcommand_matches("recombination-sampling") {
+        run_recombination_sampling(matches)
     } else {
         println!("Unknown command.");
         return;
@@ -626,6 +649,199 @@ pub fn run_tournament_sampling(matches: &ArgMatches) {
     }
 
     println!("Best tournament size is {}", best);
+}
+
+pub fn run_recombination_sampling(matches: &ArgMatches) {
+    #[derive(Serialize)]
+    #[serde(rename_all = "snake_case")]
+    enum Decision {
+        Continue,
+        End,
+    }
+
+    #[derive(Serialize)]
+    struct DataPoint {
+        crossover_rate: f32,
+        mutation_rate: f32,
+        decision: Decision,
+        duration: f32,
+        average: f32,
+        variance: f32,
+        min: f32,
+        max: f32,
+    }
+
+    let (grammar, distribution, lsys_settings) =
+        get_sample_setup(matches.value_of("grammar").unwrap());
+
+    let sample_size = 20_usize;
+    let steps = [0.01, 0.1, 0.5, 1.0];
+
+    let base_settings = Settings {
+        max_iterations: 200,
+        population_size: 800,
+        tournament_size: 2,
+        dump: false,
+        print: false,
+        ..Settings::default()
+    };
+
+    println!("Settings");
+    println!("----------");
+    println!("{}", base_settings);
+    println!("");
+
+    let distribution = match matches.value_of("distribution") {
+        Some(filename) => {
+            println!("Using distribution from {}", filename);
+            let file = File::open(filename).unwrap();
+            let d: Distribution =
+                bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite)
+                    .expect("Could not deserialize distribution");
+            Arc::new(d)
+        }
+        None => Arc::new(distribution),
+    };
+
+    let stack_rule_index = grammar.symbol_index("stack").unwrap();
+    let pool = CpuPool::new(num_cpus::get() + 1);
+    let grammar = Arc::new(grammar);
+    let distribution = Arc::new(distribution);
+    let lsys_settings = Arc::new(lsys_settings);
+
+    let data_file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open("ge-recombination-sampling.csv")
+        .expect("Could not create data file");
+    let mut data_writer = csv::Writer::from_writer(BufWriter::with_capacity(1024 * 512, data_file));
+
+    let mut frontier = VecDeque::with_capacity(1);
+    frontier.push_back((0, 0, 0.0));
+
+    let mut results = Vec::new();
+
+    while let Some((crossover_step, mutation_step, previous_score)) = frontier.pop_front() {
+        let crossover_rate = steps[crossover_step];
+        let mutation_rate = steps[mutation_step];
+        println!("Examining c={}, m={}", crossover_rate, mutation_rate);
+
+        let settings = Arc::new(Settings {
+            crossover_rate: crossover_rate,
+            mutation_rate: mutation_rate,
+            ..base_settings
+        });
+
+        let tasks: Vec<_> = (0..sample_size)
+            .map(|_| {
+                let grammar = Arc::clone(&grammar);
+                let distribution = Arc::clone(&distribution);
+                let lsys_settings = Arc::clone(&lsys_settings);
+                let settings = Arc::clone(&settings);
+
+                pool.spawn_fn(move || {
+                    let best = evolve(
+                        &grammar,
+                        &distribution,
+                        stack_rule_index,
+                        &lsys_settings,
+                        &settings,
+                    );
+                    future::ok::<LsysFitness, ()>(best)
+                })
+            })
+            .collect();
+
+        let start_time = Instant::now();
+        let scores: Vec<f32> = future::join_all(tasks)
+            .wait()
+            .unwrap()
+            .iter()
+            .map(|f| f.0)
+            .collect();
+        let duration = start_time.elapsed().to_seconds();
+
+        let mean = mean(&scores);
+        let variance = unbiased_sample_variance(&scores, mean);
+        let min: f32 = *scores
+            .iter()
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap();
+        let max: f32 = *scores
+            .iter()
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap();
+
+        let score = mean;
+
+        println!("Score for c={}, m={} is {}", crossover_rate, mutation_rate, score);
+
+        if score >= previous_score {
+            println!("Found improvement. Exploring!");
+
+            data_writer
+                .serialize(DataPoint {
+                    crossover_rate: crossover_rate,
+                    mutation_rate: mutation_rate,
+                    decision: Decision::Continue,
+                    duration: duration,
+                    average: mean,
+                    max: max,
+                    min: min,
+                    variance: variance,
+                })
+                .expect("Could not write to data file");
+
+            let next_crossover = crossover_step + 1;
+            let next_mutation = mutation_step + 1;
+            // Breath first search
+            if crossover_step > mutation_step && next_crossover < steps.len() {
+                frontier.push_back((next_crossover, mutation_step, score));
+            } else if mutation_step > crossover_step && next_mutation < steps.len() {
+                frontier.push_back((crossover_step, next_mutation, score));
+            } else if next_crossover < steps.len() && next_mutation < steps.len() {
+                frontier.push_back((next_crossover, mutation_step, score));
+                frontier.push_back((crossover_step, next_mutation, score));
+                frontier.push_back((next_crossover, next_mutation, score));
+            } else {
+                println!("Finished path.");
+            }
+        } else {
+            println!("Dead end. Giving up.");
+
+            data_writer
+                .serialize(DataPoint {
+                    crossover_rate: crossover_rate,
+                    mutation_rate: mutation_rate,
+                    decision: Decision::End,
+                    duration: duration,
+                    average: mean,
+                    max: max,
+                    min: min,
+                    variance: variance,
+                })
+                .expect("Could not write to data file");
+
+            results.push((crossover_step, mutation_step, score));
+        };
+
+        // Make sure that data is written, in case the program is aborted.
+        data_writer.flush().expect("Could not write data file");
+    }
+
+    let (best_crossover_step, best_mutation_step, _) = results
+        .into_iter()
+        .max_by(|&(_, _, score_a), &(_, _, score_b)| {
+            score_a.partial_cmp(&score_b).unwrap()
+        })
+        .unwrap();
+
+    println!(
+        "Best parameters are crossover_rate={}, mutation_rate={}",
+        steps[best_crossover_step],
+        steps[best_mutation_step]
+    );
 }
 
 /// Settings for GE simulation
