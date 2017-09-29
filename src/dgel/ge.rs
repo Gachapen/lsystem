@@ -167,6 +167,27 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                         .help("Which ABNF grammar to use"),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("duplication-sampling")
+                .about("Find the best GE duplication rate")
+                .arg(
+                    Arg::with_name("distribution")
+                        .short("d")
+                        .long("distribution")
+                        .takes_value(true)
+                        .help(
+                            "Distribution file to use. Otherwise default distribution is used.",
+                        ),
+                )
+                .arg(
+                    Arg::with_name("grammar")
+                        .short("g")
+                        .long("grammar")
+                        .takes_value(true)
+                        .default_value("grammar/lsys2.abnf")
+                        .help("Which ABNF grammar to use"),
+                ),
+        )
 }
 
 pub fn run(matches: &ArgMatches) {
@@ -178,6 +199,8 @@ pub fn run(matches: &ArgMatches) {
         run_tournament_sampling(matches)
     } else if let Some(matches) = matches.subcommand_matches("recombination-sampling") {
         run_recombination_sampling(matches)
+    } else if let Some(matches) = matches.subcommand_matches("duplication-sampling") {
+        run_duplication_sampling(matches)
     } else {
         println!("Unknown command.");
         return;
@@ -572,7 +595,6 @@ pub fn run_tournament_sampling(matches: &ArgMatches) {
     let mut data_writer = csv::Writer::from_writer(BufWriter::with_capacity(1024 * 512, data_file));
 
     let mut next = Some((tournament_size_start, 0.0_f32));
-    let mut best = 0.0_f32;
 
     while let Some((tournament_size, previous_score)) = next {
         println!("Examining t={}", tournament_size,);
@@ -641,7 +663,6 @@ pub fn run_tournament_sampling(matches: &ArgMatches) {
                 })
                 .expect("Could not write to data file");
 
-            best = score;
             next = Some((tournament_size * 2, score));
         } else {
             println!("Dead end. Giving up.");
@@ -664,8 +685,6 @@ pub fn run_tournament_sampling(matches: &ArgMatches) {
         // Make sure that data is written, in case the program is aborted.
         data_writer.flush().expect("Could not write data file");
     }
-
-    println!("Best tournament size is {}", best);
 }
 
 pub fn run_recombination_sampling(matches: &ArgMatches) {
@@ -860,6 +879,167 @@ pub fn run_recombination_sampling(matches: &ArgMatches) {
         steps[best_crossover_step],
         steps[best_mutation_step]
     );
+}
+
+pub fn run_duplication_sampling(matches: &ArgMatches) {
+    #[derive(Serialize)]
+    #[serde(rename_all = "snake_case")]
+    enum Decision {
+        Continue,
+        End,
+    }
+
+    #[derive(Serialize)]
+    struct DataPoint {
+        rate: f32,
+        decision: Decision,
+        duration: f32,
+        average: f32,
+        variance: f32,
+        min: f32,
+        max: f32,
+    }
+
+    let (grammar, distribution, lsys_settings, stack_rule_index) =
+        get_sample_setup(matches.value_of("grammar").unwrap());
+
+    let sample_size = 20_usize;
+    let steps = [0.01, 0.1, 0.5, 1.0];
+
+    let base_settings = Settings {
+        max_iterations: 200,
+        population_size: 800,
+        tournament_size: 2,
+        crossover_rate: 0.5,
+        mutation_rate: 1.0,
+        prune: true,
+        dump: false,
+        print: false,
+        ..Settings::default()
+    };
+
+    println!("Settings");
+    println!("----------");
+    println!("{}", base_settings);
+    println!("");
+
+    let distribution = match matches.value_of("distribution") {
+        Some(filename) => {
+            println!("Using distribution from {}", filename);
+            let file = File::open(filename).unwrap();
+            let d: Distribution =
+                bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite)
+                    .expect("Could not deserialize distribution");
+            Arc::new(d)
+        }
+        None => Arc::new(distribution),
+    };
+
+    let pool = CpuPool::new(num_cpus::get() + 1);
+    let grammar = Arc::new(grammar);
+    let distribution = Arc::new(distribution);
+    let lsys_settings = Arc::new(lsys_settings);
+
+    let data_file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open("ge-duplication-sampling.csv")
+        .expect("Could not create data file");
+    let mut data_writer = csv::Writer::from_writer(BufWriter::with_capacity(1024 * 512, data_file));
+
+    let mut next = Some((0, 0.0_f32));
+
+    while let Some((step, previous_score)) = next {
+        let duplication_rate = steps[step];
+        println!("Examining d={}", duplication_rate);
+
+        let settings = Arc::new(Settings {
+            duplication_rate: duplication_rate,
+            ..base_settings
+        });
+
+        let tasks: Vec<_> = (0..sample_size)
+            .map(|_| {
+                let grammar = Arc::clone(&grammar);
+                let distribution = Arc::clone(&distribution);
+                let lsys_settings = Arc::clone(&lsys_settings);
+                let settings = Arc::clone(&settings);
+
+                pool.spawn_fn(move || {
+                    let best = evolve(
+                        &grammar,
+                        &distribution,
+                        stack_rule_index,
+                        &lsys_settings,
+                        &settings,
+                    );
+                    future::ok::<LsysFitness, ()>(best)
+                })
+            })
+            .collect();
+
+        let start_time = Instant::now();
+        let scores: Vec<f32> = future::join_all(tasks)
+            .wait()
+            .unwrap()
+            .iter()
+            .map(|f| f.0)
+            .collect();
+        let duration = start_time.elapsed().to_seconds();
+
+        let mean = mean(&scores);
+        let variance = unbiased_sample_variance(&scores, mean);
+        let min: f32 = *scores
+            .iter()
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap();
+        let max: f32 = *scores
+            .iter()
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap();
+
+        let score = mean;
+
+        println!("Score for d={} is {}", duplication_rate, score);
+
+        if score >= previous_score {
+            println!("Found improvement. Exploring!");
+
+            data_writer
+                .serialize(DataPoint {
+                    rate: duplication_rate,
+                    decision: Decision::Continue,
+                    duration: duration,
+                    average: mean,
+                    max: max,
+                    min: min,
+                    variance: variance,
+                })
+                .expect("Could not write to data file");
+
+            next = Some((step + 1, score));
+        } else {
+            println!("Dead end. Giving up.");
+
+            data_writer
+                .serialize(DataPoint {
+                    rate: duplication_rate,
+                    decision: Decision::End,
+                    duration: duration,
+                    average: mean,
+                    max: max,
+                    min: min,
+                    variance: variance,
+                })
+                .expect("Could not write to data file");
+
+            next = None;
+        };
+
+        // Make sure that data is written, in case the program is aborted.
+        data_writer.flush().expect("Could not write data file");
+    }
 }
 
 /// Settings for GE simulation
