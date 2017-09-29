@@ -276,6 +276,13 @@ pub fn run_ge(matches: &ArgMatches) {
             .map(|f| f.0)
             .collect();
 
+        let scores_file = File::create("ge-scores.csv").unwrap();
+        let mut scores_writer = csv::Writer::from_writer(BufWriter::new(scores_file));
+        scores_writer.write_record(&["score"]).unwrap();
+        for s in &scores {
+            scores_writer.write_record(&[format!("{}", s)]).unwrap();
+        }
+
         let sum: f32 = scores.iter().sum();
         let size = scores.len() as f32;
         let ubniased_size = (scores.len() - 1) as f32;
