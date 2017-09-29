@@ -27,7 +27,7 @@ use yobun::{mean, rand_remove, unbiased_sample_variance, ToSeconds};
 
 use super::fitness;
 use dgel::{generate_chromosome, generate_system, get_sample_setup, random_seed, Distribution,
-           Gene, GenePrimitive, Grammar, WeightedChromosmeStrategy, CHROMOSOME_LEN};
+           GenePrimitive, Grammar, WeightedChromosmeStrategy, CHROMOSOME_LEN};
 
 pub const COMMAND_NAME: &'static str = "ge";
 
@@ -1030,7 +1030,7 @@ fn evolve(
 
         if settings.dump {
             builder = builder.set_step_callback(
-                |iteration: u64, population: &[LsysPhenotype<GenePrimitive>]| {
+                |iteration: u64, population: &[LsysPhenotype]| {
                     let fitnesses: Vec<_> = population.iter().map(|p| p.fitness().0).collect();
 
                     let sum: f32 = fitnesses.iter().sum();
@@ -1113,23 +1113,23 @@ impl Display for LsysFitness {
 }
 
 #[derive(Clone, Debug)]
-struct LsysPhenotype<'a, G: 'a> {
+struct LsysPhenotype<'a> {
     grammar: &'a Grammar,
     distribution: &'a Distribution,
     stack_rule_index: usize,
     settings: &'a lsys::Settings,
-    chromosome: Vec<G>,
+    chromosome: Vec<GenePrimitive>,
     lsystem: RefCell<Option<(Rc<ol::LSystem>, usize)>>,
     fitness: Cell<Option<LsysFitness>>,
 }
 
-impl<'a, G: Gene> LsysPhenotype<'a, G> {
+impl<'a> LsysPhenotype<'a> {
     pub fn new(
         grammar: &'a Grammar,
         distribution: &'a Distribution,
         stack_rule_index: usize,
         settings: &'a lsys::Settings,
-        chromosome: Vec<G>,
+        chromosome: Vec<GenePrimitive>,
     ) -> Self {
         LsysPhenotype {
             grammar: grammar,
@@ -1142,7 +1142,7 @@ impl<'a, G: Gene> LsysPhenotype<'a, G> {
         }
     }
 
-    pub fn clone_with_chromosome(&self, chromosome: Vec<G>) -> Self {
+    pub fn clone_with_chromosome(&self, chromosome: Vec<GenePrimitive>) -> Self {
         LsysPhenotype::new(
             self.grammar,
             self.distribution,
@@ -1223,7 +1223,7 @@ impl<'a, G: Gene> LsysPhenotype<'a, G> {
     }
 }
 
-impl<'a, G: Gene + Clone> Phenotype<LsysFitness> for LsysPhenotype<'a, G> {
+impl<'a> Phenotype<LsysFitness> for LsysPhenotype<'a> {
     fn fitness(&self) -> LsysFitness {
         if let Some(ref fitness) = self.fitness.get() {
             *fitness
@@ -1252,7 +1252,7 @@ impl<'a, G: Gene + Clone> Phenotype<LsysFitness> for LsysPhenotype<'a, G> {
 
         let mutation_index = Range::new(0, self.chromosome.len()).ind_sample(&mut rand::thread_rng());
         self.chromosome[mutation_index] =
-            Range::new(G::min_value(), G::max_value()).ind_sample(&mut rng);
+            Range::new(GenePrimitive::min_value(), GenePrimitive::max_value()).ind_sample(&mut rng);
 
         self
     }
