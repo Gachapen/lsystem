@@ -916,25 +916,6 @@ fn evolve(
         Vec::new(),
     );
 
-    if settings.print {
-        println!(
-            "Generating initial population of {} individuals.",
-            settings.population_size
-        );
-    }
-
-    let population = (0..settings.population_size)
-        .map(|_| {
-            let seed = random_seed();
-            let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
-            base_phenotype.clone_with_chromosome(chromosome)
-        })
-        .collect();
-
-    if settings.print {
-        println!("Building simulator.");
-    }
-
     let stats_file = OpenOptions::new()
         .write(true)
         .create(true)
@@ -950,8 +931,33 @@ fn evolve(
             .expect("Could not write to stats file");
     }
 
+    let mut dumped_mid_distribution = false;
+
     let best = {
-        let rng = XorShiftRng::from_seed(random_seed());
+        let mut rng = XorShiftRng::from_seed(random_seed());
+
+        if settings.print {
+            println!(
+                "Generating initial population of {} individuals.",
+                settings.population_size
+            );
+        }
+
+        let population: Vec<_> = (0..settings.population_size)
+            .map(|_| {
+                let chromosome = generate_chromosome(&mut rng, CHROMOSOME_LEN);
+                base_phenotype.clone_with_chromosome(chromosome)
+            })
+            .collect();
+
+        if settings.dump {
+            println!("Dumping initial fitness distribution.");
+            write_fitness_distribution("ge-distribution-initial.csv", &population);
+        }
+
+        if settings.print {
+            println!("Building simulator.");
+        }
 
         let mut builder = Simulator::builder(population)
             .set_selector(Box::new(TournamentSelector::new(settings.tournament_size)))
@@ -1040,6 +1046,12 @@ fn evolve(
                         .max_by(|a, b| a.partial_cmp(b).unwrap())
                         .unwrap();
 
+                    if !dumped_mid_distribution && average >= 0.5 {
+                        println!("Dumping mid fitness distribution.");
+                        write_fitness_distribution("ge-distribution-mid.csv", population);
+                        dumped_mid_distribution = true;
+                    }
+
                     let stats_csv = format!("{},{},{}\n", iteration, average, best);
                     stats_writer
                         .write_all(stats_csv.as_bytes())
@@ -1055,6 +1067,12 @@ fn evolve(
         }
 
         simulator.run();
+
+        if settings.dump {
+            println!("Dumping final fitness distribution.");
+            write_fitness_distribution("ge-distribution-final.csv", &simulator.population);
+        }
+
         simulator.get().unwrap().clone()
     };
 
@@ -1081,6 +1099,16 @@ fn evolve(
     }
 
     best.fitness()
+}
+
+fn write_fitness_distribution<P: AsRef<Path>>(path: P, population: &[LsysPhenotype]) {
+    let file = File::create(path).unwrap();
+    let mut writer = csv::Writer::from_writer(BufWriter::new(file));
+    writer.write_record(&["fitness"]).unwrap();
+
+    for p in population {
+        writer.write_record(&[format!("{}", p.fitness().0)]).unwrap();
+    }
 }
 
 #[derive(PartialEq, PartialOrd, Clone, Copy, Debug)]
