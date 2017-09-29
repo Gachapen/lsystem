@@ -1247,15 +1247,14 @@ impl<'a, G: Gene + Clone> Phenotype<LsysFitness> for LsysPhenotype<'a, G> {
         self.clone_with_chromosome(chromosome)
     }
 
-    fn mutate(&self) -> Self {
+    fn mutate(mut self) -> Self {
         let mut rng = rand::thread_rng();
 
-        let mut chromosome = self.chromosome.clone();
-        let mutation_index = Range::new(0, chromosome.len()).ind_sample(&mut rand::thread_rng());
-        chromosome[mutation_index] =
+        let mutation_index = Range::new(0, self.chromosome.len()).ind_sample(&mut rand::thread_rng());
+        self.chromosome[mutation_index] =
             Range::new(G::min_value(), G::max_value()).ind_sample(&mut rng);
 
-        self.clone_with_chromosome(chromosome)
+        self
     }
 }
 

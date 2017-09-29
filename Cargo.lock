@@ -772,7 +772,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "rsgenetic"
 version = "1.7.3"
-source = "git+https://github.com/Gachapen/RsGenetic.git?branch=features#537047e718b0be1c383279b341a22cca6826e2f4"
+source = "git+https://github.com/Gachapen/RsGenetic.git?branch=features#76af23ad51dfff9f4d8521c293c0e1ff21512376"
 dependencies = [
  "rand 0.3.16 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
