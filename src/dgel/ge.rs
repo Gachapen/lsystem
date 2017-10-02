@@ -59,27 +59,27 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                         .short("p")
                         .long("population-size")
                         .takes_value(true)
-                        .default_value("500"),
+                        .default_value("800"),
                 )
                 .arg(
                     Arg::with_name("tournament-size")
                         .short("t")
                         .long("tournament-size")
                         .takes_value(true)
-                        .default_value("50"),
+                        .default_value("2"),
                 )
                 .arg(
                     Arg::with_name("duplication-rate")
                         .long("duplication-rate")
                         .takes_value(true)
-                        .default_value("0.1"),
+                        .default_value("0"),
                 )
                 .arg(
                     Arg::with_name("mutation-rate")
                         .short("m")
                         .long("mutation-rate")
                         .takes_value(true)
-                        .default_value("0.1"),
+                        .default_value("1.0"),
                 )
                 .arg(
                     Arg::with_name("crossover-rate")
@@ -92,7 +92,7 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                     Arg::with_name("max-generations")
                         .long("max-generations")
                         .takes_value(true)
-                        .default_value("60"),
+                        .default_value("200"),
                 )
                 .arg(
                     Arg::with_name("parallel")
@@ -100,7 +100,7 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                         .takes_value(true)
                         .default_value("0"),
                 )
-                .arg(Arg::with_name("no-prune").long("no-prune"))
+                .arg(Arg::with_name("prune").long("prune"))
                 .arg(Arg::with_name("no-print").long("no-print"))
                 .arg(Arg::with_name("no-dump").long("no-dump")),
         )
@@ -229,7 +229,7 @@ pub fn run_ge(matches: &ArgMatches) {
             .unwrap()
             .parse()
             .unwrap(),
-        prune: !matches.is_present("no-prune"),
+        prune: matches.is_present("prune"),
         print: !matches.is_present("no-print"),
         dump: !matches.is_present("no-dump"),
     };
@@ -1061,13 +1061,13 @@ struct Settings {
 impl Default for Settings {
     fn default() -> Settings {
         Settings {
-            population_size: 100,
-            max_iterations: 100,
-            tournament_size: 50,
-            duplication_rate: 0.1,
+            population_size: 800,
+            max_iterations: 200,
+            tournament_size: 2,
+            duplication_rate: 0.0,
             crossover_rate: 0.5,
-            mutation_rate: 0.1,
-            prune: true,
+            mutation_rate: 1.0,
+            prune: false,
             print: false,
             dump: false,
         }
