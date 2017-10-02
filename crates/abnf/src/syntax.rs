@@ -1,4 +1,5 @@
 use fnv::FnvHashMap;
+use std::fmt::{self, Display, Formatter};
 
 #[derive(Copy, Clone, Debug, PartialEq, Default)]
 pub struct Repeat {
@@ -33,6 +34,22 @@ impl Repeat {
             max: Some(max),
             ..Repeat::new()
         }
+    }
+}
+
+impl Display for Repeat {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        if let Some(min) = self.min {
+            write!(f, "{}", min)?;
+        }
+
+        write!(f, "*")?;
+
+        if let Some(max) = self.max {
+            write!(f, "{}", max)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -73,6 +90,12 @@ impl Symbol {
     }
 }
 
+impl Display for Symbol {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Content {
     Value(String),
@@ -81,10 +104,42 @@ pub enum Content {
     Group(List),
 }
 
+impl Display for Content {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match *self {
+            Content::Value(ref value) => write!(f, "\"{}\"", value),
+            Content::Symbol(ref symbol) => write!(f, "{}", symbol),
+            Content::Range(begin, end) => write!(f, "{}-{}", begin, end),
+            Content::Group(ref group) => write!(f, "({})", group),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum List {
     Sequence(Vec<Item>),
     Alternatives(Vec<Item>),
+}
+
+impl Display for List {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match *self {
+            List::Sequence(ref sequence) => {
+                for item in sequence.iter().take(sequence.len() - 1) {
+                    write!(f, "{} ", item)?;
+                }
+
+                write!(f, "{}", sequence.last().unwrap())
+            }
+            List::Alternatives(ref alternatives) => {
+                for item in alternatives.iter().take(alternatives.len() - 1) {
+                    write!(f, "{} / ", item)?;
+                }
+
+                write!(f, "{}", alternatives.last().unwrap())
+            }
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -106,6 +161,16 @@ impl Item {
             repeat: Some(repeat),
             ..Item::new(content)
         }
+    }
+}
+
+impl Display for Item {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        if let Some(repeat) = self.repeat {
+            write!(f, "{}", repeat)?;
+        }
+
+        write!(f, "{}", self.content)
     }
 }
 
@@ -215,5 +280,16 @@ impl Grammar {
         }
 
         grammar
+    }
+}
+
+impl Display for Grammar {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        for (index, rule) in self.rules.iter().enumerate() {
+            let name = &self.rule_names[&index];
+            writeln!(f, "{} = {}", name, rule)?;
+        }
+
+        Ok(())
     }
 }
