@@ -1469,6 +1469,17 @@ fn run_random(matches: &ArgMatches) {
 
     let saved_path = save_lsystem(&lsystem);
     println!("Saved lsystem to {}", saved_path.to_str().unwrap());
+
+    let csv_path = "scores.csv";
+    let csv_file = File::create(&csv_path).unwrap();
+    let mut csv_writer = csv::Writer::from_writer(BufWriter::new(csv_file));
+    csv_writer.write_record(&["score"]).unwrap();
+
+    for score in &scores {
+        csv_writer.write_record(&[format!("{}", score)]).unwrap();
+    }
+
+    println!("Saved csv to {}", csv_path);
 }
 
 fn run_bush_inferred() {
