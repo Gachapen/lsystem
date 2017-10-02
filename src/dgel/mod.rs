@@ -53,11 +53,31 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
         )
         .subcommand(SubCommand::with_name("random")
             .about("Randomly generate plant based on random genes and ABNF")
+            .arg(Arg::with_name("distribution")
+                .short("d")
+                .long("distribution")
+                .takes_value(true)
+                .help("Distribution file to use. Otherwise default distribution is used.")
+            )
+            .arg(Arg::with_name("grammar")
+                .short("g")
+                .long("grammar")
+                .takes_value(true)
+                .default_value("grammar/lsys2.abnf")
+                .help("Which ABNF grammar to use")
+            )
+            .arg(Arg::with_name("num-samples")
+                .short("n")
+                .long("num-samples")
+                .takes_value(true)
+                .default_value("64")
+                .help("Number of samples to generate")
+            )
         )
         .subcommand(SubCommand::with_name("inferred")
             .about("Run program that infers the genes of an L-system")
         )
-        .subcommand(SubCommand::with_name("distribution")
+        .subcommand(SubCommand::with_name("visualized")
             .about("Generate plants based on a predefined distribution")
             .arg(Arg::with_name("distribution")
                 .short("d")
@@ -311,12 +331,12 @@ pub fn run_dgel(matches: &ArgMatches) {
 
     if matches.subcommand_matches("abnf").is_some() {
         run_print_abnf();
-    } else if matches.subcommand_matches("random").is_some() {
-        run_random_genes();
+    } else if let Some(matches) = matches.subcommand_matches("random") {
+        run_random(matches);
     } else if matches.subcommand_matches("inferred").is_some() {
         run_bush_inferred();
-    } else if let Some(matches) = matches.subcommand_matches("distribution") {
-        run_with_distribution(matches);
+    } else if let Some(matches) = matches.subcommand_matches("visualized") {
+        run_visualized(matches);
     } else if let Some(matches) = matches.subcommand_matches("sampling") {
         run_random_sampling(matches);
     } else if let Some(matches) = matches.subcommand_matches("sampling-dist") {
@@ -377,7 +397,7 @@ fn random_seed() -> [u32; 4] {
     ]
 }
 
-fn run_with_distribution(matches: &ArgMatches) {
+fn run_visualized(matches: &ArgMatches) {
     let (mut window, _) = setup_window();
 
     let (grammar, distribution, settings, _) = get_sample_setup(matches.value_of("grammar").unwrap());
@@ -1324,42 +1344,131 @@ fn run_print_abnf() {
     println!("{:#?}", lsys_abnf);
 }
 
-fn run_random_genes() {
-    let (mut window, _) = setup_window();
+fn run_random(matches: &ArgMatches) {
+    let (grammar, distribution, settings, stack_rule_index) =
+        get_sample_setup(matches.value_of("grammar").unwrap());
+    let grammar = Arc::new(grammar);
 
-    let lsys_abnf = abnf::parse_file("grammar/lsys.abnf").expect("Could not parse ABNF file");
-    let chromosome = generate_chromosome(&mut rand::thread_rng(), 100);
-    let mut genotype = ChromosmeStrategy::new(&chromosome);
-
-    println!("Genes: {:?}", chromosome);
-    println!("");
-
-    let settings = get_sample_settings();
-
-    let mut system = ol::LSystem {
-        axiom: expand_grammar(&lsys_abnf, "axiom", &mut genotype),
-        productions: expand_productions(&lsys_abnf, &mut genotype),
+    let distribution = match matches.value_of("distribution") {
+        Some(filename) => {
+            println!("Using distribution from {}", filename);
+            let file = File::open(filename).unwrap();
+            let d: Distribution =
+                bincode::deserialize_from(&mut BufReader::new(file), bincode::Infinite).unwrap();
+            Arc::new(d)
+        }
+        None => Arc::new(distribution),
     };
 
-    system.remove_redundancy();
+    println!("Grammar:");
+    println!("{}", grammar);
 
-    println!("LSystem:");
-    println!("{}", system);
+    println!("Distribution:");
+    println!("{}", distribution);
 
-    let instructions = system.instructions_iter(settings.iterations, &settings.command_map);
+    let num_samples = usize::from_str_radix(matches.value_of("num-samples").unwrap(), 10).unwrap();
 
-    let mut model = lsys3d::build_model(instructions, &settings);
-    window.scene_mut().add_child(model.clone());
-
-    let mut camera = {
-        let eye = Point3::new(0.0, 0.0, 5.0);
-        let at = Point3::new(0.0, 1.0, 0.0);
-        ArcBall::new(eye, at)
-    };
-
-    while window.render_with_camera(&mut camera) {
-        model.append_rotation(&UnitQuaternion::from_euler_angles(0.0f32, 0.004, 0.0));
+    struct Sample {
+        score: f32,
+        seed: [u32; 4],
     }
+
+    fn generate_sample(
+        grammar: &abnf::Grammar,
+        distribution: &Distribution,
+        settings: &lsys::Settings,
+    ) -> Sample {
+        let seed = random_seed();
+        let chromosome =
+            generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
+
+        let system = generate_system(
+            grammar,
+            &mut WeightedChromosmeStrategy::new(
+                &chromosome,
+                distribution,
+                grammar.symbol_index("stack").unwrap(),
+            ),
+        );
+
+        let (fit, _) = fitness::evaluate(&system, settings);
+
+        Sample {
+            score: fit.score(),
+            seed: seed,
+        }
+    }
+
+    let settings = Arc::new(settings);
+
+    println!("Generating {} samples...", num_samples);
+    let start_time = Instant::now();
+
+    let mut samples = {
+        let workers = num_cpus::get() + 1;
+
+        if workers == 1 || num_samples <= 1 {
+            (0..num_samples)
+                .map(|_| generate_sample(&grammar, &distribution, &settings))
+                .collect::<Vec<_>>()
+        } else {
+            let pool = CpuPool::new(workers);
+            let mut tasks = Vec::with_capacity(num_samples);
+
+            for _ in 0..num_samples {
+                let distribution = Arc::clone(&distribution);
+                let grammar = Arc::clone(&grammar);
+                let settings = Arc::clone(&settings);
+
+                tasks.push(pool.spawn_fn(move || {
+                    let sample = generate_sample(&grammar, &distribution, &settings);
+                    future::ok::<Sample, ()>(sample)
+                }));
+            }
+
+            future::join_all(tasks).wait().unwrap()
+        }
+    };
+
+    let end_time = Instant::now();
+    let duration = end_time - start_time;
+    println!(
+        "Duration: {}.{}",
+        duration.as_secs(),
+        duration.subsec_nanos()
+    );
+
+    samples.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
+    let scores: Vec<_> = samples.iter().map(|s| s.score).collect();
+
+    let best = scores.last().unwrap();
+    let worst = scores.first().unwrap();
+    let mean = mean(&scores);
+    let variance = unbiased_sample_variance(&scores, mean);
+    let sd = variance.sqrt();
+
+    println!("Best: {}", best);
+    println!("Worst: {}", worst);
+    println!("x̄: {}", mean);
+    println!("s²: {}", variance);
+    println!("s: {}", sd);
+
+    let best_seed = samples.last().unwrap().seed;
+    let chromosome = generate_chromosome(
+        &mut XorShiftRng::from_seed(best_seed),
+        CHROMOSOME_LEN,
+    );
+    let lsystem = generate_system(
+        &grammar,
+        &mut WeightedChromosmeStrategy::new(
+            &chromosome,
+            &distribution,
+            stack_rule_index,
+        ),
+    );
+
+    let saved_path = save_lsystem(&lsystem);
+    println!("Saved lsystem to {}", saved_path.to_str().unwrap());
 }
 
 fn run_bush_inferred() {
@@ -2915,6 +3024,20 @@ fn run_benchmark(_: &ArgMatches) {
     }
 
     PROFILER.lock().unwrap().stop().unwrap();
+}
+
+/// Save an `ol::LSystem` to the "model" directory with the current date time as the filename.
+pub fn save_lsystem(lsystem: &ol::LSystem) -> PathBuf {
+    let model_dir = Path::new("model");
+    fs::create_dir_all(model_dir).unwrap();
+
+    let filename = format!("{}.yaml", Local::now().to_rfc3339());
+    let path = model_dir.join(filename);
+
+    let file = File::create(&path).unwrap();
+    serde_yaml::to_writer(&mut BufWriter::new(file), lsystem).unwrap();
+
+    path
 }
 
 #[cfg(test)]
