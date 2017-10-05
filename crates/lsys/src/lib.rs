@@ -2,6 +2,7 @@ extern crate serde;
 
 #[macro_use]
 extern crate serde_derive;
+extern crate nalgebra as na;
 
 pub mod common;
 pub mod ol;

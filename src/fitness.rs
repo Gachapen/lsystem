@@ -1,13 +1,14 @@
 use std::f32;
-use std::f32::consts::{FRAC_PI_2, PI};
+use std::f32::consts::{PI};
 use std::fmt;
 
-use na::{self, Point2, Point3, Rotation3, Translation3, Unit, UnitQuaternion, Vector2, Vector3};
+use na::{self, Point2, Point3, Translation3, Unit, UnitQuaternion, Vector2};
 use ncu;
 use kiss3d::scene::SceneNode;
 use yobun::partial_clamp;
 
-use lsys::{self, ol, Command};
+use lsys::{self, ol};
+use lsys::ol::Skeleton;
 use yobun::*;
 
 pub fn is_nothing(lsystem: &ol::LSystem) -> bool {
@@ -39,169 +40,6 @@ pub fn is_nothing(lsystem: &ol::LSystem) -> bool {
     }
 
     true
-}
-
-#[derive(Debug)]
-pub struct Skeleton {
-    pub points: Vec<Point3<f32>>,
-    pub edges: Vec<Vec<usize>>,
-}
-
-impl Skeleton {
-    pub fn new() -> Skeleton {
-        Skeleton {
-            points: Vec::new(),
-            edges: Vec::new(),
-        }
-    }
-}
-
-pub fn build_skeleton(
-    instructions: ol::InstructionsIter,
-    settings: &lsys::Settings,
-    size_limit: usize,
-    instruction_limit: usize,
-) -> Option<Skeleton> {
-    let segment_length = settings.step;
-
-    let mut skeleton = Skeleton::new();
-    skeleton.points.push(Point3::new(0.0, 0.0, 0.0));
-
-    let mut position = Point3::new(0.0, 0.0, 0.0);
-    let mut rotation = UnitQuaternion::from_euler_angles(FRAC_PI_2, 0.0, 0.0);
-    let mut parent = 0usize;
-    let mut filling = false;
-
-    let mut states = Vec::<(Point3<f32>, UnitQuaternion<f32>, usize)>::new();
-
-    for (iteration, instruction) in instructions.enumerate() {
-        if skeleton.points.len() > size_limit || iteration >= instruction_limit {
-            return None;
-        }
-
-        let command = instruction.command;
-        match command {
-            Command::Forward => {
-                let segment_length = {
-                    if let Some(ref args) = instruction.args {
-                        args[0]
-                    } else {
-                        segment_length
-                    }
-                };
-
-                if !filling {
-                    let direction = rotation * Vector3::new(0.0, 0.0, -1.0);
-                    position += direction * segment_length;
-
-                    let index = skeleton.points.len();
-                    skeleton.points.push(position);
-                    skeleton.edges.push(Vec::new());
-
-                    skeleton.edges[parent].push(index);
-                    parent = index;
-                }
-            }
-            Command::YawRight => {
-                let angle = {
-                    if let Some(ref args) = instruction.args {
-                        args[0]
-                    } else {
-                        settings.angle
-                    }
-                };
-                rotation *= Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * -angle);
-            }
-            Command::YawLeft => {
-                let angle = {
-                    if let Some(ref args) = instruction.args {
-                        args[0]
-                    } else {
-                        settings.angle
-                    }
-                };
-                rotation *= Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * angle);
-            }
-            Command::UTurn => {
-                let angle = PI;
-                rotation *= Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * angle);
-            }
-            Command::PitchUp => {
-                let angle = {
-                    if let Some(ref args) = instruction.args {
-                        args[0]
-                    } else {
-                        settings.angle
-                    }
-                };
-                rotation *= Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * angle);
-            }
-            Command::PitchDown => {
-                let angle = {
-                    if let Some(ref args) = instruction.args {
-                        args[0]
-                    } else {
-                        settings.angle
-                    }
-                };
-                rotation *= Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * -angle);
-            }
-            Command::RollRight => {
-                let angle = {
-                    if let Some(ref args) = instruction.args {
-                        args[0]
-                    } else {
-                        settings.angle
-                    }
-                };
-                rotation *= Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * -angle);
-            }
-            Command::RollLeft => {
-                let angle = {
-                    if let Some(ref args) = instruction.args {
-                        args[0]
-                    } else {
-                        settings.angle
-                    }
-                };
-                rotation *= Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * angle);
-            }
-            Command::Shrink |
-            Command::Grow |
-            Command::Width |
-            Command::NextColor |
-            Command::Noop => {}
-            Command::Push => {
-                states.push((position, rotation, parent));
-            }
-            Command::Pop => {
-                if let Some((stored_position, stored_rotation, stored_parent)) = states.pop() {
-                    position = stored_position;
-                    rotation = stored_rotation;
-                    parent = stored_parent;
-                } else {
-                    panic!("Tried to pop empty state stack");
-                }
-            }
-            Command::BeginSurface => {
-                filling = true;
-                states.push((position, rotation, parent));
-            }
-            Command::EndSurface => {
-                if let Some((stored_position, stored_rotation, stored_parent)) = states.pop() {
-                    position = stored_position;
-                    rotation = stored_rotation;
-                    parent = stored_parent;
-                } else {
-                    panic!("Tried to pop empty state stack");
-                }
-
-                filling = false;
-            }
-        };
-    }
-
-    Some(skeleton)
 }
 
 #[derive(Debug)]
@@ -239,11 +77,11 @@ pub fn is_crap(lsystem: &ol::LSystem, settings: &lsys::Settings) -> bool {
     }
 
     let instruction_iter = lsystem.instructions_iter(settings.iterations, &settings.command_map);
-    let skeleton = build_skeleton(
+    let skeleton = Skeleton::build_with_limits(
         instruction_iter,
         settings,
-        SKELETON_LIMIT,
-        INSTRUCTION_LIMIT,
+        Some(SKELETON_LIMIT),
+        Some(INSTRUCTION_LIMIT),
     );
     if let Some(skeleton) = skeleton {
         if skeleton.points.len() <= 1 {
@@ -331,11 +169,11 @@ pub fn evaluate(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (Fitness, O
     }
 
     let instruction_iter = lsystem.instructions_iter(settings.iterations, &settings.command_map);
-    let skeleton = build_skeleton(
+    let skeleton = Skeleton::build_with_limits(
         instruction_iter,
         settings,
-        SKELETON_LIMIT,
-        INSTRUCTION_LIMIT,
+        Some(SKELETON_LIMIT),
+        Some(INSTRUCTION_LIMIT),
     );
 
     if let Some(skeleton) = skeleton {

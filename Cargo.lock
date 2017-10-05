@@ -442,6 +442,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "lsys"
 version = "0.1.0"
 dependencies = [
+ "nalgebra 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

@@ -1,14 +1,13 @@
 use std::{fmt, mem, ptr, slice};
 use std::ops::{Index, IndexMut};
+use std::f32::consts::{FRAC_PI_2, PI};
 
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde::ser::SerializeMap;
+use na::{Point3, Rotation3, UnitQuaternion, Vector3};
 
-use common::Instruction;
-use common::CommandMap;
-use common::map_word_to_instructions;
-use common::MAX_ALPHABET_SIZE;
-use common::Rewriter;
+use common::{Instruction, CommandMap, map_word_to_instructions, MAX_ALPHABET_SIZE, Rewriter,
+             Settings, Command};
 
 #[derive(Clone)]
 pub struct RuleMap([String; MAX_ALPHABET_SIZE]);
@@ -307,6 +306,198 @@ impl<'a, 'b> Iterator for InstructionsIter<'a, 'b> {
         } else {
             None
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct Skeleton {
+    pub points: Vec<Point3<f32>>,
+    pub edges: Vec<Vec<usize>>,
+}
+
+impl Skeleton {
+    pub fn build_with_limits(
+        instructions: InstructionsIter,
+        settings: &Settings,
+        size_limit: Option<usize>,
+        instruction_limit: Option<usize>,
+    ) -> Option<Skeleton> {
+        let segment_length = settings.step;
+
+        let mut points = Vec::new();
+        points.push(Point3::new(0.0, 0.0, 0.0));
+
+        let mut edges = Vec::new();
+
+        let mut position = Point3::new(0.0, 0.0, 0.0);
+        let mut rotation = UnitQuaternion::from_euler_angles(FRAC_PI_2, 0.0, 0.0);
+        let mut parent = 0usize;
+        let mut filling = false;
+
+        let mut states = Vec::<(Point3<f32>, UnitQuaternion<f32>, usize)>::new();
+
+        for (iteration, instruction) in instructions.enumerate() {
+            if let Some(size_limit) = size_limit {
+                if points.len() > size_limit {
+                    return None;
+                }
+            }
+
+            if let Some(instruction_limit) = instruction_limit {
+                if iteration >= instruction_limit {
+                    return None;
+                }
+            }
+
+            let command = instruction.command;
+            match command {
+                Command::Forward => {
+                    let segment_length = {
+                        if let Some(ref args) = instruction.args {
+                            args[0]
+                        } else {
+                            segment_length
+                        }
+                    };
+
+                    if !filling {
+                        let direction = rotation * Vector3::new(0.0, 0.0, -1.0);
+                        position += direction * segment_length;
+
+                        let index = points.len();
+                        points.push(position);
+                        edges.push(Vec::new());
+
+                        edges[parent].push(index);
+                        parent = index;
+                    }
+                }
+                Command::YawRight => {
+                    let angle = {
+                        if let Some(ref args) = instruction.args {
+                            args[0]
+                        } else {
+                            settings.angle
+                        }
+                    };
+                    rotation *= Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * -angle);
+                }
+                Command::YawLeft => {
+                    let angle = {
+                        if let Some(ref args) = instruction.args {
+                            args[0]
+                        } else {
+                            settings.angle
+                        }
+                    };
+                    rotation *= Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * angle);
+                }
+                Command::UTurn => {
+                    let angle = PI;
+                    rotation *= Rotation3::new(Vector3::new(0.0, 1.0, 0.0) * angle);
+                }
+                Command::PitchUp => {
+                    let angle = {
+                        if let Some(ref args) = instruction.args {
+                            args[0]
+                        } else {
+                            settings.angle
+                        }
+                    };
+                    rotation *= Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * angle);
+                }
+                Command::PitchDown => {
+                    let angle = {
+                        if let Some(ref args) = instruction.args {
+                            args[0]
+                        } else {
+                            settings.angle
+                        }
+                    };
+                    rotation *= Rotation3::new(Vector3::new(1.0, 0.0, 0.0) * -angle);
+                }
+                Command::RollRight => {
+                    let angle = {
+                        if let Some(ref args) = instruction.args {
+                            args[0]
+                        } else {
+                            settings.angle
+                        }
+                    };
+                    rotation *= Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * -angle);
+                }
+                Command::RollLeft => {
+                    let angle = {
+                        if let Some(ref args) = instruction.args {
+                            args[0]
+                        } else {
+                            settings.angle
+                        }
+                    };
+                    rotation *= Rotation3::new(Vector3::new(0.0, 0.0, 1.0) * angle);
+                }
+                Command::Shrink |
+                Command::Grow |
+                Command::Width |
+                Command::NextColor |
+                Command::Noop => {}
+                Command::Push => {
+                    states.push((position, rotation, parent));
+                }
+                Command::Pop => {
+                    if let Some((stored_position, stored_rotation, stored_parent)) = states.pop() {
+                        position = stored_position;
+                        rotation = stored_rotation;
+                        parent = stored_parent;
+                    } else {
+                        panic!("Tried to pop empty state stack");
+                    }
+                }
+                Command::BeginSurface => {
+                    filling = true;
+                    states.push((position, rotation, parent));
+                }
+                Command::EndSurface => {
+                    if let Some((stored_position, stored_rotation, stored_parent)) = states.pop() {
+                        position = stored_position;
+                        rotation = stored_rotation;
+                        parent = stored_parent;
+                    } else {
+                        panic!("Tried to pop empty state stack");
+                    }
+
+                    filling = false;
+                }
+            };
+        }
+
+        Some(Skeleton {
+            points: points,
+            edges: edges,
+        })
+    }
+
+    pub fn build_unlimited(
+        instructions: InstructionsIter,
+        settings: &Settings,
+    ) -> Skeleton {
+        // Safe to unwrap because we set no limits.
+        Self::build_with_limits(instructions, settings, None, None).unwrap()
+    }
+
+
+    pub fn build(
+        instructions: InstructionsIter,
+        settings: &Settings,
+    ) -> Option<Skeleton> {
+        const DEFAULT_SKELETON_LIMIT: usize = 10_000;
+        const DEFAULT_INSTRUCTION_LIMIT: usize = DEFAULT_SKELETON_LIMIT * 50;
+        Self::build_with_limits(
+            instructions,
+            settings,
+            Some(DEFAULT_SKELETON_LIMIT),
+            Some(DEFAULT_INSTRUCTION_LIMIT)
+        )
     }
 }
 
