@@ -312,7 +312,8 @@ impl<'a, 'b> Iterator for InstructionsIter<'a, 'b> {
 #[derive(Debug)]
 pub struct Skeleton {
     pub points: Vec<Point3<f32>>,
-    pub edges: Vec<Vec<usize>>,
+    pub children_map: Vec<Vec<usize>>,
+    pub parent_map: Vec<usize>,
 }
 
 impl Skeleton {
@@ -324,10 +325,9 @@ impl Skeleton {
     ) -> Option<Skeleton> {
         let segment_length = settings.step;
 
-        let mut points = Vec::new();
-        points.push(Point3::new(0.0, 0.0, 0.0));
-
+        let mut points = vec![Point3::new(0.0, 0.0, 0.0)];
         let mut edges = Vec::new();
+        let mut parent_map = vec![0];
 
         let mut position = Point3::new(0.0, 0.0, 0.0);
         let mut rotation = UnitQuaternion::from_euler_angles(FRAC_PI_2, 0.0, 0.0);
@@ -349,8 +349,7 @@ impl Skeleton {
                 }
             }
 
-            let command = instruction.command;
-            match command {
+            match instruction.command {
                 Command::Forward => {
                     let segment_length = {
                         if let Some(ref args) = instruction.args {
@@ -369,6 +368,7 @@ impl Skeleton {
                         edges.push(Vec::new());
 
                         edges[parent].push(index);
+                        parent_map.push(parent);
                         parent = index;
                     }
                 }
@@ -473,31 +473,36 @@ impl Skeleton {
 
         Some(Skeleton {
             points: points,
-            edges: edges,
+            children_map: edges,
+            parent_map: parent_map,
         })
     }
 
-    pub fn build_unlimited(
-        instructions: InstructionsIter,
-        settings: &Settings,
-    ) -> Skeleton {
+    pub fn build_unlimited(instructions: InstructionsIter, settings: &Settings) -> Skeleton {
         // Safe to unwrap because we set no limits.
         Self::build_with_limits(instructions, settings, None, None).unwrap()
     }
 
 
-    pub fn build(
-        instructions: InstructionsIter,
-        settings: &Settings,
-    ) -> Option<Skeleton> {
+    pub fn build(instructions: InstructionsIter, settings: &Settings) -> Option<Skeleton> {
         const DEFAULT_SKELETON_LIMIT: usize = 10_000;
         const DEFAULT_INSTRUCTION_LIMIT: usize = DEFAULT_SKELETON_LIMIT * 50;
         Self::build_with_limits(
             instructions,
             settings,
             Some(DEFAULT_SKELETON_LIMIT),
-            Some(DEFAULT_INSTRUCTION_LIMIT)
+            Some(DEFAULT_INSTRUCTION_LIMIT),
         )
+    }
+
+    pub fn find_leaves(&self) -> Vec<usize> {
+        self.children_map.iter().enumerate().filter_map(|(parent, children)| {
+            if children.is_empty() {
+                Some(parent)
+            } else {
+                None
+            }
+        }).collect()
     }
 }
 
