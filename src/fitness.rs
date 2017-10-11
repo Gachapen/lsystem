@@ -8,7 +8,7 @@ use kiss3d::scene::SceneNode;
 use yobun::partial_clamp;
 
 use lsys::{self, ol};
-use lsys::ol::Skeleton;
+use lsys::{Skeleton, SkeletonBuilder};
 use yobun::*;
 
 pub fn is_nothing(lsystem: &ol::LSystem) -> bool {
@@ -77,8 +77,7 @@ pub fn is_crap(lsystem: &ol::LSystem, settings: &lsys::Settings) -> bool {
     }
 
     let instruction_iter = lsystem.instructions_iter(settings.iterations, &settings.command_map);
-    let skeleton = Skeleton::build_with_limits(
-        instruction_iter,
+    let skeleton = instruction_iter.build_skeleton_with_limits(
         settings,
         Some(SKELETON_LIMIT),
         Some(INSTRUCTION_LIMIT),
@@ -169,8 +168,7 @@ pub fn evaluate(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (Fitness, O
     }
 
     let instruction_iter = lsystem.instructions_iter(settings.iterations, &settings.command_map);
-    let skeleton = Skeleton::build_with_limits(
-        instruction_iter,
+    let skeleton = instruction_iter.build_skeleton_with_limits(
         settings,
         Some(SKELETON_LIMIT),
         Some(INSTRUCTION_LIMIT),
@@ -299,11 +297,11 @@ fn evaluate_closeness(skeleton: &Skeleton) -> f32 {
         .iter()
         .enumerate()
         .map(|(i, p)| {
-            if i >= skeleton.edges.len() {
+            if i >= skeleton.children_map.len() {
                 return 0.0;
             }
 
-            let edges = skeleton.edges[i].iter().map(|e| skeleton.points[*e]);
+            let edges = skeleton.children_map[i].iter().map(|e| skeleton.points[*e]);
 
             let segments: Vec<_> = edges.map(|e| (e - p).normalize()).collect();
             let closeness = segments
@@ -350,15 +348,15 @@ fn branching_complexity(skeleton: &Skeleton) -> f32 {
         .enumerate()
         .skip(1)
         .filter_map(|(i, _)| {
-            if i >= skeleton.edges.len() {
+            if i >= skeleton.children_map.len() {
                 return None;
             }
 
-            if skeleton.edges[i].is_empty() {
+            if skeleton.children_map[i].is_empty() {
                 return None;
             }
 
-            Some(skeleton.edges[i].len())
+            Some(skeleton.children_map[i].len())
         })
         .collect::<Vec<_>>();
 

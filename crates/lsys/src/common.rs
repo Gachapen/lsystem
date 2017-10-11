@@ -2,6 +2,7 @@ use std::{fmt, slice};
 use std::ops::{Index, IndexMut};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde::ser::SerializeMap;
+use na::Point3;
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum Command {
@@ -244,4 +245,50 @@ impl Default for Settings {
 
 pub trait Rewriter {
     fn instructions(&self, iterations: u32, command_map: &CommandMap) -> Vec<Instruction>;
+}
+
+#[derive(Debug, Clone)]
+pub struct Skeleton {
+    pub points: Vec<Point3<f32>>,
+    pub children_map: Vec<Vec<usize>>,
+    pub parent_map: Vec<usize>,
+}
+
+impl Skeleton {
+    pub fn find_leaves(&self) -> Vec<usize> {
+        self.children_map
+            .iter()
+            .enumerate()
+            .filter_map(|(parent, children)| if children.is_empty() {
+                Some(parent)
+            } else {
+                None
+            })
+            .collect()
+    }
+}
+
+pub trait SkeletonBuilder: Sized {
+    const DEFAULT_POINT_LIMIT: usize;
+    const DEFAULT_INSTRUCTION_LIMIT: usize;
+
+    fn build_skeleton_with_limits(
+        self,
+        settings: &Settings,
+        size_limit: Option<usize>,
+        instruction_limit: Option<usize>,
+    ) -> Option<Skeleton>;
+
+    fn build_skeleton(self, settings: &Settings) -> Option<Skeleton> {
+        Self::build_skeleton_with_limits(
+            self,
+            settings,
+            Some(Self::DEFAULT_POINT_LIMIT),
+            Some(Self::DEFAULT_INSTRUCTION_LIMIT),
+        )
+    }
+
+    fn build_skeleton_unlimited(self, settings: &Settings) -> Skeleton {
+        Self::build_skeleton_with_limits(self, settings, None, None).unwrap()
+    }
 }

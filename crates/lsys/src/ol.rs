@@ -1,13 +1,15 @@
 use std::{fmt, mem, ptr, slice};
 use std::ops::{Index, IndexMut};
 use std::f32::consts::{FRAC_PI_2, PI};
+use std::borrow::Borrow;
+use std::iter::FromIterator;
 
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde::ser::SerializeMap;
 use na::{Point3, Rotation3, UnitQuaternion, Vector3};
 
-use common::{Instruction, CommandMap, map_word_to_instructions, MAX_ALPHABET_SIZE, Rewriter,
-             Settings, Command};
+use common::{map_word_to_instructions, Command, CommandMap, Instruction, Rewriter, Settings,
+             Skeleton, SkeletonBuilder, MAX_ALPHABET_SIZE};
 
 #[derive(Clone)]
 pub struct RuleMap([String; MAX_ALPHABET_SIZE]);
@@ -156,6 +158,19 @@ impl<'de> de::Visitor<'de> for RuleMapVisitor {
         E: de::Error,
     {
         Ok(RuleMap::new())
+    }
+}
+
+impl FromIterator<(char, &'static str)> for RuleMap {
+    fn from_iter<T>(iter: T) -> RuleMap
+    where
+        T: IntoIterator<Item = (char, &'static str)>,
+    {
+        let mut map = RuleMap::new();
+        for (predecessor, successor) in iter {
+            map.0[predecessor as u8 as usize] = successor.to_owned();
+        }
+        map
     }
 }
 
@@ -309,16 +324,12 @@ impl<'a, 'b> Iterator for InstructionsIter<'a, 'b> {
     }
 }
 
-#[derive(Debug)]
-pub struct Skeleton {
-    pub points: Vec<Point3<f32>>,
-    pub children_map: Vec<Vec<usize>>,
-    pub parent_map: Vec<usize>,
-}
+impl<'a, 'b> SkeletonBuilder for InstructionsIter<'a, 'b> {
+    const DEFAULT_POINT_LIMIT: usize = 10_000;
+    const DEFAULT_INSTRUCTION_LIMIT: usize = Self::DEFAULT_POINT_LIMIT * 50;
 
-impl Skeleton {
-    pub fn build_with_limits(
-        instructions: InstructionsIter,
+    fn build_skeleton_with_limits(
+        self,
         settings: &Settings,
         size_limit: Option<usize>,
         instruction_limit: Option<usize>,
@@ -326,7 +337,7 @@ impl Skeleton {
         let segment_length = settings.step;
 
         let mut points = vec![Point3::new(0.0, 0.0, 0.0)];
-        let mut edges = Vec::new();
+        let mut edges = vec![Vec::new()];
         let mut parent_map = vec![0];
 
         let mut position = Point3::new(0.0, 0.0, 0.0);
@@ -336,7 +347,7 @@ impl Skeleton {
 
         let mut states = Vec::<(Point3<f32>, UnitQuaternion<f32>, usize)>::new();
 
-        for (iteration, instruction) in instructions.enumerate() {
+        for (iteration, instruction) in self.enumerate() {
             if let Some(size_limit) = size_limit {
                 if points.len() > size_limit {
                     return None;
@@ -348,6 +359,8 @@ impl Skeleton {
                     return None;
                 }
             }
+
+            let instruction = instruction.borrow();
 
             match instruction.command {
                 Command::Forward => {
@@ -476,33 +489,6 @@ impl Skeleton {
             children_map: edges,
             parent_map: parent_map,
         })
-    }
-
-    pub fn build_unlimited(instructions: InstructionsIter, settings: &Settings) -> Skeleton {
-        // Safe to unwrap because we set no limits.
-        Self::build_with_limits(instructions, settings, None, None).unwrap()
-    }
-
-
-    pub fn build(instructions: InstructionsIter, settings: &Settings) -> Option<Skeleton> {
-        const DEFAULT_SKELETON_LIMIT: usize = 10_000;
-        const DEFAULT_INSTRUCTION_LIMIT: usize = DEFAULT_SKELETON_LIMIT * 50;
-        Self::build_with_limits(
-            instructions,
-            settings,
-            Some(DEFAULT_SKELETON_LIMIT),
-            Some(DEFAULT_INSTRUCTION_LIMIT),
-        )
-    }
-
-    pub fn find_leaves(&self) -> Vec<usize> {
-        self.children_map.iter().enumerate().filter_map(|(parent, children)| {
-            if children.is_empty() {
-                Some(parent)
-            } else {
-                None
-            }
-        }).collect()
     }
 }
 
