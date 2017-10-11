@@ -1,20 +1,23 @@
 extern crate kiss3d;
 extern crate nalgebra as na;
 extern crate ncollide_transformation as nct;
+extern crate rand;
 extern crate time;
 
 extern crate lsys;
 
 use std::f32::consts::{FRAC_PI_2, PI};
 use std::borrow::Borrow;
+use std::collections::HashMap;
 
 use na::{Isometry3, Point3, Rotation3, Translation3, UnitQuaternion, Vector3};
 use kiss3d::scene::SceneNode;
 use kiss3d::window::Window;
 use kiss3d::camera::Camera;
+use rand::{SeedableRng, XorShiftRng};
+use rand::distributions::{IndependentSample, Range};
 
-use lsys::Command;
-use lsys::param;
+use lsys::{param, Command, SkeletonBuilder};
 
 pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
 where
@@ -232,6 +235,144 @@ where
             }
             Command::Noop => {}
         };
+    }
+
+    model
+}
+
+pub fn build_heuristic_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
+where
+    I: IntoIterator,
+    I::IntoIter: Iterator + SkeletonBuilder,
+    I::Item: Borrow<lsys::Instruction>,
+{
+    fn segment_orientation(from: Point3<f32>, to: Point3<f32>) -> UnitQuaternion<f32> {
+        let direction = na::normalize(&(to - from));
+        UnitQuaternion::rotation_between(
+            &Vector3::new(0.0, 0.0, -1.0),
+            &Vector3::new(direction.x, direction.y, direction.z),
+        ).unwrap()
+    }
+
+    fn add_segment(
+        model: &mut SceneNode,
+        at: Point3<f32>,
+        orientation: UnitQuaternion<f32>,
+        length: f32,
+        width: f32,
+    ) {
+        // let width = (1.0 + width * 0.25).log10() / 10.0;
+        let width = 0.002 + width * 0.002;
+        let mut segment = model.add_cube(1.0 * width, 1.0 * width, length);
+        segment.append_translation(&Translation3::from_vector(
+            Vector3::new(0.0, 0.0, -length / 2.0),
+        ));
+
+        segment.append_transformation(&Isometry3::from_parts(
+            Translation3::new(at.x, at.y, at.z),
+            orientation,
+        ));
+
+        segment.set_color(0.757, 0.604, 0.420);
+    }
+
+    // This points are the result of the "['{+f-f-f+|+f-f}]" grammar
+    let leaf_points = vec![
+        Point3::new(0.0, 0.0, 0.0),
+        Point3::new(0.07653669, -0.1847759, 0.0),
+        Point3::new(0.07653669, -0.3847759, 0.0),
+        Point3::new(0.0, -0.5695518, 0.0),
+        Point3::new(-0.07653669, -0.3847759, 0.0),
+        Point3::new(-0.07653669, -0.1847759, 0.0),
+    ];
+    let leaf_mesh = nct::triangulate(&leaf_points);
+    let mut rng = XorShiftRng::from_seed([2170436650, 448509823, 3575179593, 3066426285]);
+    let angle_range = Range::new(-PI, PI);
+
+    let mut add_leaf =
+        |model: &mut SceneNode, at: Point3<f32>, orientation: UnitQuaternion<f32>, width: f32| {
+            let width = (width * 5.0).log10() / 3.0;
+            let scale = Vector3::new(width, width, width);
+
+            let pitch = angle_range.ind_sample(&mut rng) * 0.05;
+            let pitch_rotation = UnitQuaternion::from_euler_angles(pitch, 0.0, 0.0);
+
+            let yaw = angle_range.ind_sample(&mut rng);
+            let yaw_rotation = UnitQuaternion::from_euler_angles(0.0, 0.0, yaw);
+
+            let rotation = orientation * yaw_rotation * pitch_rotation;
+
+            let mut node = model.add_trimesh(leaf_mesh.clone(), scale);
+            node.enable_backface_culling(false);
+            node.append_transformation(&Isometry3::from_parts(
+                Translation3::new(at.x, at.y, at.z),
+                rotation,
+            ));
+            node.set_color(0.3, 1.0, 0.2);
+        };
+
+    const STARTING_WIDTH: f32 = 1.0;
+    const WIDTH_INCR: f32 = 1.0;
+    const LEAF_WIDTH_LIMIT: f32 = 20.0;
+
+    let skeleton = match instructions.into_iter().build_skeleton(settings) {
+        None => return SceneNode::new_empty(),
+        Some(skeleton) => skeleton,
+    };
+    let leaves = skeleton.find_leaves();
+
+    let mut model = SceneNode::new_empty();
+    let mut branchings = HashMap::<usize, (usize, f32)>::new();
+    let mut visit_stack: Vec<_> = leaves
+        .into_iter()
+        .map(|index| (index, STARTING_WIDTH))
+        .collect();
+
+    while let Some((index, mut width)) = visit_stack.pop() {
+        let mut parent = skeleton.parent_map[index];
+
+        let from = skeleton.points[parent];
+        let to = skeleton.points[index];
+        let length = na::distance(&from, &to);
+        let orientation = segment_orientation(from, to);
+
+        add_segment(&mut model, from, orientation, length, width);
+
+        if width <= LEAF_WIDTH_LIMIT {
+            add_leaf(&mut model, to, orientation, width);
+        }
+
+        while parent != 0 && skeleton.children_map[parent].len() == 1 {
+            let grandparent = skeleton.parent_map[parent];
+
+            let from = skeleton.points[grandparent];
+            let to = skeleton.points[parent];
+            let length = na::distance(&from, &to);
+            let orientation = segment_orientation(from, to);
+            width += WIDTH_INCR;
+
+            add_segment(&mut model, from, orientation, length, width);
+
+            if width <= LEAF_WIDTH_LIMIT {
+                add_leaf(&mut model, to, orientation, width);
+            }
+
+            parent = grandparent;
+        }
+
+        if parent != 0 {
+            let (ref mut remaining_branches, ref mut largest_width) = *branchings
+                .entry(parent)
+                .or_insert_with(|| (skeleton.children_map[parent].len(), width));
+            assert!(*remaining_branches > 0);
+
+            *remaining_branches -= 1;
+            *largest_width = largest_width.max(width);
+
+            if *remaining_branches == 0 {
+                visit_stack.push((parent, *largest_width + WIDTH_INCR));
+            }
+        }
     }
 
     model

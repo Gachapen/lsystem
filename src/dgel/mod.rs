@@ -18,7 +18,6 @@ use rand::distributions::{IndependentSample, Range};
 use rand::distributions::range::SampleRange;
 use na::{Point3, UnitQuaternion};
 use kiss3d::camera::ArcBall;
-use kiss3d::scene::SceneNode;
 use num::{self, NumCast, Unsigned};
 use glfw::{Action, Key, WindowEvent};
 use serde_yaml;
@@ -421,8 +420,11 @@ fn run_visualized(matches: &ArgMatches) {
 
     let settings = Arc::new(settings);
     let mut system = ol::LSystem::new();
-    let mut model = SceneNode::new_empty();
 
+    let mut model = lsys3d::build_heuristic_model(
+        system.instructions_iter(settings.iterations, &settings.command_map),
+        &settings,
+    );
     window.scene_mut().add_child(model.clone());
 
     let mut camera = {
@@ -544,8 +546,8 @@ fn run_visualized(matches: &ArgMatches) {
                         println!("{} points.", properties.num_points);
                         let instructions =
                             system.instructions_iter(settings.iterations, &settings.command_map);
-                        model = lsys3d::build_model(instructions, &settings);
-                        fitness::add_properties_rendering(&mut model, &properties);
+                        model = lsys3d::build_heuristic_model(instructions, &settings);
+                        // fitness::add_properties_rendering(&mut model, &properties);
                         window.scene_mut().add_child(model.clone());
 
                         println!("");
@@ -587,12 +589,12 @@ fn run_visualized(matches: &ArgMatches) {
                         println!("{:#?}", properties);
                         println!("Fitness: {}", fit);
 
-                        if let Some(properties) = properties {
+                        if let Some(_) = properties {
                             window.remove(&mut model);
                             let instructions = system
                                 .instructions_iter(settings.iterations, &settings.command_map);
-                            model = lsys3d::build_model(instructions, &settings);
-                            fitness::add_properties_rendering(&mut model, &properties);
+                            model = lsys3d::build_heuristic_model(instructions, &settings);
+                            // fitness::add_properties_rendering(&mut model, &properties);
                             window.scene_mut().add_child(model.clone());
                         }
                     }
@@ -606,12 +608,12 @@ fn run_visualized(matches: &ArgMatches) {
 
                     let instructions =
                         system.instructions_iter(settings.iterations, &settings.command_map);
-                    let (score, properties) = fitness::evaluate(&system, &settings);
+                    let (score, _) = fitness::evaluate(&system, &settings);
                     println!("Score: {}", score);
 
                     window.remove(&mut model);
-                    model = lsys3d::build_model(instructions, &settings);
-                    fitness::add_properties_rendering(&mut model, &properties.unwrap());
+                    model = lsys3d::build_heuristic_model(instructions, &settings);
+                    // fitness::add_properties_rendering(&mut model, &properties.unwrap());
                     window.scene_mut().add_child(model.clone());
 
                     model_index = 0;
