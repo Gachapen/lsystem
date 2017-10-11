@@ -28,8 +28,16 @@ plot_ge_comparison <- function(file) {
 
 plot_ge_comparison_duration <- function(file) {
   stats <- read.csv(file = file, header = TRUE)
+  stats[, 'duration'] <- stats[, 'duration'] / 11
 
-  ggplot(data=stats, aes(label, duration / 11)) +
+  random <- stats[stats$label == 'random', 'duration']
+  ge <- stats[stats$label == 'ge', 'duration']
+
+  print(var.test(random, ge))
+  print(t.test(random, ge, var.equal = TRUE))
+  print(wilcox.test(random, ge))
+
+  ggplot(data=stats, aes(label, duration)) +
     stat_summary(fun.y = mean, geom = "bar") +
     stat_summary(fun.data = mean_se, geom = "errorbar") +
     labs(
