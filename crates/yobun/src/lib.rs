@@ -376,9 +376,10 @@ mod parse {
         fold_many1!(
             call!(digit),
             0_u64,
-            |mut acc: u64, item| {
-                acc += str::from_utf8(item).unwrap().parse().unwrap();
-                acc
+            |acc: u64, item| {
+                let string = str::from_utf8(item).unwrap();
+                let digit: u64 = string.parse().unwrap();
+                acc + digit
             }
         )
     );
