@@ -1,5 +1,5 @@
 use std::f32;
-use std::f32::consts::{PI};
+use std::f32::consts::PI;
 use std::fmt;
 
 use na::{self, Point2, Point3, Translation3, Unit, UnitQuaternion, Vector2};
@@ -133,8 +133,8 @@ impl Fitness {
     pub fn punishment(&self) -> f32 {
         let branching_punishment = partial_max(-self.branching, 0.0).expect("Branching is NaN");
         let balance_punishment = partial_max(-self.balance, 0.0).expect("Balance is NaN");
-        (balance_punishment + self.drop + branching_punishment + self.closeness) / 4.0 +
-            self.nothing_punishment()
+        (balance_punishment + self.drop + branching_punishment + self.closeness) / 4.0
+            + self.nothing_punishment()
     }
 
     /// Combined reward and punisment in range [0, 1], where 1 is the best.
@@ -393,6 +393,7 @@ fn evaluate_branching(skeleton: &Skeleton) -> (f32, f32) {
     (branching_fitness(complexity), complexity)
 }
 
+#[allow(dead_code)]
 pub fn add_properties_rendering(node: &mut SceneNode, properties: &Properties) {
     const LINE_LEN: f32 = 1.0;
     const LINE_WIDTH: f32 = 0.02;

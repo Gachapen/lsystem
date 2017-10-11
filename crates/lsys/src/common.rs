@@ -135,15 +135,15 @@ impl fmt::Display for CommandMap {
 
 impl fmt::Debug for CommandMap {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.debug_map().entries(self.0
-            .iter()
-            .enumerate()
-            .filter_map(|(letter, command)| if *command != Command::Noop {
-                Some((letter as u8 as char, command))
-            } else {
-                None
-            })
-        ).finish()
+        fmt.debug_map()
+            .entries(self.0.iter().enumerate().filter_map(
+                |(letter, command)| if *command != Command::Noop {
+                    Some((letter as u8 as char, command))
+                } else {
+                    None
+                },
+            ))
+            .finish()
     }
 }
 

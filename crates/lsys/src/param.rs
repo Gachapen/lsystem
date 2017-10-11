@@ -1,9 +1,6 @@
 use std::fmt;
 
-use common::Command;
-use common::CommandMap;
-use common::Instruction;
-use common::Rewriter;
+use common::{Command, CommandMap, Instruction, Rewriter};
 
 #[derive(Copy, Clone, Debug)]
 pub enum Param {

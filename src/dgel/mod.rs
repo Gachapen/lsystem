@@ -399,7 +399,8 @@ fn random_seed() -> [u32; 4] {
 fn run_visualized(matches: &ArgMatches) {
     let (mut window, _) = setup_window();
 
-    let (grammar, distribution, settings, _) = get_sample_setup(matches.value_of("grammar").unwrap());
+    let (grammar, distribution, settings, _) =
+        get_sample_setup(matches.value_of("grammar").unwrap());
     let grammar = Arc::new(grammar);
 
     let distribution = match matches.value_of("distribution") {
@@ -1395,8 +1396,7 @@ fn run_random(matches: &ArgMatches) {
         settings: &lsys::Settings,
     ) -> Sample {
         let seed = random_seed();
-        let chromosome =
-            generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
+        let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(seed), CHROMOSOME_LEN);
 
         let system = generate_system(
             grammar,
@@ -1470,17 +1470,10 @@ fn run_random(matches: &ArgMatches) {
     println!("s: {}", sd);
 
     let best_seed = samples.last().unwrap().seed;
-    let chromosome = generate_chromosome(
-        &mut XorShiftRng::from_seed(best_seed),
-        CHROMOSOME_LEN,
-    );
+    let chromosome = generate_chromosome(&mut XorShiftRng::from_seed(best_seed), CHROMOSOME_LEN);
     let lsystem = generate_system(
         &grammar,
-        &mut WeightedChromosmeStrategy::new(
-            &chromosome,
-            &distribution,
-            stack_rule_index,
-        ),
+        &mut WeightedChromosmeStrategy::new(&chromosome, &distribution, stack_rule_index),
     );
 
     let saved_path = save_lsystem(&lsystem);
@@ -1673,11 +1666,13 @@ impl<'a, G: Gene> ChromosmeStrategy<'a, G> {
     }
 
     /// How many times the chromosome was wrapped around.
+    #[allow(dead_code)]
     pub fn wraps(&self) -> usize {
         self.index / self.chromosome.len()
     }
 
     /// If the chromosome was completely used and wrapped around.
+    #[allow(dead_code)]
     pub fn has_wrapped(&self) -> bool {
         self.index >= self.chromosome.len()
     }
@@ -1896,8 +1891,8 @@ impl Distribution {
     fn dimensions(&self) -> usize {
         self.depths.iter().fold(0, |count, rules| {
             count + rules.iter().fold(0, |count, choices| {
-                count +
-                    choices
+                count
+                    + choices
                         .iter()
                         .fold(0, |count, alternatives| count + alternatives.len())
             })
@@ -2337,9 +2332,8 @@ fn infer_item_selections(
 }
 
 fn run_stats(matches: &ArgMatches) {
-    let grammar = Arc::new(
-        abnf::parse_file("grammar/lsys2.abnf").expect("Could not parse ABNF file"),
-    );
+    let grammar =
+        Arc::new(abnf::parse_file("grammar/lsys2.abnf").expect("Could not parse ABNF file"));
 
     let distributions: Vec<Arc<Distribution>> = {
         let paths = matches
@@ -2453,8 +2447,8 @@ fn run_stats(matches: &ArgMatches) {
         .fold(csv, |csv, &(d, ref f)| if f.is_nothing {
             csv + &format!("{},{},,,,,{}\n", d, f.score(), f.nothing_punishment())
         } else {
-            csv +
-                &format!(
+            csv
+                + &format!(
                     "{},{},{},{},{},{},{}\n",
                     d,
                     f.score(),
@@ -2674,8 +2668,8 @@ fn run_learning(matches: &ArgMatches) {
             }
 
             let stats_csv = "iteration,samples,measure samples,score,accepted,temperature,type\n"
-                .to_string() +
-                &format!(
+                .to_string()
+                + &format!(
                     "{},{},{},{},,,{}\n",
                     0,
                     num_samples,

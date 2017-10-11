@@ -99,15 +99,15 @@ impl fmt::Display for RuleMap {
 
 impl fmt::Debug for RuleMap {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_map().entries(self.0
-            .iter()
-            .enumerate()
-            .filter_map(|(letter, word)| if word.len() != 1 || word.as_bytes()[0] != letter as u8 {
-                Some((letter as u8 as char, word))
-            } else {
-                None
-            })
-        ).finish()
+        f.debug_map()
+            .entries(self.0.iter().enumerate().filter_map(|(letter, word)| {
+                if word.len() != 1 || word.as_bytes()[0] != letter as u8 {
+                    Some((letter as u8 as char, word))
+                } else {
+                    None
+                }
+            }))
+            .finish()
     }
 }
 

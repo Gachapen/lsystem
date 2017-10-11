@@ -46,15 +46,11 @@ fn main() {
         .version("0.0.1")
         .author("Magnus Bjerke Vik <mbvett@gmail.com>")
         .about("Various L-system generation and visualization experiments")
-        .subcommand(
-            SubCommand::with_name("static").about("Run visualization of static plant"),
-        )
+        .subcommand(SubCommand::with_name("static").about("Run visualization of static plant"))
         .subcommand(
             SubCommand::with_name("animated").about("Run animated visualization of plant growth"),
         )
-        .subcommand(
-            SubCommand::with_name("generated").about("Run random generation of plant"),
-        )
+        .subcommand(SubCommand::with_name("generated").about("Run random generation of plant"))
         .subcommand(dgel::get_subcommand())
         .get_matches();
 

@@ -42,9 +42,7 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                         .short("d")
                         .long("distribution")
                         .takes_value(true)
-                        .help(
-                            "Distribution file to use. Otherwise default distribution is used.",
-                        ),
+                        .help("Distribution file to use. Otherwise default distribution is used."),
                 )
                 .arg(
                     Arg::with_name("grammar")
@@ -112,9 +110,7 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                         .short("d")
                         .long("distribution")
                         .takes_value(true)
-                        .help(
-                            "Distribution file to use. Otherwise default distribution is used.",
-                        ),
+                        .help("Distribution file to use. Otherwise default distribution is used."),
                 )
                 .arg(
                     Arg::with_name("grammar")
@@ -133,9 +129,7 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                         .short("d")
                         .long("distribution")
                         .takes_value(true)
-                        .help(
-                            "Distribution file to use. Otherwise default distribution is used.",
-                        ),
+                        .help("Distribution file to use. Otherwise default distribution is used."),
                 )
                 .arg(
                     Arg::with_name("grammar")
@@ -154,9 +148,7 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                         .short("d")
                         .long("distribution")
                         .takes_value(true)
-                        .help(
-                            "Distribution file to use. Otherwise default distribution is used.",
-                        ),
+                        .help("Distribution file to use. Otherwise default distribution is used."),
                 )
                 .arg(
                     Arg::with_name("grammar")
@@ -175,9 +167,7 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                         .short("d")
                         .long("distribution")
                         .takes_value(true)
-                        .help(
-                            "Distribution file to use. Otherwise default distribution is used.",
-                        ),
+                        .help("Distribution file to use. Otherwise default distribution is used."),
                 )
                 .arg(
                     Arg::with_name("grammar")
@@ -221,7 +211,11 @@ pub fn run_ge(matches: &ArgMatches) {
             .unwrap()
             .parse()
             .unwrap(),
-        duplication_rate: matches.value_of("duplication-rate").unwrap().parse().unwrap(),
+        duplication_rate: matches
+            .value_of("duplication-rate")
+            .unwrap()
+            .parse()
+            .unwrap(),
         mutation_rate: matches.value_of("mutation-rate").unwrap().parse().unwrap(),
         crossover_rate: matches.value_of("crossover-rate").unwrap().parse().unwrap(),
         max_iterations: matches
@@ -812,7 +806,12 @@ pub fn run_recombination_sampling(matches: &ArgMatches) {
 
         let score = mean;
 
-        println!("Score for c={}, m={} is {}", crossover_rate, mutation_rate, score);
+        println!(
+            "Score for c={}, m={} is {}",
+            crossover_rate,
+            mutation_rate,
+            score
+        );
 
         if score >= previous_score {
             println!("Found improvement. Exploring!");
@@ -1152,12 +1151,7 @@ fn evolve(
 
         if settings.prune {
             builder = builder.chain_operator(move |population| {
-                population
-                    .into_iter()
-                    .map(|x| {
-                        x.prune()
-                    })
-                    .collect()
+                population.into_iter().map(|x| x.prune()).collect()
             });
         }
 
@@ -1222,29 +1216,27 @@ fn evolve(
         }
 
         if settings.dump {
-            builder = builder.set_step_callback(
-                |iteration: u64, population: &[LsysPhenotype]| {
-                    let fitnesses: Vec<_> = population.iter().map(|p| p.fitness().0).collect();
+            builder = builder.set_step_callback(|iteration: u64, population: &[LsysPhenotype]| {
+                let fitnesses: Vec<_> = population.iter().map(|p| p.fitness().0).collect();
 
-                    let sum: f32 = fitnesses.iter().sum();
-                    let average = sum / population.len() as f32;
-                    let best = fitnesses
-                        .iter()
-                        .max_by(|a, b| a.partial_cmp(b).unwrap())
-                        .unwrap();
+                let sum: f32 = fitnesses.iter().sum();
+                let average = sum / population.len() as f32;
+                let best = fitnesses
+                    .iter()
+                    .max_by(|a, b| a.partial_cmp(b).unwrap())
+                    .unwrap();
 
-                    if !dumped_mid_distribution && average >= 0.5 {
-                        println!("Dumping mid fitness distribution.");
-                        write_fitness_distribution("ge-distribution-mid.csv", population);
-                        dumped_mid_distribution = true;
-                    }
+                if !dumped_mid_distribution && average >= 0.5 {
+                    println!("Dumping mid fitness distribution.");
+                    write_fitness_distribution("ge-distribution-mid.csv", population);
+                    dumped_mid_distribution = true;
+                }
 
-                    let stats_csv = format!("{},{},{}\n", iteration, average, best);
-                    stats_writer
-                        .write_all(stats_csv.as_bytes())
-                        .expect("Could not write to stats file");
-                },
-            );
+                let stats_csv = format!("{},{},{}\n", iteration, average, best);
+                stats_writer
+                    .write_all(stats_csv.as_bytes())
+                    .expect("Could not write to stats file");
+            });
         }
 
         let mut simulator = builder.build();
@@ -1294,7 +1286,9 @@ fn write_fitness_distribution<P: AsRef<Path>>(path: P, population: &[LsysPhenoty
     writer.write_record(&["fitness"]).unwrap();
 
     for p in population {
-        writer.write_record(&[format!("{}", p.fitness().0)]).unwrap();
+        writer
+            .write_record(&[format!("{}", p.fitness().0)])
+            .unwrap();
     }
 }
 
@@ -1404,6 +1398,7 @@ impl<'a> LsysPhenotype<'a> {
     }
 
     /// How many introns (unused genes) there are in the chromosome.
+    #[allow(dead_code)]
     pub fn introns(&self) -> usize {
         let genes_used = self.genes_used();
         if genes_used < self.chromosome.len() {
@@ -1465,7 +1460,8 @@ impl<'a> Phenotype<LsysFitness> for LsysPhenotype<'a> {
     fn mutate(mut self) -> Self {
         let mut rng = rand::thread_rng();
 
-        let mutation_index = Range::new(0, self.chromosome.len()).ind_sample(&mut rand::thread_rng());
+        let mutation_index =
+            Range::new(0, self.chromosome.len()).ind_sample(&mut rand::thread_rng());
         self.chromosome[mutation_index] =
             Range::new(GenePrimitive::min_value(), GenePrimitive::max_value()).ind_sample(&mut rng);
 
@@ -1674,7 +1670,7 @@ mod test {
                 0,
                 0,
                 0,
-            ]
+            ],
         );
 
         let chromosome_len = phenotype.chromosome.len();
