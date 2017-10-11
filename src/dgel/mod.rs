@@ -1,6 +1,6 @@
 mod ge;
 
-use std::f32::consts::{E, PI};
+use std::f32::consts::{FRAC_PI_2, FRAC_PI_4, E, PI};
 use std::f32;
 use std::iter;
 use std::io::{self, BufReader, BufWriter, Read, Write};
@@ -16,7 +16,7 @@ use std::fmt;
 use rand::{self, Rng, SeedableRng, XorShiftRng};
 use rand::distributions::{IndependentSample, Range};
 use rand::distributions::range::SampleRange;
-use na::{Point3, UnitQuaternion};
+use na::{Point3, Translation3, UnitQuaternion};
 use kiss3d::camera::ArcBall;
 use num::{self, NumCast, Unsigned};
 use glfw::{Action, Key, WindowEvent};
@@ -421,6 +421,20 @@ fn run_visualized(matches: &ArgMatches) {
     let settings = Arc::new(settings);
     let mut system = ol::LSystem::new();
 
+    let ground_color = (0.22745098, 0.15294118, 0.06666667);
+
+    let mut ground = window.scene_mut().add_quad(10000.0, 10000.0, 1, 1);
+    ground.set_local_rotation(UnitQuaternion::from_euler_angles(-FRAC_PI_2, 0.0, 0.0));
+    ground.set_local_translation(Translation3::new(0.0, -1.0, 0.0));
+    ground.set_color(ground_color.0, ground_color.1, ground_color.2);
+    ground.enable_backface_culling(true);
+
+    let mut hill = window.scene_mut().add_cube(10.0, 10.0, 10.0);
+    hill.prepend_to_local_rotation(&UnitQuaternion::from_euler_angles(0.615, 0.0, 0.0));
+    hill.prepend_to_local_rotation(&UnitQuaternion::from_euler_angles(0.0, 0.0, FRAC_PI_4));
+    hill.set_local_translation(Translation3::new(0.0, -8.60, 0.0));
+    hill.set_color(ground_color.0, ground_color.1, ground_color.2);
+
     let mut model = lsys3d::build_heuristic_model(
         system.instructions_iter(settings.iterations, &settings.command_map),
         &settings,
@@ -428,8 +442,8 @@ fn run_visualized(matches: &ArgMatches) {
     window.scene_mut().add_child(model.clone());
 
     let mut camera = {
-        let eye = Point3::new(0.0, 0.0, 5.0);
-        let at = Point3::new(0.0, 1.0, 0.0);
+        let eye = Point3::new(0.0, 7.0, 5.0);
+        let at = Point3::new(0.0, 3.0, 0.0);
         ArcBall::new(eye, at)
     };
 
