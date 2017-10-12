@@ -248,10 +248,23 @@ where
 {
     fn segment_orientation(from: Point3<f32>, to: Point3<f32>) -> UnitQuaternion<f32> {
         let direction = na::normalize(&(to - from));
-        UnitQuaternion::rotation_between(
+
+        let rotation = UnitQuaternion::rotation_between(
             &Vector3::new(0.0, 0.0, -1.0),
             &Vector3::new(direction.x, direction.y, direction.z),
-        ).unwrap()
+        );
+
+        match rotation {
+            Some(rot) => rot,
+            None => {
+                println!(
+                    "WARNING: Could not calulate necessary segment rotation, using hack instead..."
+                );
+                // Getting `None` seems to happen when directions are pointing away from each other
+                // (not confirmed), so we just manually rotate it all the way around.
+                UnitQuaternion::from_euler_angles(0.0, PI, 0.0)
+            }
+        }
     }
 
     fn add_segment(
