@@ -255,13 +255,37 @@ pub fn run_ge(matches: &ArgMatches) {
     let start_time = Instant::now();
 
     if parallel == 0 {
-        evolve(
+        let (_, final_population) = evolve(
             &grammar,
             &distribution,
             stack_rule_index,
             &lsys_settings,
             &settings,
         );
+
+        let scores: Vec<_> = final_population
+            .into_iter()
+            .map(|p| p.fitness().0)
+            .collect();
+        let mean = mean(&scores);
+
+        let best = *scores
+            .iter()
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap();
+        let worst = *scores
+            .iter()
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap();
+        let mean = mean;
+        let variance = unbiased_sample_variance(&scores, mean);
+        let sd = variance.sqrt();
+
+        println!("Best: {}", best);
+        println!("Worst: {}", worst);
+        println!("x̄: {}", mean);
+        println!("s²: {}", variance);
+        println!("s: {}", sd);
     } else {
         #[derive(Serialize)]
         struct Result {
@@ -341,13 +365,6 @@ pub fn run_ge(matches: &ArgMatches) {
         println!("s²: {}", unbiased_sample_variance);
         println!("s: {}", sample_standard_deviation);
         println!("SE: {}", standard_error);
-        println!(
-            "CSV: {},{},{},{}",
-            mean,
-            unbiased_sample_variance,
-            sample_standard_deviation,
-            standard_error
-        );
     }
 
     let duration: f32 = start_time.elapsed().to_seconds();
