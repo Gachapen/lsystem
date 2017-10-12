@@ -13,6 +13,7 @@ extern crate ncollide_utils as ncu;
 extern crate num;
 extern crate num_cpus;
 extern crate rand;
+extern crate rayon;
 extern crate rsgenetic;
 #[macro_use]
 extern crate serde_derive;

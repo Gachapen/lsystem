@@ -1,22 +1,23 @@
-use std::cell::{Cell, RefCell};
+mod par_tournament;
+
 use std::collections::VecDeque;
 use std::cmp::Ordering;
 use std::fmt::{self, Display, Formatter};
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
-use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use bincode;
 use chrono::prelude::*;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use rand::{self, SeedableRng, XorShiftRng};
 use rand::distributions::{IndependentSample, Range};
+use rayon::prelude::*;
 use serde_yaml;
 use rsgenetic::pheno::{Fitness, Phenotype};
 use rsgenetic::sim::{Builder, RunResult, SimResult, StepResult};
-use rsgenetic::sim::select::{MaximizeSelector, Selector, TournamentSelector};
+use rsgenetic::sim::select::{MaximizeSelector, Selector};
 use futures::future::{self, Future};
 use futures_cpupool::CpuPool;
 use num_cpus;
@@ -28,6 +29,7 @@ use yobun::{mean, rand_remove, unbiased_sample_variance, ToSeconds};
 use super::fitness;
 use dgel::{generate_chromosome, generate_system, get_sample_setup, random_seed, Distribution,
            GenePrimitive, Grammar, WeightedChromosmeStrategy, CHROMOSOME_LEN};
+use self::par_tournament::ParTournamentSelector;
 
 pub const COMMAND_NAME: &'static str = "ge";
 
@@ -100,7 +102,8 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 )
                 .arg(Arg::with_name("prune").long("prune"))
                 .arg(Arg::with_name("no-print").long("no-print"))
-                .arg(Arg::with_name("no-dump").long("no-dump")),
+                .arg(Arg::with_name("dump").long("dump"))
+                .arg(Arg::with_name("no-save").long("no-save")),
         )
         .subcommand(
             SubCommand::with_name("size-sampling")
@@ -225,7 +228,8 @@ pub fn run_ge(matches: &ArgMatches) {
             .unwrap(),
         prune: matches.is_present("prune"),
         print: !matches.is_present("no-print"),
-        dump: !matches.is_present("no-dump"),
+        dump: matches.is_present("dump"),
+        save: !matches.is_present("no-save"),
     };
 
     let (grammar, distribution, lsys_settings, stack_rule_index) =
@@ -363,6 +367,7 @@ pub fn run_size_sampling(matches: &ArgMatches) {
         prune: false,
         dump: false,
         print: false,
+        save: false,
     };
 
     println!("Settings");
@@ -556,6 +561,7 @@ pub fn run_tournament_sampling(matches: &ArgMatches) {
         prune: false,
         dump: false,
         print: false,
+        save: false,
     };
 
     println!("Settings");
@@ -1053,8 +1059,10 @@ struct Settings {
     prune: bool,
     /// Print output while running
     print: bool,
-    /// Dump stats and the resulting model
+    /// Dump stats
     dump: bool,
+    /// Save the best LSystem
+    save: bool,
 }
 
 impl Default for Settings {
@@ -1069,6 +1077,7 @@ impl Default for Settings {
             prune: false,
             print: false,
             dump: false,
+            save: true,
         }
     }
 }
@@ -1083,7 +1092,8 @@ impl Display for Settings {
         writeln!(f, "Mutation rate: {}", self.mutation_rate)?;
         writeln!(f, "Prune: {}", self.prune)?;
         writeln!(f, "Print: {}", self.print)?;
-        write!(f, "Dump: {}", self.dump)
+        writeln!(f, "Dump: {}", self.dump)?;
+        write!(f, "Save: {}", self.save)
     }
 }
 
@@ -1120,8 +1130,6 @@ fn evolve(
     let mut dumped_mid_distribution = false;
 
     let best = {
-        let mut rng = XorShiftRng::from_seed(random_seed());
-
         if settings.print {
             println!(
                 "Generating initial population of {} individuals.",
@@ -1129,6 +1137,7 @@ fn evolve(
             );
         }
 
+        let mut rng = XorShiftRng::from_seed(random_seed());
         let population: Vec<_> = (0..settings.population_size)
             .map(|_| {
                 let chromosome = generate_chromosome(&mut rng, CHROMOSOME_LEN);
@@ -1146,7 +1155,9 @@ fn evolve(
         }
 
         let mut builder = Simulator::builder(population)
-            .set_selector(Box::new(TournamentSelector::new(settings.tournament_size)))
+            .set_selector(Box::new(
+                ParTournamentSelector::new(settings.tournament_size),
+            ))
             .set_max_iters(settings.max_iterations);
 
         if settings.prune {
@@ -1156,12 +1167,12 @@ fn evolve(
         }
 
         if settings.duplication_rate > 0.0 {
-            let mut rng = rng.clone();
             let duplication_rate = settings.duplication_rate;
             builder = builder.chain_operator(move |population| {
                 population
-                    .into_iter()
+                    .into_par_iter()
                     .map(|x| {
+                        let mut rng = rand::thread_rng();
                         if Range::new(0.0, 1.0).ind_sample(&mut rng) > duplication_rate {
                             x
                         } else {
@@ -1173,7 +1184,6 @@ fn evolve(
         }
 
         if settings.crossover_rate > 0.0 {
-            let mut rng = rng.clone();
             let crossover_rate = settings.crossover_rate;
             builder = builder.chain_operator(move |mut population| {
                 let num_individuals = population.len();
@@ -1181,7 +1191,9 @@ fn evolve(
                 let range = Range::new(0, population.len());
 
                 let mut children: Vec<_> = (0..num_children)
+                    .into_par_iter()
                     .map(|_| {
+                        let mut rng = rand::thread_rng();
                         let i = range.ind_sample(&mut rng);
                         let j = range.ind_sample(&mut rng);
                         let a = &population[i];
@@ -1199,12 +1211,12 @@ fn evolve(
         }
 
         if settings.mutation_rate > 0.0 {
-            let mut rng = rng.clone();
             let mutation_rate = settings.mutation_rate;
             builder = builder.chain_operator(move |population| {
                 population
-                    .into_iter()
+                    .into_par_iter()
                     .map(|x| {
+                        let mut rng = rand::thread_rng();
                         if Range::new(0.0, 1.0).ind_sample(&mut rng) > mutation_rate {
                             x
                         } else {
@@ -1260,7 +1272,7 @@ fn evolve(
         println!("Fitness: {}", best.fitness());
     }
 
-    if settings.dump {
+    if settings.save {
         let model_dir = Path::new("model");
         fs::create_dir_all(model_dir).unwrap();
 
@@ -1321,15 +1333,15 @@ impl Display for LsysFitness {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct LsysPhenotype<'a> {
     grammar: &'a Grammar,
     distribution: &'a Distribution,
     stack_rule_index: usize,
     settings: &'a lsys::Settings,
     chromosome: Vec<GenePrimitive>,
-    lsystem: RefCell<Option<(Rc<ol::LSystem>, usize)>>,
-    fitness: Cell<Option<LsysFitness>>,
+    lsystem: Mutex<Option<(Arc<ol::LSystem>, usize)>>,
+    fitness: Mutex<Option<LsysFitness>>,
 }
 
 impl<'a> LsysPhenotype<'a> {
@@ -1346,8 +1358,8 @@ impl<'a> LsysPhenotype<'a> {
             stack_rule_index: stack_rule_index,
             settings: settings,
             chromosome: chromosome,
-            lsystem: RefCell::new(None),
-            fitness: Cell::new(None),
+            lsystem: Mutex::new(None),
+            fitness: Mutex::new(None),
         }
     }
 
@@ -1373,26 +1385,28 @@ impl<'a> LsysPhenotype<'a> {
         (lsystem, genes_used)
     }
 
-    pub fn lsystem(&self) -> Rc<ol::LSystem> {
-        if let Some((ref lsystem, _)) = *self.lsystem.borrow() {
-            return Rc::clone(lsystem);
+    pub fn lsystem(&self) -> Arc<ol::LSystem> {
+        let mut lsystem_lock = self.lsystem.lock().unwrap();
+        if let Some((ref lsystem, _)) = *lsystem_lock {
+            return Arc::clone(lsystem);
         }
 
         let (lsystem, genes_used) = self.generate_lsystem();
-        let lsystem = Rc::new(lsystem);
-        *self.lsystem.borrow_mut() = Some((Rc::clone(&lsystem), genes_used));
+        let lsystem = Arc::new(lsystem);
+        *lsystem_lock = Some((Arc::clone(&lsystem), genes_used));
 
         lsystem
     }
 
     pub fn genes_used(&self) -> usize {
-        if let Some((_, genes_used)) = *self.lsystem.borrow() {
+        let mut lsystem_lock = self.lsystem.lock().unwrap();
+        if let Some((_, genes_used)) = *lsystem_lock {
             return genes_used;
         }
 
         let (lsystem, genes_used) = self.generate_lsystem();
-        let lsystem = Rc::new(lsystem);
-        *self.lsystem.borrow_mut() = Some((lsystem, genes_used));
+        let lsystem = Arc::new(lsystem);
+        *lsystem_lock = Some((lsystem, genes_used));
 
         genes_used
     }
@@ -1435,15 +1449,16 @@ impl<'a> LsysPhenotype<'a> {
 
 impl<'a> Phenotype<LsysFitness> for LsysPhenotype<'a> {
     fn fitness(&self) -> LsysFitness {
-        if let Some(ref fitness) = self.fitness.get() {
-            *fitness
-        } else {
-            let fitness = fitness::evaluate(&self.lsystem(), self.settings);
-            let fitness = LsysFitness(fitness.0.score());
-            self.fitness.set(Some(fitness));
-
-            fitness
+        let mut fitness_lock = self.fitness.lock().unwrap();
+        if let Some(fitness) = *fitness_lock {
+            return fitness;
         }
+
+        let fitness = fitness::evaluate(&self.lsystem(), self.settings);
+        let fitness = LsysFitness(fitness.0.score());
+        *fitness_lock = Some(fitness);
+
+        fitness
     }
 
     fn crossover(&self, other: &Self) -> Self {
@@ -1469,6 +1484,17 @@ impl<'a> Phenotype<LsysFitness> for LsysPhenotype<'a> {
     }
 }
 
+impl<'a> Clone for LsysPhenotype<'a> {
+    fn clone(&self) -> LsysPhenotype<'a> {
+        LsysPhenotype {
+            chromosome: self.chromosome.clone(),
+            lsystem: Mutex::new(self.lsystem.lock().unwrap().clone()),
+            fitness: Mutex::new(*self.fitness.lock().unwrap()),
+            ..*self
+        }
+    }
+}
+
 type StepCallback<'a, T> = Box<FnMut(u64, &[T]) + 'a>;
 type Operator<'a, T> = Box<FnMut(Vec<T>) -> Vec<T> + 'a>;
 
@@ -1489,8 +1515,8 @@ struct Simulator<'a, T, F> {
 
 impl<'a, T, F> Simulator<'a, T, F>
 where
-    T: Phenotype<F>,
-    F: Fitness,
+    T: Phenotype<F> + Clone + Sync,
+    F: Fitness + Send,
 {
     /// Create builder.
     fn builder(population: Vec<T>) -> SimulatorBuilder<'a, T, F> {
@@ -1561,7 +1587,12 @@ where
     }
 
     fn get(&self) -> SimResult<T> {
-        Ok(self.population.iter().max_by_key(|x| x.fitness()).unwrap())
+        Ok(
+            self.population
+                .par_iter()
+                .max_by_key(|x| x.fitness())
+                .unwrap(),
+        )
     }
 }
 
@@ -1652,7 +1683,7 @@ mod test {
             &lsys_settings,
             vec![
                 // Axiom
-                0_u32, // string len 1
+                0, // string len 1
                 0, // symbol
                 0, // variable
                 0, // x41
