@@ -398,6 +398,7 @@ fn random_seed() -> [u32; 4] {
 
 fn run_visualized(matches: &ArgMatches) {
     let (mut window, _) = setup_window();
+    window.glfw_window_mut().set_char_polling(true);
 
     let (grammar, distribution, settings, _) =
         get_sample_setup(matches.value_of("grammar").unwrap());
@@ -419,7 +420,7 @@ fn run_visualized(matches: &ArgMatches) {
 
     let num_samples = usize::from_str_radix(matches.value_of("num-samples").unwrap(), 10).unwrap();
 
-    let settings = Arc::new(settings);
+    let mut settings = Arc::new(settings);
     let mut system = ol::LSystem::new();
 
     let ground_color = (0.22745098, 0.15294118, 0.06666667);
@@ -577,7 +578,9 @@ fn run_visualized(matches: &ArgMatches) {
                         println!("Plant was nothing or reached the limits.");
                     }
                 }
-                WindowEvent::Key(Key::L, _, Action::Release, _) => {
+                WindowEvent::Key(Key::L, _, action, _)
+                    if (action == Action::Press || action == Action::Repeat) =>
+                {
                     let mut models = fs::read_dir(model_dir)
                         .unwrap()
                         .map(|e| e.unwrap().path())
@@ -632,6 +635,28 @@ fn run_visualized(matches: &ArgMatches) {
                     window.scene_mut().add_child(model.clone());
 
                     model_index = 0;
+                }
+                WindowEvent::Char('-') => {
+                    if settings.iterations > 1 {
+                        Arc::get_mut(&mut settings).unwrap().iterations -= 1;
+
+                        window.remove(&mut model);
+                        let instructions =
+                            system.instructions_iter(settings.iterations, &settings.command_map);
+                        model = lsys3d::build_heuristic_model(instructions, &settings);
+                        // fitness::add_properties_rendering(&mut model, &properties);
+                        window.scene_mut().add_child(model.clone());
+                    }
+                }
+                WindowEvent::Char('+') => {
+                    Arc::get_mut(&mut settings).unwrap().iterations += 1;
+
+                    window.remove(&mut model);
+                    let instructions =
+                        system.instructions_iter(settings.iterations, &settings.command_map);
+                    model = lsys3d::build_heuristic_model(instructions, &settings);
+                    // fitness::add_properties_rendering(&mut model, &properties);
+                    window.scene_mut().add_child(model.clone());
                 }
                 _ => {}
             }
