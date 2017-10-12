@@ -533,7 +533,7 @@ fn run_visualized(matches: &ArgMatches) {
                         duration.subsec_nanos()
                     );
 
-                    samples.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
+                    samples.sort_unstable_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
 
                     let sample = samples.pop().unwrap();
 
@@ -582,7 +582,7 @@ fn run_visualized(matches: &ArgMatches) {
                         .unwrap()
                         .map(|e| e.unwrap().path())
                         .collect::<Vec<_>>();
-                    models.sort();
+                    models.sort_unstable();
                     models.reverse();
                     let models = models;
 
@@ -1454,7 +1454,7 @@ fn run_random(matches: &ArgMatches) {
         duration.subsec_nanos()
     );
 
-    samples.sort_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
+    samples.sort_unstable_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
     let scores: Vec<_> = samples.iter().map(|s| s.score).collect();
 
     let best = scores.last().unwrap();
