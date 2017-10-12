@@ -263,6 +263,15 @@ pub fn run_ge(matches: &ArgMatches) {
             &settings,
         );
     } else {
+        #[derive(Serialize)]
+        struct Result {
+            best: f32,
+            worst: f32,
+            mean: f32,
+            variance: f32,
+            duration: f32,
+        }
+
         let pool = CpuPool::new(num_cpus::get() + 1);
 
         let grammar = Arc::new(grammar);
@@ -278,31 +287,46 @@ pub fn run_ge(matches: &ArgMatches) {
                 let settings = Arc::clone(&settings);
 
                 pool.spawn_fn(move || {
-                    let best = evolve(
+                    let start_time = Instant::now();
+
+                    let (_, final_population) = evolve(
                         &grammar,
                         &distribution,
                         stack_rule_index,
                         &lsys_settings,
                         &settings,
                     );
-                    future::ok::<LsysFitness, ()>(best)
+
+                    let duration: f32 = start_time.elapsed().to_seconds();
+                    let scores: Vec<_> = final_population.iter().map(|p| p.fitness().0).collect();
+                    let mean = mean(&scores);
+
+                    future::ok::<Result, ()>(Result {
+                        best: *scores
+                            .iter()
+                            .max_by(|a, b| a.partial_cmp(b).unwrap())
+                            .unwrap(),
+                        worst: *scores
+                            .iter()
+                            .min_by(|a, b| a.partial_cmp(b).unwrap())
+                            .unwrap(),
+                        mean: mean,
+                        variance: unbiased_sample_variance(&scores, mean),
+                        duration: duration,
+                    })
                 })
             })
             .collect();
 
-        let scores: Vec<f32> = future::join_all(tasks)
-            .wait()
-            .unwrap()
-            .iter()
-            .map(|f| f.0)
-            .collect();
+        let results: Vec<Result> = future::join_all(tasks).wait().unwrap();
 
         let scores_file = File::create("ge-scores.csv").unwrap();
         let mut scores_writer = csv::Writer::from_writer(BufWriter::new(scores_file));
-        scores_writer.write_record(&["score"]).unwrap();
-        for s in &scores {
-            scores_writer.write_record(&[format!("{}", s)]).unwrap();
+        for r in &results {
+            scores_writer.serialize(r).unwrap();
         }
+
+        let scores: Vec<f32> = results.iter().map(|r| r.best).collect();
 
         let sum: f32 = scores.iter().sum();
         let size = scores.len() as f32;
@@ -422,7 +446,7 @@ pub fn run_size_sampling(matches: &ArgMatches) {
                 let settings = Arc::clone(&settings);
 
                 pool.spawn_fn(move || {
-                    let best = evolve(
+                    let (best, _) = evolve(
                         &grammar,
                         &distribution,
                         stack_rule_index,
@@ -612,7 +636,7 @@ pub fn run_tournament_sampling(matches: &ArgMatches) {
                 let settings = Arc::clone(&settings);
 
                 pool.spawn_fn(move || {
-                    let best = evolve(
+                    let (best, _) = evolve(
                         &grammar,
                         &distribution,
                         stack_rule_index,
@@ -778,7 +802,7 @@ pub fn run_recombination_sampling(matches: &ArgMatches) {
                 let settings = Arc::clone(&settings);
 
                 pool.spawn_fn(move || {
-                    let best = evolve(
+                    let (best, _) = evolve(
                         &grammar,
                         &distribution,
                         stack_rule_index,
@@ -972,7 +996,7 @@ pub fn run_duplication_sampling(matches: &ArgMatches) {
                 let settings = Arc::clone(&settings);
 
                 pool.spawn_fn(move || {
-                    let best = evolve(
+                    let (best, _) = evolve(
                         &grammar,
                         &distribution,
                         stack_rule_index,
@@ -1097,13 +1121,13 @@ impl Display for Settings {
     }
 }
 
-fn evolve(
-    grammar: &Grammar,
-    distribution: &Distribution,
+fn evolve<'a>(
+    grammar: &'a Grammar,
+    distribution: &'a Distribution,
     stack_rule_index: usize,
-    lsys_settings: &lsys::Settings,
+    lsys_settings: &'a lsys::Settings,
     settings: &Settings,
-) -> LsysFitness {
+) -> (LsysFitness, Vec<LsysPhenotype<'a>>) {
     let base_phenotype = LsysPhenotype::new(
         grammar,
         distribution,
@@ -1129,7 +1153,7 @@ fn evolve(
 
     let mut dumped_mid_distribution = false;
 
-    let best = {
+    let (best, population) = {
         if settings.print {
             println!(
                 "Generating initial population of {} individuals.",
@@ -1264,7 +1288,11 @@ fn evolve(
             write_fitness_distribution("ge-distribution-final.csv", &simulator.population);
         }
 
-        simulator.get().unwrap().clone()
+        if settings.print {
+            println!("Finding best individual.");
+        }
+
+        (simulator.get().unwrap().clone(), simulator.population)
     };
 
     if settings.print {
@@ -1289,7 +1317,7 @@ fn evolve(
         println!("Saved to {}", path.to_str().unwrap());
     }
 
-    best.fitness()
+    (best.fitness(), population)
 }
 
 fn write_fitness_distribution<P: AsRef<Path>>(path: P, population: &[LsysPhenotype]) {
