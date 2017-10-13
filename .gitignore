@@ -6,9 +6,10 @@ model
 dist/
 distribution.bin
 distribution.csv
-learning-stats.csv
 sample/
-stats.csv
-weight-space.csv
 models/
 *.tags
+*.csv
+*.png
+bench.profile
+flame-graph.html
