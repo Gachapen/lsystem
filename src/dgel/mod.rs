@@ -607,7 +607,7 @@ fn run_visualized(matches: &ArgMatches) {
                         println!("{:#?}", properties);
                         println!("Fitness: {}", fit);
 
-                        if let Some(_) = properties {
+                        if properties.is_some() {
                             window.remove(&mut model);
                             let instructions = system
                                 .instructions_iter(settings.iterations, &settings.command_map);
@@ -1748,7 +1748,7 @@ fn weighted_selection(weights: &[f32], selector: f32) -> usize {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-struct Distribution {
+pub struct Distribution {
     // [depth][rule][choice][option]
     depths: Vec<Vec<Vec<Vec<f32>>>>,
     // [rule][choice][option]
