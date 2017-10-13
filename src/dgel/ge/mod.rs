@@ -1472,6 +1472,8 @@ impl<'a> LsysPhenotype<'a> {
         let genes_used = self.genes_used();
         if genes_used < self.chromosome.len() {
             self.chromosome.truncate(genes_used);
+            *self.fitness.lock().unwrap() = None;
+            *self.lsystem.lock().unwrap() = None;
         }
 
         self
@@ -1486,7 +1488,10 @@ impl<'a> LsysPhenotype<'a> {
         let end = start + num_genes;
 
         let mut duplicate = self.chromosome[start..end].to_vec();
+
         self.chromosome.append(&mut duplicate);
+        *self.fitness.lock().unwrap() = None;
+        *self.lsystem.lock().unwrap() = None;
 
         self
     }
@@ -1520,10 +1525,15 @@ impl<'a> Phenotype<LsysFitness> for LsysPhenotype<'a> {
     fn mutate(mut self) -> Self {
         let mut rng = rand::thread_rng();
 
-        let mutation_index =
-            Range::new(0, self.chromosome.len()).ind_sample(&mut rand::thread_rng());
-        self.chromosome[mutation_index] =
-            Range::new(GenePrimitive::min_value(), GenePrimitive::max_value()).ind_sample(&mut rng);
+        let index_range = Range::new(0, self.chromosome.len());
+        let mutation_index = index_range.ind_sample(&mut rng);
+
+        let gene_range = Range::new(GenePrimitive::min_value(), GenePrimitive::max_value());
+        let new_gene = gene_range.ind_sample(&mut rng);
+
+        self.chromosome[mutation_index] = new_gene;
+        *self.fitness.lock().unwrap() = None;
+        *self.lsystem.lock().unwrap() = None;
 
         self
     }
