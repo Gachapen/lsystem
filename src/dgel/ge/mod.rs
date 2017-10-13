@@ -1,4 +1,5 @@
 mod par_tournament;
+mod sim;
 
 use std::collections::VecDeque;
 use std::cmp::Ordering;
@@ -14,10 +15,9 @@ use clap::{App, Arg, ArgMatches, SubCommand};
 use rand::{self, SeedableRng, XorShiftRng};
 use rand::distributions::{IndependentSample, Range};
 use rayon::prelude::*;
-use serde_yaml;
 use rsgenetic::pheno::{Fitness, Phenotype};
-use rsgenetic::sim::{Builder, RunResult, SimResult, StepResult};
-use rsgenetic::sim::select::{MaximizeSelector, Selector};
+use rsgenetic::sim::{Simulation, Builder};
+use serde_yaml;
 use futures::future::{self, Future};
 use futures_cpupool::CpuPool;
 use num_cpus;
@@ -30,6 +30,7 @@ use super::fitness;
 use dgel::{generate_chromosome, generate_system, get_sample_setup, random_seed, Distribution,
            GenePrimitive, Grammar, WeightedChromosmeStrategy, CHROMOSOME_LEN};
 use self::par_tournament::ParTournamentSelector;
+use self::sim::Simulator;
 
 pub const COMMAND_NAME: &'static str = "ge";
 
@@ -1300,16 +1301,19 @@ fn evolve<'a>(
 
         simulator.run();
 
+        let best = simulator.get().unwrap().clone();
+        let population = simulator.population();
+
         if settings.dump {
             println!("Dumping final fitness distribution.");
-            write_fitness_distribution("ge-distribution-final.csv", &simulator.population);
+            write_fitness_distribution("ge-distribution-final.csv", &population);
         }
 
         if settings.print {
             println!("Finding best individual.");
         }
 
-        (simulator.get().unwrap().clone(), simulator.population)
+        (best, population)
     };
 
     if settings.print {
@@ -1547,179 +1551,6 @@ impl<'a> Clone for LsysPhenotype<'a> {
             fitness: Mutex::new(*self.fitness.lock().unwrap()),
             ..*self
         }
-    }
-}
-
-type StepCallback<'a, T> = Box<FnMut(u64, &[T]) + 'a>;
-type Operator<'a, T> = Box<FnMut(Vec<T>) -> Vec<T> + 'a>;
-
-/// A genetic algorithm implementation, designed after "A Comparison of Selection Schemes used
-/// in Genetic Algorithms", Tobias Blickle and Lothar Thiele, 1995. It is a modification of
-/// `rsgenetic::sim::seq::Simulator`.
-///
-/// By default it has no genetic operators (`operators`). To add one, use
-/// `SimulatorBuilder::chain_operator`.
-struct Simulator<'a, T, F> {
-    population: Vec<T>,
-    selector: Box<Selector<T, F>>,
-    iteration_limit: u64,
-    iteration: u64,
-    step_callback: Option<StepCallback<'a, T>>,
-    operators: Vec<Operator<'a, T>>,
-}
-
-impl<'a, T, F> Simulator<'a, T, F>
-where
-    T: Phenotype<F> + Clone + Sync,
-    F: Fitness + Send,
-{
-    /// Create builder.
-    fn builder(population: Vec<T>) -> SimulatorBuilder<'a, T, F> {
-        let sim = Simulator {
-            population: population,
-            selector: Box::new(MaximizeSelector::new(3)),
-            iteration_limit: 100,
-            iteration: 0,
-            step_callback: None,
-            operators: Vec::new(),
-        };
-
-        SimulatorBuilder { sim: sim }
-    }
-
-    fn step(&mut self) -> StepResult {
-        if self.population.is_empty() {
-            println!(
-                "Tried to run a simulator without a population, or the \
-                 population was empty."
-            );
-            return StepResult::Failure;
-        }
-
-        if self.iteration >= self.iteration_limit {
-            return StepResult::Done;
-        }
-
-        let next_population: Vec<T> = {
-            let parents = match self.selector.select(&self.population) {
-                Ok(parents) => parents,
-                Err(e) => {
-                    println!("Error selecting parents: {}", e);
-                    return StepResult::Failure;
-                }
-            };
-
-            let population_size = self.population.len();
-
-            let recombined: Vec<T> = self.operators.iter_mut().fold(
-                parents.into_iter().cloned().collect(),
-                |population, operator| operator(population),
-            );
-            assert_eq!(recombined.len(), population_size);
-
-            recombined
-        };
-
-        self.population = next_population;
-        self.iteration += 1;
-
-        if let Some(ref mut callback) = self.step_callback {
-            callback(self.iteration, &self.population);
-        }
-
-        StepResult::Success // Not done yet, but successful
-    }
-
-    fn run(&mut self) -> RunResult {
-        // Loop until Failure or Done.
-        loop {
-            match self.step() {
-                StepResult::Success => {}
-                StepResult::Failure => return RunResult::Failure,
-                StepResult::Done => return RunResult::Done,
-            }
-        }
-    }
-
-    fn get(&self) -> SimResult<T> {
-        Ok(
-            self.population
-                .par_iter()
-                .max_by_key(|x| x.fitness())
-                .unwrap(),
-        )
-    }
-}
-
-impl<'a, T, F> fmt::Debug for Simulator<'a, T, F>
-where
-    T: Phenotype<F> + fmt::Debug,
-    F: Fitness,
-{
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.debug_struct("Simulator")
-            .field("population", &self.population)
-            .field("selector", &self.selector)
-            .field("iteration_limit", &self.iteration_limit)
-            .field("iteration", &self.iteration)
-            .field("step_callback", &self.step_callback.is_some())
-            .finish()
-    }
-}
-
-/// A `Builder` for the `Simulator` type.
-struct SimulatorBuilder<'a, T, F>
-where
-    T: Phenotype<F>,
-    F: Fitness,
-{
-    sim: Simulator<'a, T, F>,
-}
-
-impl<'a, T, F> SimulatorBuilder<'a, T, F>
-where
-    T: Phenotype<F>,
-    F: Fitness,
-{
-    fn set_selector(mut self, sel: Box<Selector<T, F>>) -> Self {
-        self.sim.selector = sel;
-        self
-    }
-
-    fn set_max_iters(mut self, i: u64) -> Self {
-        self.sim.iteration_limit = i;
-        self
-    }
-
-    fn set_step_callback<C>(mut self, callback: C) -> Self
-    where
-        C: FnMut(u64, &[T]) + 'a,
-    {
-        self.sim.step_callback = Some(Box::new(callback));
-        self
-    }
-
-    /// Chain an `operator` in the operator chain used for creating the new population from the
-    /// current population. An `operator` gets the current population as the parameter,
-    /// and uses it to produce a new population as the return value. The last `operator` in the
-    /// chain **must** return a population of size equal to the input population of the first
-    /// `operator`.
-    fn chain_operator<O>(mut self, operator: O) -> Self
-    where
-        O: FnMut(Vec<T>) -> Vec<T> + 'a,
-    {
-        self.sim.operators.push(Box::new(operator));
-        self
-    }
-}
-
-impl<'a, T, F> Builder<Simulator<'a, T, F>> for SimulatorBuilder<'a, T, F>
-where
-    T: Phenotype<F>,
-    F: Fitness,
-{
-    fn build(self) -> Simulator<'a, T, F> {
-        self.sim
     }
 }
 
