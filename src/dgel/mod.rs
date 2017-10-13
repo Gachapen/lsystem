@@ -418,6 +418,7 @@ fn run_visualized(matches: &ArgMatches) {
     println!("Distribution:");
     println!("{}", distribution);
 
+    let default_iterations = settings.iterations;
     let num_samples = usize::from_str_radix(matches.value_of("num-samples").unwrap(), 10).unwrap();
 
     let mut settings = Arc::new(settings);
@@ -581,6 +582,8 @@ fn run_visualized(matches: &ArgMatches) {
                 WindowEvent::Key(Key::L, _, action, _)
                     if (action == Action::Press || action == Action::Repeat) =>
                 {
+                    Arc::get_mut(&mut settings).unwrap().iterations = default_iterations;
+
                     let mut models = fs::read_dir(model_dir)
                         .unwrap()
                         .map(|e| e.unwrap().path())
