@@ -243,6 +243,7 @@ impl<'a> Clone for LsysPhenotype<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use dgel::get_sample_setup;
 
     #[test]
     fn test_prune() {

@@ -1,6 +1,7 @@
 mod par_tournament;
 mod sim;
 mod pheno;
+mod test;
 
 use std::collections::VecDeque;
 use std::fmt::{self, Display, Formatter};

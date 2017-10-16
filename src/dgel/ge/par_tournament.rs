@@ -77,8 +77,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use sim::select::*;
-    use test::Test;
+    use super::*;
+    use dgel::ge::test::Test;
 
     #[test]
     fn test_participants_zero() {
