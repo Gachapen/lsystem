@@ -18,8 +18,10 @@ use rand::distributions::{IndependentSample, Range};
 use rand::distributions::range::SampleRange;
 use na::{Point3, Translation3, UnitQuaternion};
 use kiss3d::camera::ArcBall;
+use kiss3d::scene::SceneNode;
+use kiss3d::window::Window;
 use num::{self, NumCast, Unsigned};
-use glfw::{Action, Key, WindowEvent};
+use glfw::{Action, Key, WindowEvent, WindowHint};
 use serde_yaml;
 use num_cpus;
 use futures::{future, Future};
@@ -30,6 +32,7 @@ use clap::{App, Arg, ArgMatches, SubCommand};
 use csv;
 use chrono::prelude::*;
 use chrono::Duration;
+use mpeg_encoder;
 
 use abnf::{self, Grammar};
 use abnf::expand::{expand_grammar, Rulechain, SelectionStrategy};
@@ -37,7 +40,7 @@ use lsys::{self, ol};
 use lsys3d;
 use lsystems;
 use yobun::{mean, read_dir_all, unbiased_sample_variance};
-use super::setup_window;
+use super::{setup_window, setup_window_with_size};
 use super::fitness::{self, Fitness};
 
 const DEPTHS: usize = 4;
@@ -322,6 +325,27 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
         .subcommand(SubCommand::with_name("bench")
             .about("Run benchmarks")
         )
+        .subcommand(SubCommand::with_name("record-video")
+            .about("Record a video of a plant model")
+            .arg(Arg::with_name("MODEL")
+                .required(true)
+                .index(1)
+                .help("The model to record")
+            )
+            .arg(Arg::with_name("grammar")
+                .short("g")
+                .long("grammar")
+                .takes_value(true)
+                .default_value("grammar/lsys2.abnf")
+                .help("Which ABNF grammar to use")
+            )
+            .arg(Arg::with_name("extension")
+                .long("ext")
+                .takes_value(true)
+                .default_value("mp4")
+                .help("Video file extension")
+            )
+        )
 }
 
 pub fn run_dgel(matches: &ArgMatches) {
@@ -354,6 +378,8 @@ pub fn run_dgel(matches: &ArgMatches) {
         ge::run(matches);
     } else if let Some(matches) = matches.subcommand_matches("bench") {
         run_benchmark(matches);
+    } else if let Some(matches) = matches.subcommand_matches("record-video") {
+        run_record_video(matches);
     } else {
         println!("A subcommand must be specified. See help by passing -h.");
     }
@@ -3073,6 +3099,92 @@ fn run_benchmark(_: &ArgMatches) {
     }
 
     PROFILER.lock().unwrap().stop().unwrap();
+}
+
+fn run_record_video(matches: &ArgMatches) {
+    let (_, _, settings, _) = get_sample_setup(matches.value_of("grammar").unwrap());
+
+    let model_path = matches.value_of("MODEL").unwrap();
+    let model_file = File::open(&model_path).unwrap();
+    let system: ol::LSystem = serde_yaml::from_reader(&mut BufReader::new(model_file)).unwrap();
+
+    const SIZE: u16 = 800;
+    Window::context().window_hint(WindowHint::Samples(Some(8)));
+    Window::context().window_hint(WindowHint::Resizable(false));
+    let (mut window, _) = setup_window_with_size(SIZE as u32, SIZE as u32);
+
+    let mut camera = {
+        let eye = Point3::new(0.0, 7.0, 5.0);
+        let at = Point3::new(0.0, 3.0, 0.0);
+        ArcBall::new(eye, at)
+    };
+
+    let scenery = create_scenery();
+    window.scene_mut().add_child(scenery);
+
+    let model = lsys3d::build_heuristic_model(
+        system.instructions_iter(settings.iterations, &settings.command_map),
+        &settings,
+    );
+    window.scene_mut().add_child(model.clone());
+
+    let num_frames = 200_usize;
+    let angle_step = (PI * 2.0) / num_frames as f32;
+
+    let snapshots: Vec<_> = (0..num_frames)
+        .map(|i| {
+            camera.set_yaw(angle_step * i as f32);
+            window.render_with_camera(&mut camera);
+            let mut pixels = Vec::new();
+            window.snap(&mut pixels);
+            pixels
+        })
+        .collect();
+
+    let width = window.width() as u16;
+    let height = window.height() as u16;
+    let fps = 25;
+    let model_name = Path::new(model_path).file_stem().unwrap().to_str().unwrap();
+
+    let extensions = matches.value_of("extension").unwrap().split(",");
+    for extension in extensions {
+        let path = Path::new("video").join(model_name.to_owned() + "." + extension);
+
+        let mut encoder = mpeg_encoder::Encoder::new_with_params(
+            path,
+            width as usize,
+            height as usize,
+            None,
+            Some((1, fps)),
+            None,
+            None,
+            None,
+        );
+
+        for pixels in &snapshots {
+            encoder.encode_rgb(width as usize, height as usize, &pixels, true);
+        }
+    }
+}
+
+fn create_scenery() -> SceneNode {
+    let ground_color = (0.22745098, 0.15294118, 0.06666667);
+
+    let mut node = SceneNode::new_empty();
+
+    let mut ground = node.add_quad(10000.0, 10000.0, 1, 1);
+    ground.set_local_rotation(UnitQuaternion::from_euler_angles(-FRAC_PI_2, 0.0, 0.0));
+    ground.set_local_translation(Translation3::new(0.0, -2.0, 0.0));
+    ground.set_color(ground_color.0, ground_color.1, ground_color.2);
+    ground.enable_backface_culling(true);
+
+    let mut hill = node.add_cube(10.0, 10.0, 10.0);
+    hill.prepend_to_local_rotation(&UnitQuaternion::from_euler_angles(0.615, 0.0, 0.0));
+    hill.prepend_to_local_rotation(&UnitQuaternion::from_euler_angles(0.0, 0.0, FRAC_PI_4));
+    hill.set_local_translation(Translation3::new(0.0, -8.60, 0.0));
+    hill.set_color(ground_color.0, ground_color.1, ground_color.2);
+
+    node
 }
 
 /// Save an `ol::LSystem` to the "model" directory with the current date time as the filename.

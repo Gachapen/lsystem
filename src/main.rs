@@ -18,6 +18,7 @@ extern crate rsgenetic;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_yaml;
+extern crate mpeg_encoder;
 
 extern crate abnf;
 #[macro_use]
@@ -75,7 +76,14 @@ fn main() {
 }
 
 fn setup_window() -> (Window, ArcBall) {
-    let mut window = Window::new("lsystem");
+    configure_window(Window::new("lsystem"))
+}
+
+fn setup_window_with_size(width: u32, height: u32) -> (Window, ArcBall) {
+    configure_window(Window::new_with_size("lsystem", width, height))
+}
+
+fn configure_window(mut window: Window) -> (Window, ArcBall) {
     window.set_light(Light::Absolute(Point3::new(0.3, 1.0, 0.3) * 1000.0));
     window.set_background_color(135.0 / 255.0, 206.0 / 255.0, 250.0 / 255.0);
     window.set_framerate_limit(Some(60));
