@@ -454,7 +454,7 @@ fn run_visualized(matches: &ArgMatches) {
 
     let mut ground = window.scene_mut().add_quad(10000.0, 10000.0, 1, 1);
     ground.set_local_rotation(UnitQuaternion::from_euler_angles(-FRAC_PI_2, 0.0, 0.0));
-    ground.set_local_translation(Translation3::new(0.0, -1.0, 0.0));
+    ground.set_local_translation(Translation3::new(0.0, -2.0, 0.0));
     ground.set_color(ground_color.0, ground_color.1, ground_color.2);
     ground.enable_backface_culling(true);
 
