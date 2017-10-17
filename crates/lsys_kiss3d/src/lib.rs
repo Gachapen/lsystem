@@ -6,7 +6,7 @@ extern crate time;
 
 extern crate lsys;
 
-use std::f32::consts::{FRAC_PI_2, PI};
+use std::f32::consts::{FRAC_PI_2, FRAC_PI_4, PI};
 use std::borrow::Borrow;
 use std::collections::HashMap;
 
@@ -307,7 +307,7 @@ where
             let width = (width * 5.0).log10() / 3.0;
             let scale = Vector3::new(width, width, width);
 
-            let pitch = angle_range.ind_sample(&mut rng) * 0.05;
+            let pitch = FRAC_PI_4 + angle_range.ind_sample(&mut rng) * 0.05;
             let pitch_rotation = UnitQuaternion::from_euler_angles(pitch, 0.0, 0.0);
 
             let yaw = angle_range.ind_sample(&mut rng);
