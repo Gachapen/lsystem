@@ -2,7 +2,7 @@ use std::{fmt, slice};
 use std::ops::{Index, IndexMut};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde::ser::SerializeMap;
-use na::Point3;
+use na::{self, Point3, Vector2};
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum Command {
@@ -265,6 +265,23 @@ impl Skeleton {
                 None
             })
             .collect()
+    }
+
+    pub fn find_height(&self) -> f32 {
+        self.points
+            .iter()
+            .map(|p| p.y)
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap_or(0.0)
+    }
+
+    /// Find the largest radius in the horizontal plane
+    pub fn find_horizontal_radius(&self) -> f32 {
+        self.points
+            .iter()
+            .map(|p| na::norm(&Vector2::new(p.x, p.z)))
+            .max_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap_or(0.0)
     }
 }
 
