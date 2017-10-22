@@ -36,7 +36,7 @@ use mpeg_encoder;
 
 use abnf::{self, Grammar};
 use abnf::expand::{expand_grammar, Rulechain, SelectionStrategy};
-use lsys::{self, ol};
+use lsys::{self, ol, SkeletonBuilder};
 use lsys3d;
 use lsystems;
 use yobun::{mean, read_dir_all, unbiased_sample_variance};
@@ -3114,9 +3114,21 @@ fn run_record_video(matches: &ArgMatches) {
     let (mut window, _) = setup_window_with_size(SIZE as u32, SIZE as u32);
 
     let mut camera = {
-        let eye = Point3::new(0.0, 7.0, 5.0);
-        let at = Point3::new(0.0, 3.0, 0.0);
-        ArcBall::new(eye, at)
+        let skeleton = system
+            .instructions_iter(settings.iterations, &settings.command_map)
+            .build_skeleton(&settings)
+            .unwrap();
+        let height = skeleton.find_height();
+        let width = skeleton.find_horizontal_radius();
+
+        let look_at = Point3::new(0.0, height * 0.5, 0.0);
+        let fov = FRAC_PI_2;
+        let near = 0.1;
+        let far = 1024.0;
+        let distance = (height * 0.5 / (fov * 0.5).tan()).max(width * 2.0);
+        let look_from = Point3::new(0.0, height * 0.5, distance * 1.2);
+
+        ArcBall::new_with_frustrum(fov, near, far, look_from, look_at)
     };
 
     let scenery = create_scenery();
