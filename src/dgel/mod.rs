@@ -3108,8 +3108,8 @@ fn run_record_video(matches: &ArgMatches) {
     let model_file = File::open(&model_path).unwrap();
     let system: ol::LSystem = serde_yaml::from_reader(&mut BufReader::new(model_file)).unwrap();
 
-    const SIZE: u16 = 800;
-    Window::context().window_hint(WindowHint::Samples(Some(8)));
+    const SIZE: u16 = 600;
+    Window::context().window_hint(WindowHint::Samples(Some(16)));
     Window::context().window_hint(WindowHint::Resizable(false));
     let (mut window, _) = setup_window_with_size(SIZE as u32, SIZE as u32);
 
@@ -3128,7 +3128,7 @@ fn run_record_video(matches: &ArgMatches) {
     );
     window.scene_mut().add_child(model.clone());
 
-    let num_frames = 200_usize;
+    let num_frames = 400_usize;
     let angle_step = (PI * 2.0) / num_frames as f32;
 
     let snapshots: Vec<_> = (0..num_frames)
@@ -3143,7 +3143,7 @@ fn run_record_video(matches: &ArgMatches) {
 
     let width = window.width() as u16;
     let height = window.height() as u16;
-    let fps = 25;
+    let fps = 60;
     let model_name = Path::new(model_path).file_stem().unwrap().to_str().unwrap();
 
     let extensions = matches.value_of("extension").unwrap().split(",");
@@ -3154,10 +3154,10 @@ fn run_record_video(matches: &ArgMatches) {
             path,
             width as usize,
             height as usize,
-            None,
+            Some(500_000),
             Some((1, fps)),
-            None,
-            None,
+            Some(30),
+            Some(4),
             None,
         );
 
