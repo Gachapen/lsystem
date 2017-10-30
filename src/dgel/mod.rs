@@ -346,6 +346,22 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .help("Video file extension")
             )
         )
+        .subcommand(SubCommand::with_name("sort-models")
+            .about("Sort stored models based on score")
+            .arg(Arg::with_name("grammar")
+                .short("g")
+                .long("grammar")
+                .takes_value(true)
+                .default_value("grammar/lsys2.abnf")
+                .help("Which ABNF grammar to use")
+            )
+            .arg(Arg::with_name("models")
+                .long("models")
+                .takes_value(true)
+                .default_value("model")
+                .help("Which ABNF grammar to use")
+            )
+        )
 }
 
 pub fn run_dgel(matches: &ArgMatches) {
@@ -380,6 +396,8 @@ pub fn run_dgel(matches: &ArgMatches) {
         run_benchmark(matches);
     } else if let Some(matches) = matches.subcommand_matches("record-video") {
         run_record_video(matches);
+    } else if let Some(matches) = matches.subcommand_matches("sort-models") {
+        run_sort_models(matches);
     } else {
         println!("A subcommand must be specified. See help by passing -h.");
     }
@@ -3211,6 +3229,27 @@ pub fn save_lsystem(lsystem: &ol::LSystem) -> PathBuf {
     serde_yaml::to_writer(&mut BufWriter::new(file), lsystem).unwrap();
 
     path
+}
+
+fn run_sort_models(matches: &ArgMatches) {
+    let model_dir = Path::new(matches.value_of("models").unwrap());
+    let models = fs::read_dir(model_dir)
+        .unwrap()
+        .map(|e| e.unwrap().path());
+    let (_, _, settings, _) =
+        get_sample_setup(matches.value_of("grammar").unwrap());
+
+    let mut evaluations: Vec<_> = models.map(|model_path| {
+        let model_file = File::open(&model_path).unwrap();
+        let system: ol::LSystem = serde_yaml::from_reader(&mut BufReader::new(model_file)).unwrap();
+        let fitness = fitness::evaluate(&system, &settings).0.score();
+        (model_path, fitness)
+    }).collect();
+    evaluations.sort_by(|&(_, fit_a), &(_, fit_b)| fit_b.partial_cmp(&fit_a).unwrap());
+
+    for (path, fitness) in evaluations {
+        println!("{} - {}", path.to_str().unwrap(), fitness);
+    }
 }
 
 #[cfg(test)]
