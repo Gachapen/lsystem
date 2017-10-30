@@ -9,6 +9,7 @@ use yobun::partial_clamp;
 
 use lsys::{self, ol};
 use lsys::{Skeleton, SkeletonBuilder};
+use lsys3d;
 use yobun::*;
 
 pub fn is_nothing(lsystem: &ol::LSystem) -> bool {
@@ -99,6 +100,7 @@ pub struct Fitness {
     pub branching: f32,
     pub closeness: f32,
     pub drop: f32,
+    pub foliage: f32,
     pub is_nothing: bool,
 }
 
@@ -109,6 +111,7 @@ impl Fitness {
             branching: 0.0,
             closeness: 0.0,
             drop: 0.0,
+            foliage: 0.0,
             is_nothing: true,
         }
     }
@@ -117,7 +120,7 @@ impl Fitness {
     pub fn reward(&self) -> f32 {
         let branching_reward = partial_max(self.branching, 0.0).expect("Brancing is NaN");
         let balance_reward = partial_max(self.balance, 0.0).expect("Balance is NaN");
-        (balance_reward + branching_reward) / 2.0
+        (balance_reward + branching_reward + self.foliage) / 3.0
     }
 
     /// Punisment of being nothing as either 0 or 1, where 1 is worst.
@@ -152,9 +155,10 @@ impl fmt::Display for Fitness {
         } else {
             write!(
                 f,
-                " (bl: {}, br: {}, cl: {}, dr: {})",
+                " (bl: {}, br: {}, fl: {}, cl: {}, dr: {})",
                 self.balance,
                 self.branching,
+                self.foliage,
                 self.closeness,
                 self.drop
             )
@@ -192,12 +196,14 @@ pub fn evaluate(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (Fitness, O
         let balance = evaluate_balance(&skeleton);
         let closeness = evaluate_closeness(&skeleton);
         let (branching, complexity) = evaluate_branching(&skeleton);
+        let foliage = evaluate_foliage(&skeleton);
 
         let fit = Fitness {
             balance: balance.fitness,
             branching: branching,
             drop: drop_fitness,
             closeness: closeness,
+            foliage: foliage,
             is_nothing: false,
         };
 
@@ -391,6 +397,16 @@ fn branching_fitness(complexity: f32) -> f32 {
 fn evaluate_branching(skeleton: &Skeleton) -> (f32, f32) {
     let complexity = branching_complexity(skeleton);
     (branching_fitness(complexity), complexity)
+}
+
+fn evaluate_foliage(skeleton: &Skeleton) -> f32 {
+    let leaves = lsys3d::place_leaves(&skeleton);
+    let num_leaves = leaves.len();
+
+    // 0 leaves = 0 score, asymptotic towards 1.
+    let strength = 0.1;
+    let x = num_leaves as f32 * strength;
+    x / (1.0 + x)
 }
 
 #[allow(dead_code)]

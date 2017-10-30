@@ -17,7 +17,7 @@ use kiss3d::camera::Camera;
 use rand::{SeedableRng, XorShiftRng};
 use rand::distributions::{IndependentSample, Range};
 
-use lsys::{param, Command, SkeletonBuilder};
+use lsys::{param, Command, Skeleton, SkeletonBuilder};
 
 pub fn build_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
 where
@@ -240,6 +240,115 @@ where
     model
 }
 
+pub struct LeafPlacement {
+    pub position: Point3<f32>,
+    pub orientation: UnitQuaternion<f32>,
+    pub scale: f32,
+}
+
+const STARTING_WIDTH: f32 = 1.0;
+const WIDTH_INCR: f32 = 1.0;
+
+pub fn place_leaves(skeleton: &Skeleton) -> Vec<LeafPlacement>
+{
+    const LEAF_WIDTH_LIMIT: f32 = 20.0;
+
+    fn segment_orientation(from: Point3<f32>, to: Point3<f32>) -> UnitQuaternion<f32> {
+        let direction = na::normalize(&(to - from));
+
+        let rotation = UnitQuaternion::rotation_between(
+            &Vector3::new(0.0, 0.0, -1.0),
+            &Vector3::new(direction.x, direction.y, direction.z),
+        );
+
+        match rotation {
+            Some(rot) => rot,
+            None => {
+                println!(
+                    "WARNING: Could not calulate necessary segment rotation, using hack instead..."
+                );
+                // Getting `None` seems to happen when directions are pointing away from each other
+                // (not confirmed), so we just manually rotate it all the way around.
+                UnitQuaternion::from_euler_angles(0.0, PI, 0.0)
+            }
+        }
+    }
+
+    let mut rng = XorShiftRng::from_seed([2170436650, 448509823, 3575179593, 3066426285]);
+    let angle_range = Range::new(-PI, PI);
+    let mut placements = Vec::new();
+
+    let mut add_leaf =
+        |placements: &mut Vec<LeafPlacement>, at: Point3<f32>, orientation: UnitQuaternion<f32>, width: f32| {
+            let width = (width * 5.0).log10() / 3.0;
+
+            let pitch = FRAC_PI_4 + angle_range.ind_sample(&mut rng) * 0.05;
+            let pitch_rotation = UnitQuaternion::from_euler_angles(pitch, 0.0, 0.0);
+
+            let yaw = angle_range.ind_sample(&mut rng);
+            let yaw_rotation = UnitQuaternion::from_euler_angles(0.0, 0.0, yaw);
+
+            let rotation = orientation * yaw_rotation * pitch_rotation;
+
+            placements.push(LeafPlacement {
+                position: at,
+                orientation: rotation,
+                scale: width,
+            });
+        };
+
+    let leaves = skeleton.find_leaves();
+
+    let mut branchings = HashMap::<usize, (usize, f32)>::new();
+    let mut visit_stack: Vec<_> = leaves
+        .into_iter()
+        .map(|index| (index, STARTING_WIDTH))
+        .collect();
+
+    while let Some((index, mut width)) = visit_stack.pop() {
+        let mut parent = skeleton.parent_map[index];
+
+        let from = skeleton.points[parent];
+        let to = skeleton.points[index];
+        let orientation = segment_orientation(from, to);
+
+        if width <= LEAF_WIDTH_LIMIT {
+            add_leaf(&mut placements, to, orientation, width);
+        }
+
+        while parent != 0 && skeleton.children_map[parent].len() == 1 {
+            let grandparent = skeleton.parent_map[parent];
+
+            let from = skeleton.points[grandparent];
+            let to = skeleton.points[parent];
+            let orientation = segment_orientation(from, to);
+            width += WIDTH_INCR;
+
+            if width <= LEAF_WIDTH_LIMIT {
+                add_leaf(&mut placements, to, orientation, width);
+            }
+
+            parent = grandparent;
+        }
+
+        if parent != 0 {
+            let (ref mut remaining_branches, ref mut largest_width) = *branchings
+                .entry(parent)
+                .or_insert_with(|| (skeleton.children_map[parent].len(), width));
+            assert!(*remaining_branches > 0);
+
+            *remaining_branches -= 1;
+            *largest_width = largest_width.max(width);
+
+            if *remaining_branches == 0 {
+                visit_stack.push((parent, *largest_width + WIDTH_INCR));
+            }
+        }
+    }
+
+    placements
+}
+
 pub fn build_heuristic_model<I>(instructions: I, settings: &lsys::Settings) -> SceneNode
 where
     I: IntoIterator,
@@ -289,6 +398,13 @@ where
         segment.set_color(0.757, 0.604, 0.420);
     }
 
+    let skeleton = match instructions.into_iter().build_skeleton(settings) {
+        None => return SceneNode::new_empty(),
+        Some(skeleton) => skeleton,
+    };
+
+    let leaf_placements = place_leaves(&skeleton);
+
     // This points are the result of the "['{+f-f-f+|+f-f}]" grammar
     let leaf_points = vec![
         Point3::new(0.0, 0.0, 0.0),
@@ -299,44 +415,24 @@ where
         Point3::new(-0.07653669, -0.1847759, 0.0),
     ];
     let leaf_mesh = nct::triangulate(&leaf_points);
-    let mut rng = XorShiftRng::from_seed([2170436650, 448509823, 3575179593, 3066426285]);
-    let angle_range = Range::new(-PI, PI);
 
-    let mut add_leaf =
+    let add_leaf =
         |model: &mut SceneNode, at: Point3<f32>, orientation: UnitQuaternion<f32>, width: f32| {
-            let width = (width * 5.0).log10() / 3.0;
             let scale = Vector3::new(width, width, width);
-
-            let pitch = FRAC_PI_4 + angle_range.ind_sample(&mut rng) * 0.05;
-            let pitch_rotation = UnitQuaternion::from_euler_angles(pitch, 0.0, 0.0);
-
-            let yaw = angle_range.ind_sample(&mut rng);
-            let yaw_rotation = UnitQuaternion::from_euler_angles(0.0, 0.0, yaw);
-
-            let rotation = orientation * yaw_rotation * pitch_rotation;
-
             let mut node = model.add_trimesh(leaf_mesh.clone(), scale);
             node.enable_backface_culling(false);
             node.append_transformation(&Isometry3::from_parts(
                 Translation3::new(at.x, at.y, at.z),
-                rotation,
+                orientation,
             ));
             node.set_color(0.3, 1.0, 0.2);
         };
 
-    const STARTING_WIDTH: f32 = 1.0;
-    const WIDTH_INCR: f32 = 1.0;
-    const LEAF_WIDTH_LIMIT: f32 = 20.0;
-
-    let skeleton = match instructions.into_iter().build_skeleton(settings) {
-        None => return SceneNode::new_empty(),
-        Some(skeleton) => skeleton,
-    };
-    let leaves = skeleton.find_leaves();
+    let leaf_branches = skeleton.find_leaves();
 
     let mut model = SceneNode::new_empty();
     let mut branchings = HashMap::<usize, (usize, f32)>::new();
-    let mut visit_stack: Vec<_> = leaves
+    let mut visit_stack: Vec<_> = leaf_branches
         .into_iter()
         .map(|index| (index, STARTING_WIDTH))
         .collect();
@@ -351,10 +447,6 @@ where
 
         add_segment(&mut model, from, orientation, length, width);
 
-        if width <= LEAF_WIDTH_LIMIT {
-            add_leaf(&mut model, to, orientation, width);
-        }
-
         while parent != 0 && skeleton.children_map[parent].len() == 1 {
             let grandparent = skeleton.parent_map[parent];
 
@@ -365,10 +457,6 @@ where
             width += WIDTH_INCR;
 
             add_segment(&mut model, from, orientation, length, width);
-
-            if width <= LEAF_WIDTH_LIMIT {
-                add_leaf(&mut model, to, orientation, width);
-            }
 
             parent = grandparent;
         }
@@ -386,6 +474,10 @@ where
                 visit_stack.push((parent, *largest_width + WIDTH_INCR));
             }
         }
+    }
+
+    for placement in leaf_placements {
+        add_leaf(&mut model, placement.position, placement.orientation, placement.scale);
     }
 
     model
