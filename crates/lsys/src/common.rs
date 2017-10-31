@@ -283,6 +283,10 @@ impl Skeleton {
             .max_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap_or(0.0)
     }
+
+    pub fn root(&self) -> usize {
+        return 0;
+    }
 }
 
 pub trait SkeletonBuilder: Sized {

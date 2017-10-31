@@ -94,6 +94,14 @@ pub fn is_crap(lsystem: &ol::LSystem, settings: &lsys::Settings) -> bool {
     }
 }
 
+const BALANCE_WEIGHT: f32 = 1.0;
+const BRANCHING_WEIGHT: f32 = 1.0;
+const CLOSENESS_WEIGHT: f32 = 1.0;
+const DROP_WEIGHT: f32 = 1.0;
+const FOLIAGE_WEIGHT: f32 = 1.5;
+const CURVATURE_WEIGHT: f32 = 0.4;
+const LENGTH_WEIGHT: f32 = 1.0;
+
 #[derive(Debug)]
 pub struct Fitness {
     pub balance: f32,
@@ -102,6 +110,7 @@ pub struct Fitness {
     pub drop: f32,
     pub foliage: f32,
     pub curvature: f32,
+    pub length: f32,
     pub is_nothing: bool,
 }
 
@@ -114,15 +123,26 @@ impl Fitness {
             drop: 0.0,
             foliage: 0.0,
             curvature: 0.0,
+            length: 0.0,
             is_nothing: true,
         }
     }
 
     /// Amount of reward in range [0, 1], where 1 is the best.
     pub fn reward(&self) -> f32 {
-        let branching_reward = partial_max(self.branching, 0.0).expect("Brancing is NaN");
-        let balance_reward = partial_max(self.balance, 0.0).expect("Balance is NaN");
-        (balance_reward + branching_reward + self.foliage + self.curvature) / 4.0
+        let branching_reward =
+            partial_max(self.branching, 0.0).expect("Brancing is NaN") * BRANCHING_WEIGHT;
+        let balance_reward =
+            partial_max(self.balance, 0.0).expect("Balance is NaN") * BALANCE_WEIGHT;
+        let foliage_reward = self.foliage * FOLIAGE_WEIGHT;
+        let curvature_reward = self.curvature * CURVATURE_WEIGHT;
+        let length_reward = self.length * LENGTH_WEIGHT;
+
+        const TOTAL_WEIGHT: f32 =
+            BRANCHING_WEIGHT + BALANCE_WEIGHT + FOLIAGE_WEIGHT + CURVATURE_WEIGHT + LENGTH_WEIGHT;
+        const NORMALIZER: f32 = 1.0 / TOTAL_WEIGHT;
+        (balance_reward + branching_reward + foliage_reward + curvature_reward + length_reward)
+            * NORMALIZER
     }
 
     /// Punisment of being nothing as either 0 or 1, where 1 is worst.
@@ -138,8 +158,14 @@ impl Fitness {
     pub fn punishment(&self) -> f32 {
         let branching_punishment = partial_max(-self.branching, 0.0).expect("Branching is NaN");
         let balance_punishment = partial_max(-self.balance, 0.0).expect("Balance is NaN");
-        (balance_punishment + self.drop + branching_punishment + self.closeness) / 4.0
-            + self.nothing_punishment()
+        let drop_punishment = self.drop * DROP_WEIGHT;
+        let closeness_punishment = self.closeness * CLOSENESS_WEIGHT;
+
+        const TOTAL_WEIGHT: f32 =
+            BRANCHING_WEIGHT + BALANCE_WEIGHT + DROP_WEIGHT + CLOSENESS_WEIGHT;
+        const NORMALIZER: f32 = 1.0 / TOTAL_WEIGHT;
+        (balance_punishment + drop_punishment + branching_punishment + closeness_punishment)
+            * NORMALIZER + self.nothing_punishment()
     }
 
     /// Combined reward and punisment in range [0, 1], where 1 is the best.
@@ -150,18 +176,19 @@ impl Fitness {
 
 impl fmt::Display for Fitness {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.score())?;
+        write!(f, "{:.3}", self.score())?;
 
         if self.is_nothing {
             write!(f, " (nothing)")
         } else {
             write!(
                 f,
-                " (bl: {}, br: {}, fl: {}, cu: {}, cl: {}, dr: {})",
+                " (bl: {:.3}, br: {:.3}, fl: {:.3}, cu: {:.3}, le: {:.3}, cl: {:.3}, dr: {:.3})",
                 self.balance,
                 self.branching,
                 self.foliage,
                 self.curvature,
+                self.length,
                 self.closeness,
                 self.drop
             )
@@ -201,6 +228,7 @@ pub fn evaluate(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (Fitness, O
         let (branching, complexity) = evaluate_branching(&skeleton);
         let foliage = evaluate_foliage(&skeleton);
         let curvature = evaluate_curvature(&skeleton);
+        let length = evaluate_length(&skeleton);
 
         let fit = Fitness {
             balance: balance.fitness,
@@ -209,6 +237,7 @@ pub fn evaluate(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (Fitness, O
             closeness: closeness,
             foliage: foliage,
             curvature: curvature,
+            length: length,
             is_nothing: false,
         };
 
@@ -409,8 +438,8 @@ fn evaluate_foliage(skeleton: &Skeleton) -> f32 {
     let num_leaves = leaves.len();
 
     // 0 leaves = 0 score, asymptotic towards 1.
-    let strength = 0.1;
-    let x = num_leaves as f32 * strength;
+    let steepness = 0.1;
+    let x = num_leaves as f32 * steepness;
     x / (1.0 + x)
 }
 
@@ -443,13 +472,11 @@ fn evaluate_curvature(skeleton: &Skeleton) -> f32 {
                 })
                 .min_by(|a, b| a.partial_cmp(b).unwrap())
                 .unwrap();
-            println!("min: {}", min_angle);
             Some(min_angle)
         })
         .collect();
 
     let avg_min_angle: f32 = min_angles.iter().sum::<f32>() / min_angles.len() as f32;
-    println!("avg: {}", avg_min_angle);
 
     const ANGLE_MIN: f32 = 0.0;
     const ANGLE_OPTIMUM: f32 = 0.24711092; // Angle found in a nice looking plant (~14 deg)
@@ -464,6 +491,25 @@ fn evaluate_curvature(skeleton: &Skeleton) -> f32 {
     } else {
         ANGLE_MIN
     }
+}
+
+fn evaluate_length(skeleton: &Skeleton) -> f32 {
+    let mut visit_stack = vec![(skeleton.root(), 0)];
+    let mut longest = 0;
+    while let Some((index, length)) = visit_stack.pop() {
+        if length > longest {
+            longest = length;
+        }
+
+        for child in &skeleton.children_map[index] {
+            visit_stack.push((*child, length + 1));
+        }
+    }
+
+    // 0 length = 0 score, asymptotic towards 1.
+    let steepness = 0.5;
+    let x = longest as f32 * steepness;
+    x / (1.0 + x)
 }
 
 #[allow(dead_code)]

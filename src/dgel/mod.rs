@@ -3242,10 +3242,10 @@ fn run_sort_models(matches: &ArgMatches) {
     let mut evaluations: Vec<_> = models.map(|model_path| {
         let model_file = File::open(&model_path).unwrap();
         let system: ol::LSystem = serde_yaml::from_reader(&mut BufReader::new(model_file)).unwrap();
-        let fitness = fitness::evaluate(&system, &settings).0.score();
+        let fitness = fitness::evaluate(&system, &settings).0;
         (model_path, fitness)
     }).collect();
-    evaluations.sort_by(|&(_, fit_a), &(_, fit_b)| fit_b.partial_cmp(&fit_a).unwrap());
+    evaluations.sort_by(|&(_, ref fit_a), &(_, ref fit_b)| fit_b.score().partial_cmp(&fit_a.score()).unwrap());
 
     for (path, fitness) in evaluations {
         println!("{} - {}", path.to_str().unwrap(), fitness);
