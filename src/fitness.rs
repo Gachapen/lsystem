@@ -1,5 +1,5 @@
 use std::f32;
-use std::f32::consts::PI;
+use std::f32::consts::{FRAC_PI_4, PI};
 use std::fmt;
 
 use na::{self, Point2, Point3, Translation3, Unit, UnitQuaternion, Vector2};
@@ -101,6 +101,7 @@ pub struct Fitness {
     pub closeness: f32,
     pub drop: f32,
     pub foliage: f32,
+    pub curvature: f32,
     pub is_nothing: bool,
 }
 
@@ -112,6 +113,7 @@ impl Fitness {
             closeness: 0.0,
             drop: 0.0,
             foliage: 0.0,
+            curvature: 0.0,
             is_nothing: true,
         }
     }
@@ -120,7 +122,7 @@ impl Fitness {
     pub fn reward(&self) -> f32 {
         let branching_reward = partial_max(self.branching, 0.0).expect("Brancing is NaN");
         let balance_reward = partial_max(self.balance, 0.0).expect("Balance is NaN");
-        (balance_reward + branching_reward + self.foliage) / 3.0
+        (balance_reward + branching_reward + self.foliage + self.curvature) / 4.0
     }
 
     /// Punisment of being nothing as either 0 or 1, where 1 is worst.
@@ -155,10 +157,11 @@ impl fmt::Display for Fitness {
         } else {
             write!(
                 f,
-                " (bl: {}, br: {}, fl: {}, cl: {}, dr: {})",
+                " (bl: {}, br: {}, fl: {}, cu: {}, cl: {}, dr: {})",
                 self.balance,
                 self.branching,
                 self.foliage,
+                self.curvature,
                 self.closeness,
                 self.drop
             )
@@ -197,6 +200,7 @@ pub fn evaluate(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (Fitness, O
         let closeness = evaluate_closeness(&skeleton);
         let (branching, complexity) = evaluate_branching(&skeleton);
         let foliage = evaluate_foliage(&skeleton);
+        let curvature = evaluate_curvature(&skeleton);
 
         let fit = Fitness {
             balance: balance.fitness,
@@ -204,6 +208,7 @@ pub fn evaluate(lsystem: &ol::LSystem, settings: &lsys::Settings) -> (Fitness, O
             drop: drop_fitness,
             closeness: closeness,
             foliage: foliage,
+            curvature: curvature,
             is_nothing: false,
         };
 
@@ -407,6 +412,58 @@ fn evaluate_foliage(skeleton: &Skeleton) -> f32 {
     let strength = 0.1;
     let x = num_leaves as f32 * strength;
     x / (1.0 + x)
+}
+
+fn evaluate_curvature(skeleton: &Skeleton) -> f32 {
+    let min_angles: Vec<f32> = skeleton
+        .children_map
+        .iter()
+        .enumerate()
+        .filter_map(|(parent, children)| {
+            if children.len() == 0 {
+                return None;
+            }
+
+            let grand_parent = skeleton.parent_map[parent];
+            if grand_parent == parent {
+                return None;
+            }
+
+            let parent_pos = skeleton.points[parent];
+
+            let parent_direction =
+                Unit::new_normalize(parent_pos - skeleton.points[grand_parent]).unwrap();
+
+            let min_angle: f32 = children
+                .iter()
+                .map(|child| {
+                    let direction =
+                        Unit::new_normalize(skeleton.points[*child] - parent_pos).unwrap();
+                    na::angle(&direction, &parent_direction)
+                })
+                .min_by(|a, b| a.partial_cmp(b).unwrap())
+                .unwrap();
+            println!("min: {}", min_angle);
+            Some(min_angle)
+        })
+        .collect();
+
+    let avg_min_angle: f32 = min_angles.iter().sum::<f32>() / min_angles.len() as f32;
+    println!("avg: {}", avg_min_angle);
+
+    const ANGLE_MIN: f32 = 0.0;
+    const ANGLE_OPTIMUM: f32 = 0.24711092; // Angle found in a nice looking plant (~14 deg)
+    const ANGLE_MAX: f32 = FRAC_PI_4;
+
+    if avg_min_angle >= ANGLE_MIN && avg_min_angle < ANGLE_OPTIMUM {
+        const ANGLE_RANGE: f32 = ANGLE_OPTIMUM - ANGLE_MIN;
+        interpolate_cos(0.0, 1.0, (avg_min_angle - ANGLE_MIN) / ANGLE_RANGE)
+    } else if avg_min_angle >= ANGLE_OPTIMUM && avg_min_angle < ANGLE_MAX {
+        const ANGLE_RANGE: f32 = ANGLE_MAX - ANGLE_OPTIMUM;
+        interpolate_cos(1.0, 0.0, (avg_min_angle - ANGLE_OPTIMUM) / ANGLE_RANGE)
+    } else {
+        ANGLE_MIN
+    }
 }
 
 #[allow(dead_code)]
