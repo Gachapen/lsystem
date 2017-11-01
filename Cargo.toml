@@ -1,6 +1,6 @@
 [package]
 name = "lsystem"
-version = "0.0.1"
+version = "0.1.0"
 authors = [ "Magnus Bjerke Vik <mbvett@gmail.com>" ]
 
 [dependencies]
