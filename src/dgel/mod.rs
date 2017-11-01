@@ -19,9 +19,8 @@ use rand::distributions::range::SampleRange;
 use na::{Point3, Translation3, UnitQuaternion};
 use kiss3d::camera::ArcBall;
 use kiss3d::scene::SceneNode;
-use kiss3d::window::Window;
 use num::{self, NumCast, Unsigned};
-use glfw::{Action, Key, WindowEvent, WindowHint};
+use glfw::{Action, Key, WindowEvent};
 use serde_yaml;
 use num_cpus;
 use futures::{future, Future};
@@ -32,15 +31,16 @@ use clap::{App, Arg, ArgMatches, SubCommand};
 use csv;
 use chrono::prelude::*;
 use chrono::Duration;
+#[cfg(feature = "record")]
 use mpeg_encoder;
 
 use abnf::{self, Grammar};
 use abnf::expand::{expand_grammar, Rulechain, SelectionStrategy};
-use lsys::{self, ol, SkeletonBuilder};
+use lsys::{self, ol};
 use lsys3d;
 use lsystems;
 use yobun::{mean, read_dir_all, unbiased_sample_variance};
-use super::{setup_window, setup_window_with_size};
+use super::setup_window;
 use super::fitness::{self, Fitness};
 
 const DEPTHS: usize = 4;
@@ -48,7 +48,7 @@ const DEPTHS: usize = 4;
 pub const COMMAND_NAME: &'static str = "dgel";
 
 pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
-    SubCommand::with_name(COMMAND_NAME)
+    let mut command = SubCommand::with_name(COMMAND_NAME)
         .about("Run random plant generation using GE")
         .subcommand(SubCommand::with_name("abnf")
             .about("Print the parsed ABNF structure")
@@ -325,7 +325,25 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
         .subcommand(SubCommand::with_name("bench")
             .about("Run benchmarks")
         )
-        .subcommand(SubCommand::with_name("record-video")
+        .subcommand(SubCommand::with_name("sort-models")
+            .about("Sort stored models based on score")
+            .arg(Arg::with_name("grammar")
+                .short("g")
+                .long("grammar")
+                .takes_value(true)
+                .default_value("grammar/lsys2.abnf")
+                .help("Which ABNF grammar to use")
+            )
+            .arg(Arg::with_name("models")
+                .long("models")
+                .takes_value(true)
+                .default_value("model")
+                .help("Which ABNF grammar to use")
+            )
+        );
+
+    if cfg!(feature = "record") {
+        command = command.subcommand(SubCommand::with_name("record-video")
             .about("Record a video of a plant model")
             .arg(Arg::with_name("MODEL")
                 .required(true)
@@ -345,25 +363,13 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .default_value("mp4")
                 .help("Video file extension")
             )
-        )
-        .subcommand(SubCommand::with_name("sort-models")
-            .about("Sort stored models based on score")
-            .arg(Arg::with_name("grammar")
-                .short("g")
-                .long("grammar")
-                .takes_value(true)
-                .default_value("grammar/lsys2.abnf")
-                .help("Which ABNF grammar to use")
-            )
-            .arg(Arg::with_name("models")
-                .long("models")
-                .takes_value(true)
-                .default_value("model")
-                .help("Which ABNF grammar to use")
-            )
-        )
+        );
+    }
+
+    command
 }
 
+#[allow(unused_variables)]
 pub fn run_dgel(matches: &ArgMatches) {
     // Initialize the ABNF core rules as to not create a lag spike in the first usage of it.
     abnf::core::initialize();
@@ -395,6 +401,7 @@ pub fn run_dgel(matches: &ArgMatches) {
     } else if let Some(matches) = matches.subcommand_matches("bench") {
         run_benchmark(matches);
     } else if let Some(matches) = matches.subcommand_matches("record-video") {
+        #[cfg(feature = "record")]
         run_record_video(matches);
     } else if let Some(matches) = matches.subcommand_matches("sort-models") {
         run_sort_models(matches);
@@ -468,19 +475,8 @@ fn run_visualized(matches: &ArgMatches) {
     let mut settings = Arc::new(settings);
     let mut system = ol::LSystem::new();
 
-    let ground_color = (0.22745098, 0.15294118, 0.06666667);
-
-    let mut ground = window.scene_mut().add_quad(10000.0, 10000.0, 1, 1);
-    ground.set_local_rotation(UnitQuaternion::from_euler_angles(-FRAC_PI_2, 0.0, 0.0));
-    ground.set_local_translation(Translation3::new(0.0, -2.0, 0.0));
-    ground.set_color(ground_color.0, ground_color.1, ground_color.2);
-    ground.enable_backface_culling(true);
-
-    let mut hill = window.scene_mut().add_cube(10.0, 10.0, 10.0);
-    hill.prepend_to_local_rotation(&UnitQuaternion::from_euler_angles(0.615, 0.0, 0.0));
-    hill.prepend_to_local_rotation(&UnitQuaternion::from_euler_angles(0.0, 0.0, FRAC_PI_4));
-    hill.set_local_translation(Translation3::new(0.0, -8.60, 0.0));
-    hill.set_color(ground_color.0, ground_color.1, ground_color.2);
+    let scenery = create_scenery();
+    window.scene_mut().add_child(scenery);
 
     let mut model = lsys3d::build_heuristic_model(
         system.instructions_iter(settings.iterations, &settings.command_map),
@@ -3119,7 +3115,13 @@ fn run_benchmark(_: &ArgMatches) {
     PROFILER.lock().unwrap().stop().unwrap();
 }
 
+#[cfg(feature = "record")]
 fn run_record_video(matches: &ArgMatches) {
+    use super::setup_window_with_size;
+    use kiss3d::window::Window;
+    use glfw::WindowHint;
+    use lsys::SkeletonBuilder;
+
     let (_, _, settings, _) = get_sample_setup(matches.value_of("grammar").unwrap());
 
     let model_path = matches.value_of("MODEL").unwrap();

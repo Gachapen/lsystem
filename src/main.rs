@@ -18,6 +18,7 @@ extern crate rsgenetic;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_yaml;
+#[cfg(feature = "record")]
 extern crate mpeg_encoder;
 
 extern crate abnf;
@@ -79,6 +80,7 @@ fn setup_window() -> (Window, ArcBall) {
     configure_window(Window::new("lsystem"))
 }
 
+#[allow(dead_code)]
 fn setup_window_with_size(width: u32, height: u32) -> (Window, ArcBall) {
     configure_window(Window::new_with_size("lsystem", width, height))
 }
