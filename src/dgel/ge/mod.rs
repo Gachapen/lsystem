@@ -1318,7 +1318,17 @@ fn evolve<'a>(
 
         simulator.run();
 
+        if settings.print {
+            println!("Finding best individual.");
+        }
+
         let best = simulator.get().unwrap().clone();
+
+        if settings.print {
+            println!("Done.");
+            println!("Fitness: {}", best.fitness());
+        }
+
         let population = simulator.population();
 
         if settings.dump {
@@ -1326,17 +1336,8 @@ fn evolve<'a>(
             write_fitness_distribution("ge-distribution-final.csv", &population);
         }
 
-        if settings.print {
-            println!("Finding best individual.");
-        }
-
         (best, population)
     };
-
-    if settings.print {
-        println!("Done.");
-        println!("Fitness: {}", best.fitness());
-    }
 
     if settings.save {
         let model_dir = Path::new("model");
