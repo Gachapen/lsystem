@@ -240,6 +240,76 @@ impl<'a> Clone for LsysPhenotype<'a> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct TargetedLsysPhenotype<'a> {
+    phenotype: LsysPhenotype<'a>,
+    target: f32,
+}
+
+impl<'a> TargetedLsysPhenotype<'a> {
+    pub fn new_random<R: Rng>(
+        grammar: &'a Grammar,
+        distribution: &'a Distribution,
+        stack_rule_index: usize,
+        settings: &'a lsys::Settings,
+        target: f32,
+        rng: &mut R,
+    ) -> Self {
+        TargetedLsysPhenotype {
+            phenotype: LsysPhenotype::new_random(
+                grammar,
+                distribution,
+                stack_rule_index,
+                settings,
+                rng,
+            ),
+            target: target,
+        }
+    }
+
+    /// Remove introns (unused genes)
+    pub fn prune(self) -> Self {
+        TargetedLsysPhenotype {
+            phenotype: self.phenotype.prune(),
+            target: self.target,
+        }
+    }
+
+    /// Duplicate genes
+    pub fn duplicate(self) -> Self {
+        TargetedLsysPhenotype {
+            phenotype: self.phenotype.duplicate(),
+            target: self.target,
+        }
+    }
+
+    pub fn chromosome(&self) -> &Vec<GenePrimitive> {
+        self.phenotype.chromosome()
+    }
+}
+
+impl<'a> Phenotype<LsysFitness> for TargetedLsysPhenotype<'a> {
+    fn fitness(&self) -> LsysFitness {
+        let fitness = self.phenotype.fitness();
+        let targeted_distance = (self.target - fitness.as_f32()).abs();
+        LsysFitness(1.0 - targeted_distance)
+    }
+
+    fn crossover(&self, other: &Self) -> Self {
+        TargetedLsysPhenotype {
+            phenotype: self.phenotype.crossover(&other.phenotype),
+            target: self.target,
+        }
+    }
+
+    fn mutate(self) -> Self {
+        TargetedLsysPhenotype {
+            phenotype: self.phenotype.mutate(),
+            target: self.target,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

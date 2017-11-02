@@ -31,7 +31,7 @@ use dgel::{generate_system, get_sample_setup, random_seed, Distribution, Grammar
            WeightedChromosmeStrategy};
 use self::par_tournament::ParTournamentSelector;
 use self::sim::Simulator;
-use self::pheno::{LsysFitness, LsysPhenotype};
+use self::pheno::{LsysFitness, TargetedLsysPhenotype};
 
 pub const COMMAND_NAME: &'static str = "ge";
 
@@ -105,7 +105,14 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .arg(Arg::with_name("prune").long("prune"))
                 .arg(Arg::with_name("no-print").long("no-print"))
                 .arg(Arg::with_name("dump").long("dump"))
-                .arg(Arg::with_name("no-save").long("no-save")),
+                .arg(Arg::with_name("no-save").long("no-save"))
+                .arg(
+                    Arg::with_name("target-fitness")
+                        .long("target-fitness")
+                        .short("f")
+                        .takes_value(true)
+                        .default_value("1"),
+                ),
         )
         .subcommand(
             SubCommand::with_name("size-sampling")
@@ -229,6 +236,7 @@ pub fn run_ge(matches: &ArgMatches) {
             .parse()
             .unwrap(),
         prune: matches.is_present("prune"),
+        target_fitness: matches.value_of("target-fitness").unwrap().parse().unwrap(),
         print: !matches.is_present("no-print"),
         dump: matches.is_present("dump"),
         save: !matches.is_present("no-save"),
@@ -411,6 +419,7 @@ pub fn run_size_sampling(matches: &ArgMatches) {
         crossover_rate: 0.5,
         mutation_rate: 0.1,
         prune: false,
+        target_fitness: 1.0,
         dump: false,
         print: false,
         save: false,
@@ -605,6 +614,7 @@ pub fn run_tournament_sampling(matches: &ArgMatches) {
         crossover_rate: 0.5,
         mutation_rate: 0.1,
         prune: false,
+        target_fitness: 1.0,
         dump: false,
         print: false,
         save: false,
@@ -1103,6 +1113,7 @@ struct Settings {
     max_iterations: u64,
     tournament_size: usize,
     prune: bool,
+    target_fitness: f32,
     /// Print output while running
     print: bool,
     /// Dump stats
@@ -1121,6 +1132,7 @@ impl Default for Settings {
             crossover_rate: 0.5,
             mutation_rate: 1.0,
             prune: false,
+            target_fitness: 1.0,
             print: false,
             dump: false,
             save: true,
@@ -1137,6 +1149,7 @@ impl Display for Settings {
         writeln!(f, "Crossover rate: {}", self.crossover_rate)?;
         writeln!(f, "Mutation rate: {}", self.mutation_rate)?;
         writeln!(f, "Prune: {}", self.prune)?;
+        writeln!(f, "Target fitness: {}", self.target_fitness)?;
         writeln!(f, "Print: {}", self.print)?;
         writeln!(f, "Dump: {}", self.dump)?;
         write!(f, "Save: {}", self.save)
@@ -1149,7 +1162,7 @@ fn evolve<'a>(
     stack_rule_index: usize,
     lsys_settings: &'a lsys::Settings,
     settings: &Settings,
-) -> (LsysFitness, Vec<LsysPhenotype<'a>>) {
+) -> (LsysFitness, Vec<TargetedLsysPhenotype<'a>>) {
     let stats_file = OpenOptions::new()
         .write(true)
         .create(true)
@@ -1178,11 +1191,12 @@ fn evolve<'a>(
         let mut rng = XorShiftRng::from_seed(random_seed());
         let population: Vec<_> = (0..settings.population_size)
             .map(|_| {
-                LsysPhenotype::new_random(
+                TargetedLsysPhenotype::new_random(
                     grammar,
                     distribution,
                     stack_rule_index,
                     lsys_settings,
+                    settings.target_fitness,
                     &mut rng,
                 )
             })
@@ -1271,27 +1285,29 @@ fn evolve<'a>(
         }
 
         if settings.dump {
-            builder = builder.set_step_callback(|iteration: u64, population: &[LsysPhenotype]| {
-                let fitnesses: Vec<_> = population.iter().map(|p| p.fitness().as_f32()).collect();
+            builder =
+                builder.set_step_callback(|iteration: u64, population: &[TargetedLsysPhenotype]| {
+                    let fitnesses: Vec<_> =
+                        population.iter().map(|p| p.fitness().as_f32()).collect();
 
-                let sum: f32 = fitnesses.iter().sum();
-                let average = sum / population.len() as f32;
-                let best = fitnesses
-                    .iter()
-                    .max_by(|a, b| a.partial_cmp(b).unwrap())
-                    .unwrap();
+                    let sum: f32 = fitnesses.iter().sum();
+                    let average = sum / population.len() as f32;
+                    let best = fitnesses
+                        .iter()
+                        .max_by(|a, b| a.partial_cmp(b).unwrap())
+                        .unwrap();
 
-                if !dumped_mid_distribution && average >= 0.5 {
-                    println!("Dumping mid fitness distribution.");
-                    write_fitness_distribution("ge-distribution-mid.csv", population);
-                    dumped_mid_distribution = true;
-                }
+                    if !dumped_mid_distribution && average >= 0.5 {
+                        println!("Dumping mid fitness distribution.");
+                        write_fitness_distribution("ge-distribution-mid.csv", population);
+                        dumped_mid_distribution = true;
+                    }
 
-                let stats_csv = format!("{},{},{}\n", iteration, average, best);
-                stats_writer
-                    .write_all(stats_csv.as_bytes())
-                    .expect("Could not write to stats file");
-            });
+                    let stats_csv = format!("{},{},{}\n", iteration, average, best);
+                    stats_writer
+                        .write_all(stats_csv.as_bytes())
+                        .expect("Could not write to stats file");
+                });
         }
 
         let mut simulator = builder.build();
@@ -1342,7 +1358,7 @@ fn evolve<'a>(
     (best.fitness(), population)
 }
 
-fn write_fitness_distribution<P: AsRef<Path>>(path: P, population: &[LsysPhenotype]) {
+fn write_fitness_distribution<P: AsRef<Path>>(path: P, population: &[TargetedLsysPhenotype]) {
     let file = File::create(path).unwrap();
     let mut writer = csv::Writer::from_writer(BufWriter::new(file));
     writer.write_record(&["fitness"]).unwrap();
