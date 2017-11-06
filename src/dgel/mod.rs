@@ -101,6 +101,13 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
                 .default_value("grammar/lsys2.abnf")
                 .help("Which ABNF grammar to use")
             )
+            .arg(Arg::with_name("models")
+                .short("m")
+                .long("models")
+                .takes_value(true)
+                .default_value("model")
+                .help("Directory to load/save models to")
+            )
         )
         .subcommand(SubCommand::with_name("sampling")
             .about("Run random sampling program until you type 'quit'")
@@ -490,7 +497,7 @@ fn run_visualized(matches: &ArgMatches) {
         ArcBall::new(eye, at)
     };
 
-    let model_dir = Path::new("model");
+    let model_dir = Path::new(matches.value_of("models").unwrap());
     fs::create_dir_all(model_dir).unwrap();
     let mut model_index = 0;
 
