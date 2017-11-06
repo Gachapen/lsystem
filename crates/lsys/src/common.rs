@@ -267,12 +267,26 @@ impl Skeleton {
             .collect()
     }
 
-    pub fn find_height(&self) -> f32 {
+    /// Find the hightest point that the system reaches
+    pub fn find_top(&self) -> f32 {
         self.points
             .iter()
             .map(|p| p.y)
             .max_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap_or(0.0)
+    }
+
+    /// Find the lowest point that the system reaches
+    pub fn find_bottom(&self) -> f32 {
+        self.points
+            .iter()
+            .map(|p| p.y)
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap_or(0.0)
+    }
+
+    pub fn find_height(&self) -> f32 {
+        self.find_top() - self.find_bottom()
     }
 
     /// Find the largest radius in the horizontal plane

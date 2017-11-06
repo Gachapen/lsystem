@@ -3145,15 +3145,21 @@ fn run_record_video(matches: &ArgMatches) {
             .instructions_iter(settings.iterations, &settings.command_map)
             .build_skeleton(&settings)
             .unwrap();
-        let height = skeleton.find_height();
-        let width = skeleton.find_horizontal_radius();
 
-        let look_at = Point3::new(0.0, height * 0.5, 0.0);
-        let fov = FRAC_PI_2;
+        let top = skeleton.find_top();
+        let bottom = skeleton.find_bottom();
+        let height = top - bottom;
+        let center = bottom + height * 0.5;
+        let radius = skeleton.find_horizontal_radius();
+        let max_dimension = height.max(radius * 2.0);
+        let padding = 0.7;
+
+        let look_at = Point3::new(0.0, center, 0.0);
+        let fov = FRAC_PI_4;
         let near = 0.1;
         let far = 1024.0;
-        let distance = (height * 0.5 / (fov * 0.5).tan()).max(width * 2.0);
-        let look_from = Point3::new(0.0, height * 0.5, distance * 1.2);
+        let distance = ((max_dimension + padding) * 0.5 / (fov * 0.5).tan()).max(radius + padding);
+        let look_from = Point3::new(0.0, center, distance);
 
         ArcBall::new_with_frustrum(fov, near, far, look_from, look_at)
     };
