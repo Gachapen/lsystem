@@ -3199,10 +3199,10 @@ fn run_record_video(matches: &ArgMatches) {
             path,
             width as usize,
             height as usize,
-            Some(500_000),
+            None,
             Some((1, fps)),
-            Some(30),
-            Some(4),
+            None,
+            None,
             None,
         );
 

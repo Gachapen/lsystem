@@ -21,7 +21,7 @@ csv = "1.0.0-beta.5"
 rsgenetic = { git = "https://github.com/Gachapen/RsGenetic.git", branch = "features" }
 cpuprofiler = "0.0.3"
 rayon = "^0.8.2"
-mpeg_encoder = { git = "https://github.com/Gachapen/mpeg_encoder.git", branch = "fix", optional = true }
+mpeg_encoder = { git = "https://github.com/Gachapen/mpeg_encoder.git", branch = "hack", optional = true }
 
 # Dependencies of kiss3d also used by the project.
 # Dependencies must match the same versions kiss3d uses.
