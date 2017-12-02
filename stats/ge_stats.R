@@ -23,7 +23,9 @@ plot_ge_comparison <- function(file) {
 
   ggplot(data=stats, aes(label, best)) +
     stat_summary(fun.y = mean, geom = "bar") +
-    stat_summary(fun.data = mean_se, geom = "errorbar")
+    stat_summary(fun.data = mean_se, geom = "errorbar") +
+    scale_x_discrete(name="method") +
+    scale_y_continuous(name="mean of best fitness")
 }
 
 plot_ge_comparison_duration <- function(file) {
