@@ -41,3 +41,39 @@ score_changes <- function(stats) {
     geom_errorbar(aes(ymin = value - se, ymax = value + se), width = 0.1, alpha = 0.5) +
     ylim(-1.01, 1.01)
 }
+
+plot_population_comparison <- function(file) {
+  stats <- read.csv(file = file, header = TRUE)
+
+  uniform <- stats[stats$population == 'uniform', 'score']
+  sa <- stats[stats$population == 'sa', 'score']
+
+  print(var.test(uniform, sa))
+  print(t.test(uniform, sa, var.equal = TRUE))
+  print(wilcox.test(uniform, sa))
+
+  ggplot(data=stats, aes(population, score)) +
+    stat_summary(fun.y = mean, geom = "bar") +
+    stat_summary(fun.data = mean_se, geom = "errorbar") +
+    scale_x_discrete(name="population") +
+    scale_y_continuous(name="fitness mean", limits=c(0, 1))
+}
+
+plot_score_distribution <- function(file, population) {
+  data <- read.csv(file = file, header = TRUE)
+  population_data <- data[data$population == population, ]
+  mean <- data.frame(label = "mean", val = mean(population_data$score, na.rm = T))
+  median <- data.frame(label = "median", val = median(population_data$score, na.rm = T))
+  averages <- rbind(mean, median)
+
+  ggplot(
+    data = population_data,
+    aes(
+      x = score
+    )
+  ) +
+    xlim(-0.05, 1.05) +
+    geom_histogram(aes(y = ..density..), breaks = seq(0, 1, 0.01), colour="black", fill="white") +
+    geom_density(alpha = 0.2, fill = "#FF6666") +
+    geom_vline(data = averages, aes(xintercept = val, linetype = label, color = label), show.legend = TRUE)
+}
