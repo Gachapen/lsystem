@@ -61,10 +61,13 @@ plot_population_comparison <- function(file) {
 
 plot_score_distribution <- function(file, population) {
   data <- read.csv(file = file, header = TRUE)
-  population_data <- data[data$population == population, ]
+  # population_data <- data[which(data$population == population), ]
+  population_data <- data[which(data$population == population & data$score > 0), ]
+  cat("Population size: ", length(population_data$score), " (", length(population_data$score) / length(data[which(data$population == population), ]$score) * 100, "%)\n")
   mean <- data.frame(label = "mean", val = mean(population_data$score, na.rm = T))
   median <- data.frame(label = "median", val = median(population_data$score, na.rm = T))
   averages <- rbind(mean, median)
+  print(averages)
 
   ggplot(
     data = population_data,
