@@ -3195,6 +3195,27 @@ fn run_record_video(matches: &ArgMatches) {
     for extension in extensions {
         let path = Path::new("video").join(model_name.to_owned() + "." + extension);
 
+        let options = match extension {
+            "mp4" => vec![
+                ("preset".to_string(), Some("ultrafast".to_string())),
+                ("crf".to_string(), Some("0".to_string())),
+            ],
+            "webm" => {
+                let target_bitrate = 1400_u32;
+                let min_bitrate = target_bitrate / 2;
+                let max_bitrate = (target_bitrate as f32 * 1.45) as u32;
+
+                vec![
+                    ("quality".to_string(), Some("good".to_string())),
+                    ("crf".to_string(), Some("32".to_string())),
+                    ("b".to_string(), Some(format!("{}", target_bitrate))),
+                    ("minrate".to_string(), Some(format!("{}", min_bitrate))),
+                    ("maxrate".to_string(), Some(format!("{}", max_bitrate))),
+                ]
+            },
+            _ => vec![],
+        };
+
         let mut encoder = mpeg_encoder::Encoder::new_with_params(
             path,
             width as usize,
@@ -3204,6 +3225,7 @@ fn run_record_video(matches: &ArgMatches) {
             None,
             None,
             None,
+            options,
         );
 
         for pixels in &snapshots {

@@ -569,7 +569,7 @@ dependencies = [
  "kiss3d 0.11.0 (git+https://github.com/Gachapen/kiss3d.git?branch=glfw_context)",
  "lsys 0.1.0",
  "lsys_kiss3d 0.1.0",
- "mpeg_encoder 0.2.1 (git+https://github.com/Gachapen/mpeg_encoder.git?branch=hack)",
+ "mpeg_encoder 0.2.1 (git+https://github.com/Gachapen/mpeg_encoder.git?branch=set_options)",
  "nalgebra 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "ncollide_utils 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "num 0.1.40 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -607,7 +607,7 @@ dependencies = [
 [[package]]
 name = "mpeg_encoder"
 version = "0.2.1"
-source = "git+https://github.com/Gachapen/mpeg_encoder.git?branch=hack#fb08868a1abf6a18e2151f6da5fe011d15127366"
+source = "git+https://github.com/Gachapen/mpeg_encoder.git?branch=set_options#be9f3782a78dd1ed023a9fdb214f0dd0f7fcc62a"
 dependencies = [
  "ffmpeg-sys 3.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -1238,7 +1238,7 @@ dependencies = [
 "checksum lzw 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)" = "7d947cbb889ed21c2a84be6ffbaebf5b4e0f4340638cba0444907e38b56be084"
 "checksum matrixmultiply 0.1.14 (registry+https://github.com/rust-lang/crates.io-index)" = "cac1a66eab356036af85ea093101a14223dc6e3f4c02a59b7d572e5b93270bf7"
 "checksum memchr 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "148fab2e51b4f1cfc66da2a7c32981d1d3c083a803978268bb11fe4b86925e7a"
-"checksum mpeg_encoder 0.2.1 (git+https://github.com/Gachapen/mpeg_encoder.git?branch=hack)" = "<none>"
+"checksum mpeg_encoder 0.2.1 (git+https://github.com/Gachapen/mpeg_encoder.git?branch=set_options)" = "<none>"
 "checksum nalgebra 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)" = "c8516d8710f28c64cfc75b274c75c55c967ad4ece7090521b3c065de1d12336b"
 "checksum ncollide_geometry 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)" = "ce6b6a22647f0f0aff90f7237e69150784da41a78b134554ec26c7e406e189e7"
 "checksum ncollide_math 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)" = "64b88168c4ddad2e1123299bfb529c4de73383520caf45ccb5a9c9129fdcbe3d"
