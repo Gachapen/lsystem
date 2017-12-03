@@ -66,18 +66,20 @@ plot_sa_2 <- function(file) {
 
   print(stats[stats$iteration == 1161,])
 
-  ggplot() +
-    # scale_x_continuous(breaks = seq(0, nrow(stats), by = 512)) +
-    # xlim(8900, 9035) +
-    ylim(0, 1) +
-    # geom_point(data = stats, aes(iteration, temperature), color = "green") +
+  ggplot(stats, aes(x = iteration, y = score, color = type)) +
+    ylab("fitness or temperature") +
+    # ylim(0, 1) +
+    ylim(0, 0.67) +
+    xlim(0, 49500) +
+    geom_point(data = stats, aes(iteration, temperature), color = "#777777", size = 0.1) +
+    geom_point(size = 0.1, alpha = 0.3) +
+    scale_color_manual(values = c("init" = "black", "improve" = "green4", "explore" = "blue3", "stay" = "red3"), guide = guide_legend(title = "move", override.aes = list(alpha = 1, size = 1)))
     # geom_line(data = stats[stats$accepted == "true",], aes(iteration, score), size = 1, color = "grey") +
     # geom_smooth(data = stats[stats$type == "improve",], aes(iteration, score), color = "green4") +
-    geom_point(data = stats, aes(iteration, temperature), size = 0.5, color = "black") +
-    geom_point(data = stats[stats$type == "stay",], aes(iteration, score), size = 1, color = "red3", alpha = 0.3) +
+    # geom_point(data = stats[stats$type == "stay",], aes(iteration, score), size = 1, color = "red3", alpha = 0.3) +
     # geom_smooth(data = stats[stats$type == "stay",], aes(iteration, score), color = "red3") +
-    geom_point(data = stats[stats$type == "explore",], aes(iteration, score), size = 1, color = "blue3", alpha = 0.3) +
-    geom_point(data = stats[stats$type == "improve",], aes(iteration, score), size = 1, color = "green4", alpha = 0.3)
+    # geom_point(data = stats[stats$type == "explore",], aes(iteration, score), size = 1, color = "blue3", alpha = 0.3) +
+    # geom_point(data = stats[stats$type == "improve",], aes(iteration, score), size = 1, color = "green4", alpha = 0.3)
     # geom_smooth(data = stats[stats$accepted == "true",], aes(iteration, score), size = 1, color = "grey")
     # geom_smooth(data = stats[stats$type == "explore",], aes(iteration, score), color = "blue3")
 }
