@@ -140,9 +140,13 @@ impl Fitness {
 
         const TOTAL_WEIGHT: f32 =
             BRANCHING_WEIGHT + BALANCE_WEIGHT + FOLIAGE_WEIGHT + CURVATURE_WEIGHT + LENGTH_WEIGHT;
-        const NORMALIZER: f32 = 1.0 / TOTAL_WEIGHT;
-        (balance_reward + branching_reward + foliage_reward + curvature_reward + length_reward)
-            * NORMALIZER
+        if TOTAL_WEIGHT == 0.0 {
+            0.0
+        } else {
+            const NORMALIZER: f32 = 1.0 / TOTAL_WEIGHT;
+            (balance_reward + branching_reward + foliage_reward + curvature_reward + length_reward)
+                * NORMALIZER
+        }
     }
 
     /// Punisment of being nothing as either 0 or 1, where 1 is worst.
@@ -156,16 +160,22 @@ impl Fitness {
 
     /// Amount of punishment in range [0, 1], where 1 is the worst.
     pub fn punishment(&self) -> f32 {
-        let branching_punishment = partial_max(-self.branching, 0.0).expect("Branching is NaN");
-        let balance_punishment = partial_max(-self.balance, 0.0).expect("Balance is NaN");
+        let branching_punishment =
+            partial_max(-self.branching, 0.0).expect("Branching is NaN") * BRANCHING_WEIGHT;
+        let balance_punishment =
+            partial_max(-self.balance, 0.0).expect("Balance is NaN") * BALANCE_WEIGHT;
         let drop_punishment = self.drop * DROP_WEIGHT;
         let closeness_punishment = self.closeness * CLOSENESS_WEIGHT;
 
         const TOTAL_WEIGHT: f32 =
             BRANCHING_WEIGHT + BALANCE_WEIGHT + DROP_WEIGHT + CLOSENESS_WEIGHT;
-        const NORMALIZER: f32 = 1.0 / TOTAL_WEIGHT;
-        (balance_punishment + drop_punishment + branching_punishment + closeness_punishment)
-            * NORMALIZER + self.nothing_punishment()
+        if TOTAL_WEIGHT == 0.0 {
+            0.0
+        } else {
+            const NORMALIZER: f32 = 1.0 / TOTAL_WEIGHT;
+            (balance_punishment + drop_punishment + branching_punishment + closeness_punishment)
+                * NORMALIZER + self.nothing_punishment()
+        }
     }
 
     /// Combined reward and punisment in range [0, 1], where 1 is the best.
