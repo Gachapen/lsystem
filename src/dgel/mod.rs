@@ -720,7 +720,7 @@ struct SampleBatch {
     accepted: Vec<[u32; 4]>,
 }
 
-fn get_sample_settings() -> lsys::Settings {
+pub fn get_sample_settings() -> lsys::Settings {
     lsys::Settings {
         width: 0.05,
         angle: PI / 8.0,

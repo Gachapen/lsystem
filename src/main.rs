@@ -37,7 +37,9 @@ use na::Point3;
 use kiss3d::window::Window;
 use kiss3d::light::Light;
 use kiss3d::camera::ArcBall;
-use clap::{App, SubCommand};
+use clap::{App, Arg, SubCommand};
+use std::io::BufReader;
+use std::fs::File;
 
 mod lsystems;
 mod glp;
@@ -55,6 +57,16 @@ fn main() {
         )
         .subcommand(SubCommand::with_name("generated").about("Run random generation of plant"))
         .subcommand(dgel::get_subcommand())
+        .subcommand(
+            SubCommand::with_name("measure")
+                .about("Measure the fitness of a model")
+                .arg(
+                    Arg::with_name("MODEL")
+                        .required(true)
+                        .index(1)
+                        .help("Model to measure"),
+                ),
+        )
         .get_matches();
 
     if matches.subcommand_matches("static").is_some() {
@@ -69,6 +81,13 @@ fn main() {
     } else if matches.subcommand_matches("generated").is_some() {
         let (mut window, mut camera) = setup_window();
         glp::run_generated(&mut window, &mut camera);
+    } else if let Some(args) = matches.subcommand_matches("measure") {
+        let model_path = args.value_of("MODEL").unwrap();
+        let file = File::open(model_path).unwrap();
+        let lsystem = serde_yaml::from_reader(&mut BufReader::new(file)).unwrap();
+        let settings = dgel::get_sample_settings();
+        let (fit, _) = fitness::evaluate(&lsystem, &settings);
+        println!("{}", fit.score());
     } else if let Some(matches) = matches.subcommand_matches(dgel::COMMAND_NAME) {
         dgel::run_dgel(matches);
     } else {
