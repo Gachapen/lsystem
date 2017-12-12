@@ -1,6 +1,7 @@
 library(ggplot2)
 library(gridExtra)
 library(scales)
+library(lawstat)
 
 plot_ge <- function(file) {
   stats <- read.csv(file = file, header = TRUE)
@@ -14,30 +15,47 @@ plot_ge <- function(file) {
 plot_ge_comparison <- function(file) {
   stats <- read.csv(file = file, header = TRUE)
 
-  random <- stats[stats$label == 'random', 'best']
+  random <- stats[stats$label == 'brute-force', 'best']
   ge <- stats[stats$label == 'ge', 'best']
 
-  print(var.test(random, ge))
-  print(t.test(random, ge, var.equal = TRUE))
-  print(wilcox.test(random, ge))
+  print(shapiro.test(random))
+  print(shapiro.test(ge))
+
+  y <- c(random, ge)
+  group <- as.factor(c(rep(1, length(random)), rep(2, length(ge))))
+  print(levene.test(y, group))
+
+  # print(t.test(random, ge, var.equal = TRUE))
+  cat('Random median: ', median(random), '\n')
+  cat('GE median: ', median(ge), '\n')
+  cat('Median diff: ', median(ge) - median(random), '\n')
+  print(wilcox.test(ge, random))
 
   ggplot(data=stats, aes(label, best)) +
-    stat_summary(fun.y = mean, geom = "bar") +
-    stat_summary(fun.data = mean_se, geom = "errorbar") +
+    stat_summary(fun.y = median, geom = "bar") +
+    stat_summary(fun.ymin = function(x) median(x) - mad(x), fun.ymax = function(x) median(x) + mad(x), geom = "errorbar") +
     scale_x_discrete(name="method") +
-    scale_y_continuous(name="mean of best fitness")
+    scale_y_continuous(name="median of best fitness")
 }
 
 plot_ge_comparison_duration <- function(file) {
   stats <- read.csv(file = file, header = TRUE)
   stats[, 'duration'] <- stats[, 'duration'] / 11
 
-  random <- stats[stats$label == 'random', 'duration']
+  random <- stats[stats$label == 'brute-force', 'duration']
   ge <- stats[stats$label == 'ge', 'duration']
 
-  print(var.test(random, ge))
-  print(t.test(random, ge, var.equal = TRUE))
-  print(wilcox.test(random, ge))
+  print(shapiro.test(random))
+  print(shapiro.test(ge))
+
+  y <- c(random, ge)
+  group <- as.factor(c(rep(1, length(random)), rep(2, length(ge))))
+  print(levene.test(y, group))
+
+  cat('Random mean: ', mean(random), '\n')
+  cat('GE mean: ', mean(ge), '\n')
+  cat('Mean diff: ', mean(ge) - mean(random), '\n')
+  print(t.test(ge, random, var.equal = FALSE))
 
   ggplot(data=stats, aes(label, duration)) +
     stat_summary(fun.y = mean, geom = "bar") +

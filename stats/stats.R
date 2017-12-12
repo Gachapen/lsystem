@@ -44,19 +44,38 @@ score_changes <- function(stats) {
 
 plot_population_comparison <- function(file) {
   stats <- read.csv(file = file, header = TRUE)
+  stats <- stats[stats$score > 0, ]
 
   uniform <- stats[stats$population == 'uniform', 'score']
   sa <- stats[stats$population == 'sa', 'score']
 
-  print(var.test(uniform, sa))
-  print(t.test(uniform, sa, var.equal = TRUE))
+  # ggplot(data = stats, aes(sample = score, group = population, color = population)) +
+  #   geom_qq()
+
+  # print(shapiro.test(uniform))
+  # print(shapiro.test(sa))
+
+  y <- c(uniform, sa)
+  group <- as.factor(c(rep(1, length(uniform)), rep(2, length(sa))))
+  print(levene.test(y, group))
+
+  # print(t.test(uniform, sa, var.equal = TRUE))
+  cat('Uniform median: ', median(uniform), ' (MAD: ', mad(uniform), ')\n')
+  cat('Uniform mean: ', mean(uniform), ' (SD: ', sd(uniform), ')\n')
+  cat('SA median: ', median(sa), ' (MAD: ', mad(sa), ')\n')
+  cat('SA mean: ', mean(sa), ' (SD: ', sd(sa), ')\n')
+  cat('Median diff: ', median(sa) - median(uniform), '\n')
   print(wilcox.test(uniform, sa))
 
+  # print(var.test(uniform, sa))
+  # print(t.test(uniform, sa, var.equal = TRUE))
+  # print(wilcox.test(uniform, sa))
+
   ggplot(data=stats, aes(population, score)) +
-    stat_summary(fun.y = mean, geom = "bar") +
-    stat_summary(fun.data = mean_se, geom = "errorbar") +
+    stat_summary(fun.y = median, geom = "bar") +
+    stat_summary(fun.ymin = function(x) median(x) - mad(x), fun.ymax = function(x) median(x) + mad(x), geom = "errorbar") +
     scale_x_discrete(name="population") +
-    scale_y_continuous(name="fitness mean", limits=c(0, 1))
+    scale_y_continuous(name="fitness median", limits=c(0, 1))
 }
 
 plot_score_distribution <- function(file, population) {
