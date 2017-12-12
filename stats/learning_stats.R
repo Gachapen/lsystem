@@ -69,7 +69,7 @@ plot_sa_2 <- function(file) {
   ggplot(stats, aes(x = iteration, y = score, color = type)) +
     ylab("fitness or temperature") +
     # ylim(0, 1) +
-    ylim(0, 0.67) +
+    ylim(0, 0.68) +
     xlim(0, 49500) +
     geom_point(data = stats, aes(iteration, temperature), color = "#777777", size = 0.1) +
     geom_point(size = 0.1, alpha = 0.3) +
