@@ -36,7 +36,7 @@ use mpeg_encoder;
 
 use abnf::{self, Grammar};
 use abnf::expand::{expand_grammar, Rulechain, SelectionStrategy};
-use lsys::{self, ol};
+use lsys::{self, ol, Skeleton, SkeletonBuilder};
 use lsys3d;
 use lsystems;
 use yobun::{mean, read_dir_all, unbiased_sample_variance};
@@ -622,6 +622,13 @@ fn run_visualized(matches: &ArgMatches) {
                         println!("Fitness: {}", fit);
 
                         model_index = 0;
+
+                        let skeleton = system
+                            .instructions_iter(settings.iterations, &settings.command_map)
+                            .build_skeleton(&settings)
+                            .unwrap();
+
+                        camera = find_plant_view(&skeleton)
                     } else {
                         println!("Plant was nothing or reached the limits.");
                     }
@@ -650,20 +657,26 @@ fn run_visualized(matches: &ArgMatches) {
 
                         println!("Loaded {}", path.to_str().unwrap());
 
-                        println!("LSystem:");
-                        println!("{}", system);
+                        // println!("LSystem:");
+                        // println!("{}", system);
 
                         let (fit, properties) = fitness::evaluate(&system, &settings);
                         println!("{:#?}", properties);
                         println!("Fitness: {}", fit);
 
-                        if properties.is_some() {
+                        if let Some(_properties) = properties {
                             window.remove(&mut model);
                             let instructions = system
                                 .instructions_iter(settings.iterations, &settings.command_map);
                             model = lsys3d::build_heuristic_model(instructions, &settings);
                             // fitness::add_properties_rendering(&mut model, &properties);
                             window.scene_mut().add_child(model.clone());
+
+                            let skeleton = system
+                                .instructions_iter(settings.iterations, &settings.command_map)
+                                .build_skeleton(&settings)
+                                .unwrap();
+                            camera = find_plant_view(&skeleton)
                         }
                     }
 
@@ -3122,12 +3135,30 @@ fn run_benchmark(_: &ArgMatches) {
     PROFILER.lock().unwrap().stop().unwrap();
 }
 
+fn find_plant_view(skeleton: &Skeleton) -> ArcBall {
+    let top = skeleton.find_top();
+    let bottom = skeleton.find_bottom();
+    let height = top - bottom;
+    let center = bottom + height * 0.5;
+    let radius = skeleton.find_horizontal_radius();
+    let max_dimension = height.max(radius * 2.0);
+    let padding = 0.7;
+
+    let look_at = Point3::new(0.0, center, 0.0);
+    let fov = FRAC_PI_4;
+    let near = 0.1;
+    let far = 1024.0;
+    let distance = ((max_dimension + padding) * 0.5 / (fov * 0.5).tan()).max(radius + padding);
+    let look_from = Point3::new(0.0, center, distance);
+
+    ArcBall::new_with_frustrum(fov, near, far, look_from, look_at)
+}
+
 #[cfg(feature = "record")]
 fn run_record_video(matches: &ArgMatches) {
     use super::setup_window_with_size;
     use kiss3d::window::Window;
     use glfw::WindowHint;
-    use lsys::SkeletonBuilder;
 
     let (_, _, settings, _) = get_sample_setup(matches.value_of("grammar").unwrap());
 
@@ -3146,22 +3177,7 @@ fn run_record_video(matches: &ArgMatches) {
             .build_skeleton(&settings)
             .unwrap();
 
-        let top = skeleton.find_top();
-        let bottom = skeleton.find_bottom();
-        let height = top - bottom;
-        let center = bottom + height * 0.5;
-        let radius = skeleton.find_horizontal_radius();
-        let max_dimension = height.max(radius * 2.0);
-        let padding = 0.7;
-
-        let look_at = Point3::new(0.0, center, 0.0);
-        let fov = FRAC_PI_4;
-        let near = 0.1;
-        let far = 1024.0;
-        let distance = ((max_dimension + padding) * 0.5 / (fov * 0.5).tan()).max(radius + padding);
-        let look_from = Point3::new(0.0, center, distance);
-
-        ArcBall::new_with_frustrum(fov, near, far, look_from, look_at)
+        find_plant_view(&skeleton)
     };
 
     let scenery = create_scenery();
