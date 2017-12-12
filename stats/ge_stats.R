@@ -200,3 +200,25 @@ plot_ge_scores_distribution <- function(file) {
     geom_density(alpha = 0.2, fill = "#FF6666") +
     geom_vline(aes(xintercept = mean(best, na.rm = T)), color = "red", linetype = "dashed", size = 1)
 }
+
+plot_ge_duplication_sampling <- function(file) {
+  stats <- read.csv(file = file, header = TRUE)
+
+  ggplot(
+    data=stats,
+    aes(
+      x = factor(as.character(rate), levels = unique(rate)),
+      y = average,
+      fill = duration / 20 / 60,
+    )
+  ) +
+    # ylim(1, 1) +
+    geom_bar(stat="identity") +
+    geom_errorbar(aes(ymin = average - sqrt(variance) / sqrt(20), ymax = average + sqrt(variance) / sqrt(20)), width=0.8, color="red3") +
+    labs(
+      x = "Duplication rate",
+      y = "Mean score",
+      fill = "Mean duration (m)"
+    ) +
+    scale_fill_gradientn(colors = c("#49f770", "#ffed5e", "#ff3155"))
+}
