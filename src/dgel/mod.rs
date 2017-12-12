@@ -350,26 +350,30 @@ pub fn get_subcommand<'a, 'b>() -> App<'a, 'b> {
         );
 
     if cfg!(feature = "record") {
-        command = command.subcommand(SubCommand::with_name("record-video")
-            .about("Record a video of a plant model")
-            .arg(Arg::with_name("MODEL")
-                .required(true)
-                .index(1)
-                .help("The model to record")
-            )
-            .arg(Arg::with_name("grammar")
-                .short("g")
-                .long("grammar")
-                .takes_value(true)
-                .default_value("grammar/lsys2.abnf")
-                .help("Which ABNF grammar to use")
-            )
-            .arg(Arg::with_name("extension")
-                .long("ext")
-                .takes_value(true)
-                .default_value("mp4")
-                .help("Video file extension")
-            )
+        command = command.subcommand(
+            SubCommand::with_name("record-video")
+                .about("Record a video of a plant model")
+                .arg(
+                    Arg::with_name("MODEL")
+                        .required(true)
+                        .index(1)
+                        .help("The model to record"),
+                )
+                .arg(
+                    Arg::with_name("grammar")
+                        .short("g")
+                        .long("grammar")
+                        .takes_value(true)
+                        .default_value("grammar/lsys2.abnf")
+                        .help("Which ABNF grammar to use"),
+                )
+                .arg(
+                    Arg::with_name("extension")
+                        .long("ext")
+                        .takes_value(true)
+                        .default_value("mp4")
+                        .help("Video file extension"),
+                ),
         );
     }
 
@@ -1253,11 +1257,7 @@ impl SelectionStats {
                         let weight = *count as f32 / total as f32;
                         csv += &format!(
                             "{},{},{},{},{}\n",
-                            depth,
-                            rule_index,
-                            choice,
-                            alternative,
-                            weight
+                            depth, rule_index, choice, alternative, weight
                         );
                     }
                 }
@@ -2534,9 +2534,8 @@ fn run_stats(matches: &ArgMatches) {
         }
     };
 
-    let csv = samples
-        .iter()
-        .fold(csv, |csv, &(d, ref f)| if f.is_nothing {
+    let csv = samples.iter().fold(csv, |csv, &(d, ref f)| {
+        if f.is_nothing {
             csv + &format!("{},{},,,,,{}\n", d, f.score(), f.nothing_punishment())
         } else {
             csv
@@ -2550,7 +2549,8 @@ fn run_stats(matches: &ArgMatches) {
                     f.drop,
                     f.nothing_punishment()
                 )
-        });
+        }
+    });
 
     csv_file.write_all(csv.as_bytes()).unwrap();
 }
@@ -2587,8 +2587,7 @@ fn run_learning(matches: &ArgMatches) {
                 Err(err) => {
                     println!(
                         "Failed deserializing distribution file \"{}\": {}",
-                        filename,
-                        err
+                        filename, err
                     );
                     return;
                 }
@@ -2741,9 +2740,10 @@ fn run_learning(matches: &ArgMatches) {
         .open(&stats_csv_path)
         .expect("Could not create stats file");
 
-    let stats_writer = Arc::new(Mutex::new(
-        BufWriter::with_capacity(1024 * 1024, stats_csv_file),
-    ));
+    let stats_writer = Arc::new(Mutex::new(BufWriter::with_capacity(
+        1024 * 1024,
+        stats_csv_file,
+    )));
 
     let mut save_future = {
         let distribution = Arc::clone(&distribution);
@@ -2763,11 +2763,7 @@ fn run_learning(matches: &ArgMatches) {
                 .to_string()
                 + &format!(
                     "{},{},{},{},,,{}\n",
-                    0,
-                    num_samples,
-                    num_samples,
-                    current_score,
-                    "init"
+                    0, num_samples, num_samples, current_score, "init"
                 );
             stats_writer
                 .lock()
@@ -3053,8 +3049,7 @@ fn run_sample_weight_space(matches: &ArgMatches) {
 
     println!(
         "Sampling {} samples in {}-dimensinal weight space.",
-        num_samples,
-        dimensions
+        num_samples, dimensions
     );
 
     let output_path = Path::new(matches.value_of("output").unwrap());
@@ -3084,12 +3079,14 @@ fn run_sample_weight_space(matches: &ArgMatches) {
     };
 
     let tasks: Vec<_> = (0..num_samples)
-        .map(|_| if dividers {
-            pool.spawn_fn(move || {
-                future::ok(dividers_from_weights(&generate_weight(dimensions)))
-            })
-        } else {
-            pool.spawn_fn(move || future::ok(generate_weight(dimensions)))
+        .map(|_| {
+            if dividers {
+                pool.spawn_fn(move || {
+                    future::ok(dividers_from_weights(&generate_weight(dimensions)))
+                })
+            } else {
+                pool.spawn_fn(move || future::ok(generate_weight(dimensions)))
+            }
         })
         .collect();
 
@@ -3232,7 +3229,7 @@ fn run_record_video(matches: &ArgMatches) {
                     ("minrate".to_string(), Some(format!("{}", min_bitrate))),
                     ("maxrate".to_string(), Some(format!("{}", max_bitrate))),
                 ]
-            },
+            }
             _ => vec![],
         };
 
@@ -3290,19 +3287,21 @@ pub fn save_lsystem(lsystem: &ol::LSystem) -> PathBuf {
 
 fn run_sort_models(matches: &ArgMatches) {
     let model_dir = Path::new(matches.value_of("models").unwrap());
-    let models = fs::read_dir(model_dir)
-        .unwrap()
-        .map(|e| e.unwrap().path());
-    let (_, _, settings, _) =
-        get_sample_setup(matches.value_of("grammar").unwrap());
+    let models = fs::read_dir(model_dir).unwrap().map(|e| e.unwrap().path());
+    let (_, _, settings, _) = get_sample_setup(matches.value_of("grammar").unwrap());
 
-    let mut evaluations: Vec<_> = models.map(|model_path| {
-        let model_file = File::open(&model_path).unwrap();
-        let system: ol::LSystem = serde_yaml::from_reader(&mut BufReader::new(model_file)).unwrap();
-        let fitness = fitness::evaluate(&system, &settings).0;
-        (model_path, fitness)
-    }).collect();
-    evaluations.sort_by(|&(_, ref fit_a), &(_, ref fit_b)| fit_b.score().partial_cmp(&fit_a.score()).unwrap());
+    let mut evaluations: Vec<_> = models
+        .map(|model_path| {
+            let model_file = File::open(&model_path).unwrap();
+            let system: ol::LSystem =
+                serde_yaml::from_reader(&mut BufReader::new(model_file)).unwrap();
+            let fitness = fitness::evaluate(&system, &settings).0;
+            (model_path, fitness)
+        })
+        .collect();
+    evaluations.sort_by(|&(_, ref fit_a), &(_, ref fit_b)| {
+        fit_b.score().partial_cmp(&fit_a.score()).unwrap()
+    });
 
     for (path, fitness) in evaluations {
         println!("{} - {}", path.to_str().unwrap(), fitness);
@@ -3412,11 +3411,9 @@ mod test {
 
         assert_eq!(
             infer_selections("valueextra", &grammar, "symbol"),
-            Err(
-                "Expanded string does not fully match grammar. \
+            Err("Expanded string does not fully match grammar. \
                  The first 5 characters matched"
-                    .to_string(),
-            )
+                .to_string(),)
         );
     }
 

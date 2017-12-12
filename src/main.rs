@@ -8,6 +8,8 @@ extern crate futures;
 extern crate futures_cpupool;
 extern crate glfw;
 extern crate kiss3d;
+#[cfg(feature = "record")]
+extern crate mpeg_encoder;
 extern crate nalgebra as na;
 extern crate ncollide_utils as ncu;
 extern crate num;
@@ -18,8 +20,6 @@ extern crate rsgenetic;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_yaml;
-#[cfg(feature = "record")]
-extern crate mpeg_encoder;
 
 extern crate abnf;
 #[macro_use]
