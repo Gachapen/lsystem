@@ -455,6 +455,10 @@ fn random_seed() -> [u32; 4] {
 }
 
 fn run_visualized(matches: &ArgMatches) {
+    use kiss3d::window::Window;
+    use glfw::WindowHint;
+
+    Window::context().window_hint(WindowHint::Samples(Some(8)));
     let (mut window, _) = setup_window();
     window.glfw_window_mut().set_char_polling(true);
 
